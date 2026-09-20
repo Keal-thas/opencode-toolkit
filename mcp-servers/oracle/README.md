@@ -10,6 +10,27 @@ A minimal MCP server exposing one tool, `oracle_query`, that runs an arbitrary S
 - **One Oracle connection per request**, opened and closed within the call, not pooled. A stray DML statement can't outlive its request (closing a session with uncommitted work rolls it back); concurrent calls never race on the same session; a session killed on the DB side only fails the one request in flight. Cost: connection-setup latency on every call — fine for a low-QPS internal tool, not for anything latency-sensitive.
 - **`autoCommit: true`** on every execute — otherwise a successful UPDATE/INSERT would report no error and then silently roll back the moment its connection closes right after (immediately, given one connection per request).
 
+## Recommended read-only account
+
+Since `oracle_query` is a full passthrough with no code-level restriction (see Design above), the account `ORACLE_USER`/`ORACLE_PASSWORD` point at is the actual safety boundary. Create a dedicated account for it rather than pointing this server at an account that also has write access:
+
+```sql
+CREATE USER readonly IDENTIFIED BY "<a real password>";
+
+GRANT CREATE SESSION, READ ANY TABLE, SELECT ANY SEQUENCE,
+      FLASHBACK ANY TABLE, SELECT_CATALOG_ROLE, SELECT ANY DICTIONARY,
+      EXECUTE_CATALOG_ROLE
+TO readonly;
+```
+
+A few things confirmed against a real Oracle 23ai Free instance (this repo's own `docker/docker-compose.oracle.yml` sandbox), not just assumed from Oracle's docs:
+
+- `READ ANY TABLE` genuinely blocks locking reads too — `SELECT ... FOR UPDATE` fails with `ORA-41900`, on top of `INSERT`/`UPDATE`/`DELETE`/DDL all failing — stricter than the more commonly-used `SELECT ANY TABLE`.
+- `SELECT ANY DICTIONARY` does **not** expose `SYS.USER$` (password hashes) or other similarly hardened SYS tables — Oracle hardcodes that protection regardless of grants, so this combination doesn't leak credential material.
+- `EXECUTE_CATALOG_ROLE` is broader than its name suggests for a read-only setup: it grants `EXECUTE` on 115 SYS packages, not just the `DBMS_METADATA` package a DDL-extraction use case actually needs — includes `DBMS_LOCK`, `DBMS_FILE_TRANSFER`, `DBMS_REDEFINITION`, `DBMS_RLS` among others. Included above as an accepted tradeoff for this deployment; a narrower alternative if only DDL text is needed is `GRANT EXECUTE ON DBMS_METADATA TO readonly;` in place of the whole role.
+
+See `mcp-servers/TODO.md` for planned follow-ups that go further than DB grants alone (a result-size cap, `SET TRANSACTION READ ONLY` as an independent session-level guard, `CURRENT_SCHEMA` support).
+
 ## Configuration
 
 Copy `.env.example` to `.env` and fill in real values, or set them however the process supervisor that starts this server (see Run below) is configured. A `remote` MCP entry in `opencode.json` carries no `environment` field (just a `url`) — opencode never starts this process, so wherever it actually gets started is what needs these set:
