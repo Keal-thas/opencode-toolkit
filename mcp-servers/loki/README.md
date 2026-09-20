@@ -23,12 +23,21 @@ Unlike `mcp-servers/oracle/`, only `LOKI_BASE_URL` is required — Loki is commo
 
 ## Run
 
+Published as `@kealthas-dev/opencode-mcp-loki` — on a real deployment, install it globally and run the resulting binary (see SETUP.md step 7):
+
+```bash
+npm install -g @kealthas-dev/opencode-mcp-loki
+LOKI_BASE_URL=... opencode-mcp-loki
+```
+
+For local dev/testing against this repo's own checkout (this directory, not the published package):
+
 ```bash
 npm install
 npm start
 ```
 
-Starts a persistent HTTP server on `LOKI_MCP_PORT` (default `8091`), serving MCP over Streamable HTTP at `/mcp`. Point opencode at it with a `type: "remote"` entry (see `deploy/opencode.json.example` and SETUP.md) — it needs to already be running and stay running, since opencode connects rather than spawns it (`npm start` alone exits when its terminal closes; see `mcp-servers/oracle/README.md`'s Design section for real supervisor options — the same reasoning applies here).
+Either way, this starts a persistent HTTP server on `LOKI_MCP_PORT` (default `8091`), serving MCP over Streamable HTTP at `/mcp`. Point opencode at it with a `type: "remote"` entry (see `deploy/opencode.json.example`) — it needs to already be running and stay running, since opencode connects rather than spawns it (either command alone exits when its terminal closes; see `mcp-servers/oracle/README.md`'s Design section for real supervisor options — the same reasoning applies here).
 
 ## Testing against a real Loki instance
 

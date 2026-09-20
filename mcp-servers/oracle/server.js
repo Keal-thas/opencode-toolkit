@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import http from "node:http";
 import oracledb from "oracledb";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";

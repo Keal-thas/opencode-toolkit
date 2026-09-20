@@ -42,12 +42,21 @@ Copy `.env.example` to `.env` and fill in real values, or set them however the p
 
 ## Run
 
+Published as `@kealthas-dev/opencode-mcp-oracle` — on a real deployment, install it globally and run the resulting binary (see SETUP.md step 6):
+
+```bash
+npm install -g @kealthas-dev/opencode-mcp-oracle
+ORACLE_CONNECT_STRING=... ORACLE_USER=... ORACLE_PASSWORD=... opencode-mcp-oracle
+```
+
+For local dev/testing against this repo's own checkout (this directory, not the published package):
+
 ```bash
 npm install
 npm start
 ```
 
-Starts a persistent HTTP server on `ORACLE_MCP_PORT` (default `8090`), serving MCP over Streamable HTTP at `/mcp`. Point opencode at it with a `type: "remote"` entry (see `deploy/opencode.json.example` and SETUP.md step 5) — it needs to already be running and stay running, since opencode connects rather than spawns it (`npm start` alone exits when its terminal closes; see Design above for real supervisor options).
+Either way, this starts a persistent HTTP server on `ORACLE_MCP_PORT` (default `8090`), serving MCP over Streamable HTTP at `/mcp`. Point opencode at it with a `type: "remote"` entry (see `deploy/opencode.json.example`) — it needs to already be running and stay running, since opencode connects rather than spawns it (either command alone exits when its terminal closes; see Design above for real supervisor options).
 
 ## Testing against a real Oracle instance
 

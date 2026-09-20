@@ -110,21 +110,20 @@ Merge into the same `plugin` array as step 4's entry rather than replacing it �
 
 ## 6. Add the Oracle MCP server
 
-`mcp-servers/oracle/` needs its npm dependencies (`@modelcontextprotocol/sdk`, `oracledb`) installed — this machine has no public internet, but does have a working internal npm registry (a full mirror of public npm), so a plain `npm install` below resolves them from there (this repo doesn't vendor them, unlike the plugins in steps 4/5, which needed no dependencies at all). If `npm install` unexpectedly fails here, report it rather than working around by guessing at a substitute package or an unofficial mirror.
-
-The Oracle MCP server is wired as `type: "remote"` in `opencode.json` (see `mcp-servers/oracle/README.md`'s Design section for why): opencode connects to it as an already-running HTTP endpoint rather than spawning and owning it. The server process has to be started independently, before opencode ever tries to use it — a persistent terminal/session running `npm start`, a process supervisor, or a container, whichever fits this machine. opencode itself never starts, stops, or restarts it.
-
-Copy the server directory in:
+Published as a real npm package, `@kealthas-dev/opencode-mcp-oracle` — install it globally via the internal npm registry (see this doc's intro for why that registry, not public npm, resolves this), same mechanism that already makes the `opencode` command itself work on this machine:
 
 ```bash
-mkdir -p "$CONFIG_DIR/mcp-servers"
-cp -r "$SRC_DIR/mcp-servers/oracle" "$CONFIG_DIR/mcp-servers/oracle"
+npm install -g @kealthas-dev/opencode-mcp-oracle
 ```
 
-Start the server with the real Oracle credentials as environment variables (`ORACLE_CONNECT_STRING`, `ORACLE_USER`, `ORACLE_PASSWORD` — see `mcp-servers/oracle/README.md`'s Configuration section), and `ORACLE_MCP_PORT` too if the default port (`8090`) isn't free:
+This puts an `opencode-mcp-oracle` binary on `PATH`. If `npm install` unexpectedly fails here, report it rather than working around by guessing at a substitute package or an unofficial mirror.
+
+The Oracle MCP server is wired as `type: "remote"` in `opencode.json` (see `mcp-servers/oracle/README.md`'s Design section for why): opencode connects to it as an already-running HTTP endpoint rather than spawning and owning it. The server process has to be started independently, before opencode ever tries to use it — a persistent terminal/session running the binary, a process supervisor, or a container, whichever fits this machine. opencode itself never starts, stops, or restarts it.
+
+Start the server with the real Oracle credentials as environment variables (`ORACLE_CONNECT_STRING`, `ORACLE_USER`, `ORACLE_PASSWORD` — see `mcp-servers/oracle/README.md`'s Configuration section), and `ORACLE_MCP_PORT` too if the default port (`8090`) isn't free — however the process supervisor chosen above lets you set environment variables (there's no longer a project directory for a `.env` file to live next to, since this is a global install, not a copied-in source tree):
 
 ```bash
-cd "$CONFIG_DIR/mcp-servers/oracle" && npm install && npm start
+ORACLE_CONNECT_STRING=... ORACLE_USER=... ORACLE_PASSWORD=... opencode-mcp-oracle
 ```
 
 Leave that running (in its own terminal, or under whatever supervisor was chosen above). `deploy/opencode.json.example` already carries this same block, enabled, with a placeholder port — if step 2 merged into an existing `opencode.json` instead of copying the example fresh, add it to `opencode.json`'s top level (merge, don't replace, same rule as step 2):
@@ -145,22 +144,23 @@ Two things need real values that this repo or an executing agent should never gu
 
 ## 7. Add the Loki MCP server
 
-Same shape as step 6: `mcp-servers/loki/` needs `@modelcontextprotocol/sdk` installed via `npm install` against the internal registry (one dependency instead of Oracle's two — no driver like `oracledb`, see `mcp-servers/loki/README.md`'s Design section for why).
-
-Wired as `type: "remote"` in `opencode.json`, same reasoning as step 6 — opencode connects to an already-running HTTP endpoint. Copy the directory in:
+Same shape as step 6: published as `@kealthas-dev/opencode-mcp-loki`, install it globally the same way:
 
 ```bash
-mkdir -p "$CONFIG_DIR/mcp-servers"
-cp -r "$SRC_DIR/mcp-servers/loki" "$CONFIG_DIR/mcp-servers/loki"
+npm install -g @kealthas-dev/opencode-mcp-loki
 ```
+
+This puts an `opencode-mcp-loki` binary on `PATH`.
+
+Wired as `type: "remote"` in `opencode.json`, same reasoning as step 6 — opencode connects to an already-running HTTP endpoint, started independently rather than spawned by opencode.
 
 Start the server with `LOKI_BASE_URL` pointing at the real internal Loki instance (see `mcp-servers/loki/README.md`'s Configuration section — `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` too, only if that Loki instance actually requires them; unlike Oracle's credentials, all of these are optional), and `LOKI_MCP_PORT` if the default port (`8091`) isn't free:
 
 ```bash
-cd "$CONFIG_DIR/mcp-servers/loki" && npm install && npm start
+LOKI_BASE_URL=... opencode-mcp-loki
 ```
 
-Leave that running. `deploy/opencode.json.example` already carries this same block, enabled, with a placeholder port — if step 2 merged into an existing `opencode.json` instead of copying the example fresh, add it to `opencode.json`'s top level (merge, don't replace):
+Leave that running (in its own terminal, or under whatever supervisor was chosen in step 6). `deploy/opencode.json.example` already carries this same block, enabled, with a placeholder port — if step 2 merged into an existing `opencode.json` instead of copying the example fresh, add it to `opencode.json`'s top level (merge, don't replace):
 
 ```json
 "mcp": {
@@ -234,7 +234,7 @@ If you installed either plugin (steps 4/5) and `opencode run` errors out instead
 
 ## 10. Cleanup (optional)
 
-`$SRC_DIR` (the extracted zip) and the original zip file can be deleted once `$CONFIG_DIR/system-prompt.txt`, `$CONFIG_DIR/mcp-servers/oracle/` (if installed), `$CONFIG_DIR/mcp-servers/loki/` (if installed), and the globally-installed `@modelcontextprotocol/server-memory` (if installed, step 8 — nothing under `$SRC_DIR` to clean up for it either way) are in place — those are the only files that matter going forward. Steps 4/5's plugins install themselves into `$CACHE_DIR/packages/<name>@latest/` the first time opencode runs with them configured — nothing under `$SRC_DIR` to clean up for those either. Ask the human running this before deleting anything, don't assume.
+`$SRC_DIR` (the extracted zip) and the original zip file can be deleted once `$CONFIG_DIR/system-prompt.txt` and the globally-installed `@kealthas-dev/opencode-mcp-oracle`/`@kealthas-dev/opencode-mcp-loki`/`@modelcontextprotocol/server-memory` (whichever of steps 6/7/8 were installed — nothing under `$SRC_DIR` to clean up for any of them, they're global installs, not copied-in source trees) are in place — those are the only files that matter going forward. Steps 4/5's plugins install themselves into `$CACHE_DIR/packages/<name>@latest/` the first time opencode runs with them configured — nothing under `$SRC_DIR` to clean up for those either. Ask the human running this before deleting anything, don't assume.
 
 ## Report back
 
