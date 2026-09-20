@@ -83,7 +83,7 @@ OPENCODE_DISABLE_MODELS_FETCH=1
 
 ## 4. (Optional but recommended) Install the viewer plugin
 
-This lets you actually see what gets sent to the model — a JSON-valid `opencode.json` doesn't guarantee the override actually took effect at runtime, and this is the only way to check. Published as a real npm package, `@kealthas-dev/opencode-system-prompt-tools` — opencode's own npm-plugin loader installs it itself, no manual packaging or cache-seeding needed. If step 2 copied `deploy/opencode.json.example` fresh (the "does NOT exist yet" branch), this entry is already in there — skip straight to the verification note below. Otherwise (the more likely case — you merged into an existing `opencode.json`), add it to `opencode.json`'s top level (merge, don't replace, same rule as step 2), by bare package name, no version:
+This lets you actually see what gets sent to the model — a JSON-valid `opencode.json` doesn't guarantee the override actually took effect at runtime, and this is the only way to check. Published as a real npm package, `@kealthas-dev/opencode-system-prompt-tools` — opencode's own npm-plugin loader installs it itself, no manual packaging or cache-seeding needed. If step 2 copied `deploy/opencode.json.example` fresh (the "does NOT exist yet" branch), this entry — along with step 5's two plugins — is already in there by default; skip straight to the verification note below unless you want to remove one. Otherwise (the more likely case — you merged into an existing `opencode.json`), add it to `opencode.json`'s top level (merge, don't replace, same rule as step 2), by bare package name, no version:
 
 ```json
 "plugin": ["@kealthas-dev/opencode-system-prompt-tools"]
@@ -93,20 +93,20 @@ opencode does a real `npm install` of this on first use, against whatever regist
 
 **Important:** `opencode debug config` showing a `plugin_origins` entry for this spec is NOT proof the install actually succeeded — a bad/unreachable package name fails completely silently (exit 0, no log line, a `plugin_origins` entry that looks identical to a real success) and leaves behind a permanently-empty `$CACHE_DIR/packages/@kealthas-dev/opencode-system-prompt-tools@latest/` that will never retry on its own. The real proof is step 9's check: after `opencode run`, does `~/.local/share/opencode/last-system-prompt.txt` actually exist and contain the expected content? If not, check whether `$CACHE_DIR/packages/@kealthas-dev/opencode-system-prompt-tools@latest/` actually has files in it (a real install has `package.json`/`node_modules`; a failed one is empty) — if it's empty, delete that directory by hand and retry rather than assuming the plugin config itself is wrong.
 
-## 5. (Optional) Install the hook-logger / llm-review-gate plugins
+## 5. (Included by default) hook-logger / llm-review-gate plugins
 
-Two more opencode plugins live in this repo, in `plugins/` — general-purpose tooling, unrelated to the prompt override itself, so skip this step entirely unless you specifically want one or both. Each is its own separate published npm package, so you can install either one independently:
+Two more opencode plugins live in this repo, in `plugins/` — general-purpose tooling, unrelated to the prompt override itself. `deploy/opencode.json.example` includes both by default (Franco's call — same template as step 4's plugin). Each is its own separate published npm package, independent of the other, so removing one from the `plugin` array doesn't affect the other:
 
 - `hook-logger.ts` (`@kealthas-dev/opencode-hook-logger`) — logs essentially every opencode hook event (chat, tool execution, permission asks, compaction, etc.) as JSONL under `~/opencode-hook-output/`, for debugging/observability.
-- `llm-review-gate.ts` (`@kealthas-dev/opencode-llm-review-gate`) — gates `bash` tool calls behind an LLM safety review: before a command runs, it's sent to a hidden internal opencode session for an ALLOW/BLOCK verdict, layered on top of (not replacing) opencode's own permission config. Fails open on review errors/timeouts by default. This changes real runtime behavior (an extra hidden model call before every `bash` call) — make sure that's actually wanted before installing it.
+- `llm-review-gate.ts` (`@kealthas-dev/opencode-llm-review-gate`) — gates `bash` tool calls behind an LLM safety review: before a command runs, it's sent to a hidden internal opencode session for an ALLOW/BLOCK verdict, layered on top of (not replacing) opencode's own permission config. Fails open on review errors/timeouts by default. **This changes real runtime behavior** (an extra hidden model call before every `bash` call) — if that's not wanted, remove `@kealthas-dev/opencode-llm-review-gate` from the `plugin` array before proceeding.
 
-Same install mechanism as step 4, just add both bare names:
+If step 2 merged into an existing `opencode.json` rather than copying the example fresh, add these the same way as step 4, same install mechanism:
 
 ```json
 "plugin": ["@kealthas-dev/opencode-hook-logger", "@kealthas-dev/opencode-llm-review-gate"]
 ```
 
-Merge into the same `plugin` array as step 4's entry (if installed) rather than replacing it — `opencode.json`'s `plugin` field accepts multiple entries, and each entry here is independent: install just one by adding just its own array entry above.
+Merge into the same `plugin` array as step 4's entry rather than replacing it — `opencode.json`'s `plugin` field accepts multiple entries, and each entry here is independent: include just one by adding just its own array entry above.
 
 ## 6. (Optional) Add the Oracle MCP server
 

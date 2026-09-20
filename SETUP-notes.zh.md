@@ -31,7 +31,7 @@ OPENCODE_DISABLE_MODELS_FETCH=1
 
 ## 4. (建议做)装查看器插件
 
-装这个插件是为了能亲眼看到真正发给模型的 prompt——opencode.json 语法没错不代表覆盖真的在运行时生效了,这是唯一能确认的办法.这插件是发布到 npm 的正式包(`@kealthas-dev/opencode-system-prompt-tools`),不用手动解包进缓存目录——opencode 自己的 npm 插件加载器会装.如果第 2 步是直接拷贝 `opencode.json.example` 新建的,这一项已经在里面了,不用再加.如果是合并进已有的 opencode.json,在 plugin 数组里写裸包名(不带版本号)就行:
+装这个插件是为了能亲眼看到真正发给模型的 prompt——opencode.json 语法没错不代表覆盖真的在运行时生效了,这是唯一能确认的办法.这插件是发布到 npm 的正式包(`@kealthas-dev/opencode-system-prompt-tools`),不用手动解包进缓存目录——opencode 自己的 npm 插件加载器会装.如果第 2 步是直接拷贝 `opencode.json.example` 新建的,这一项(连同第 5 步那两个)默认已经在里面了,不用再加.如果是合并进已有的 opencode.json,在 plugin 数组里写裸包名(不带版本号)就行:
 
 ```json
 "plugin": ["@kealthas-dev/opencode-system-prompt-tools"]
@@ -39,9 +39,9 @@ OPENCODE_DISABLE_MODELS_FETCH=1
 
 opencode 第一次用到这条配置时会自己跑一次真正的 `npm install`(走这台机器配置的那个 registry,也就是内网镜像),装完缓存住,以后就不用再装了.不写版本号意味着每次全新缓存都会拿当时 registry 上 `latest` 标的版本——但装完之后不会自动再更新.如果 `opencode debug config` 里没能正确解析这个 plugin,如实汇报看到的情况,不要瞎猜着改.
 
-## 5. (可选)装 hook-logger / llm-review-gate
+## 5. (默认已包含)hook-logger / llm-review-gate
 
-跟 prompt 覆盖无关,不需要就跳过.装法跟第 4 步一样,也是各自独立发布的 npm 包,想装哪个装哪个:
+跟 prompt 覆盖无关,`opencode.json.example` 默认把这两个也一起打包进去了(Franco 决定的).`llm-review-gate.ts` 会真的改变运行时行为(每次 bash 调用前多一次隐藏的 LLM 审核)——不想要的话把 `@kealthas-dev/opencode-llm-review-gate` 从 plugin 数组里删掉.如果第 2 步是合并进已有的 opencode.json,同第 4 步一样手动加上:
 
 ```json
 "plugin": ["@kealthas-dev/opencode-hook-logger", "@kealthas-dev/opencode-llm-review-gate"]
