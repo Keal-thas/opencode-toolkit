@@ -1,11 +1,18 @@
 {
-  "name": "opencode-system-prompt-tools",
+  "name": "@kealthas-dev/opencode-system-prompt-tools",
   "version": "1.0.0",
   "type": "module",
-  "private": true,
-  "description": "system-prompt-tools.ts opencode plugin (dumps the fully-assembled system prompt actually sent to the model, on every request, to ~/.local/share/opencode/last-system-prompt.txt), packed and installed locally by extracting this tarball straight into opencode's own package cache under a bare name@version (no registry, no server - see CLAUDE.md). Written in TypeScript against @opencode-ai/plugin's Plugin type. After editing system-prompt-tools.ts, run `npm pack` in this directory to regenerate the committed opencode-system-prompt-tools-1.0.0.tgz - tests/unit/plugins-tarball.test.mjs fails the build if it drifts from source.",
+  "description": "system-prompt-tools.ts opencode plugin (dumps the fully-assembled system prompt actually sent to the model, on every request, to ~/.local/share/opencode/last-system-prompt.txt), published to npm so opencode's own npm-plugin loader can install it directly from a bare package name in opencode.json's plugin array - see CLAUDE.md. Written in TypeScript against @opencode-ai/plugin's Plugin type.",
   "main": "system-prompt-tools.ts",
   "files": ["system-prompt-tools.ts"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Keal-thas/opencode-toolkit.git",
+    "directory": "plugins/system-prompt-tools"
+  },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.0.0",
     "@types/node": "^22.0.0"

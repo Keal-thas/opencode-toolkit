@@ -11,6 +11,7 @@
       "prompt": "{file:./system-prompt.txt}"
     }
   },
+  "plugin": ["@kealthas-dev/opencode-system-prompt-tools"],
   "mcp": {
     "oracle": {
       "type": "remote",
