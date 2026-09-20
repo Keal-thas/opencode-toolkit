@@ -1,6 +1,6 @@
 # loki mcp server
 
-A minimal MCP server exposing three read-only tools — `loki_query_range`, `loki_labels`, `loki_label_values` — against a configured Grafana Loki instance's HTTP query API. Built directly against `@modelcontextprotocol/sdk`, same hand-rolled-against-the-raw-API pattern as `mcp-servers/oracle/`. Speaks MCP over Streamable HTTP, as a persistent process opencode connects to (`type: "remote"`) rather than spawns and owns (`type: "local"`) — same deployment shape `mcp-servers/oracle/` converted to, from the start this time (see `mcp-servers/TODO.md`).
+A minimal MCP server exposing three read-only tools — `loki_query_range`, `loki_labels`, `loki_label_values` — against a configured Grafana Loki instance's HTTP query API. Built directly against `@modelcontextprotocol/sdk`, same hand-rolled-against-the-raw-API pattern as `mcp-servers/oracle/`. Speaks MCP over Streamable HTTP, as a persistent process opencode connects to (`type: "remote"`) rather than spawns and owns (`type: "local"`) — same deployment shape as `mcp-servers/oracle/`.
 
 ## Design, and why it looks the way it does
 
@@ -44,4 +44,4 @@ docker/dev.sh run --rm opencode-dev bash
 
 ## Status
 
-**Verified end-to-end and automated.** `loki.test.mjs` covers tool listing, `loki_labels`/`loki_label_values` finding pushed test data, `loki_query_range` finding a pushed log line by content, an empty-result query returning cleanly (not an error), and a malformed LogQL query returning a clean error — driven over the real Streamable HTTP transport against the sandbox's `loki` service. Wired into `deploy/opencode.json.example` (`mcp.loki`, `type: "remote"`, `enabled: false`).
+**Verified end-to-end and automated.** `loki.test.mjs` covers tool listing, `loki_labels`/`loki_label_values` finding pushed test data, `loki_query_range` finding a pushed log line by content, an empty-result query returning cleanly (not an error), and a malformed LogQL query returning a clean error — driven over the real Streamable HTTP transport against the sandbox's `loki` service. Wired into `deploy/opencode.json.example` (`mcp.loki`, `type: "remote"`, `enabled: true`).

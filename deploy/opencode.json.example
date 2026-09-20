@@ -20,27 +20,27 @@
     "oracle": {
       "type": "remote",
       "url": "http://localhost:8090/mcp",
-      "enabled": false
+      "enabled": true
     },
     "loki": {
       "type": "remote",
       "url": "http://localhost:8091/mcp",
-      "enabled": false
+      "enabled": true
     },
     "java-lsp": {
       "type": "remote",
       "url": "http://localhost:8092/mcp",
-      "enabled": false
+      "enabled": true
     },
     "spring-lsp": {
       "type": "remote",
       "url": "http://localhost:8093/mcp",
-      "enabled": false
+      "enabled": true
     },
     "memory": {
       "type": "local",
       "command": ["mcp-server-memory"],
-      "enabled": false
+      "enabled": true
     }
   }
 }

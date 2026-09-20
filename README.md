@@ -27,15 +27,15 @@ opencode overrides the system prompt it sends to a model using its own config �
 
 ### What's in `deploy/`
 
-- `system-prompt.txt` — the replacement prompt content, edit to taste. Also carries a `# Memory` policy section for the optional memory MCP server below.
-- `opencode.json.example` — the config that wires `system-prompt.txt` in, plus optional MCP entries: `oracle`/`loki` (this repo's own LAN-ops servers, see `mcp-servers/`) and `memory` (the official `@modelcontextprotocol/server-memory` package — cross-session memory for opencode itself, not hosted in this repo; see `docs/feature-points/15-opencode-memory-mcp.md` and SETUP.md step 8).
+- `system-prompt.txt` — the replacement prompt content, edit to taste. Also carries a `# Memory` policy section for the memory MCP server below.
+- `opencode.json.example` — the config that wires `system-prompt.txt` in, plus MCP entries: `oracle`/`loki` (this repo's own LAN-ops servers, see `mcp-servers/`), `java-lsp`/`spring-lsp` (LSP-backed code intelligence, also under `mcp-servers/`), and `memory` (the official `@modelcontextprotocol/server-memory` package — cross-session memory for opencode itself, not hosted in this repo; see `docs/feature-points/15-opencode-memory-mcp.md` and SETUP.md step 8). All enabled by default — each still needs its own server started/credentials supplied per SETUP.md before it actually works, so disable in `opencode.json` whichever ones aren't wanted.
 - `models-dev-snapshot.json` — a local copy of opencode's models.dev metadata catalog, for the offline restricted machine to point `OPENCODE_MODELS_PATH` at instead of ever fetching it live. See SETUP.md step 3. Optional — the offline build already has a build-time snapshot baked in as a fallback. Generated, not hand-authored — refresh with `./deploy/fetch-models-snapshot.sh`; also listed in `.gitignore` for the same reason as `docs/opencode-docs-reference/` (kept out of broad searches, still git-tracked so it travels in the zip transfer — see that directory's own `fetch-opencode-docs.sh` header for the mechanism).
 
 ### What's in `plugins/`
 
 One subdirectory per plugin, each its own npm package (`package.json` + the `.ts` source), published to the public npm registry — mirroring `mcp-servers/`'s one-thing-per-subdirectory shape:
 
-- `system-prompt-tools/` (`@kealthas-dev/opencode-system-prompt-tools`) — optional plugin that dumps the fully-assembled system prompt to a local file on every request. Diagnostic only, not required, but the only way to confirm the override is actually reaching the real model. See `docs/feature-points/02-system-prompt-tools-plugin.md`.
+- `system-prompt-tools/` (`@kealthas-dev/opencode-system-prompt-tools`) — diagnostic plugin that dumps the fully-assembled system prompt to a local file on every request, the only way to confirm the override is actually reaching the real model. See `docs/feature-points/02-system-prompt-tools-plugin.md`.
 - `hook-logger/` (`@kealthas-dev/opencode-hook-logger`) / `llm-review-gate/` (`@kealthas-dev/opencode-llm-review-gate`) — general-purpose opencode tooling, unrelated to the prompt override, independently installable from each other. See `docs/feature-points/03-hook-logger-plugin.md` / `04-llm-review-gate-plugin.md`.
 
 Installed by opencode's own npm-plugin loader from just the bare package name in `opencode.json`'s `plugin` array — no version, no registry config, no path (SETUP.md steps 4/5).

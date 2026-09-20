@@ -24,12 +24,12 @@ test("deploy/opencode.json.example is valid JSON wiring build/plan/general to sy
   }
 });
 
-test("deploy/opencode.json.example wires the memory MCP server as a local, disabled-by-default stdio server", async () => {
+test("deploy/opencode.json.example wires the memory MCP server as a local, enabled-by-default stdio server", async () => {
   const raw = await readFile(join(repoRoot, "deploy", "opencode.json.example"), "utf-8");
   const config = JSON.parse(raw);
   assert.equal(config.mcp?.memory?.type, "local");
   assert.deepEqual(config.mcp?.memory?.command, ["mcp-server-memory"]);
-  assert.equal(config.mcp?.memory?.enabled, false, "should ship disabled, same as oracle/loki, until SETUP.md step 8 enables it");
+  assert.equal(config.mcp?.memory?.enabled, true, "should ship enabled, same as oracle/loki/java-lsp/spring-lsp");
 });
 
 test("deploy/system-prompt.txt is non-empty and doesn't contain upstream's default identity paragraph", async () => {

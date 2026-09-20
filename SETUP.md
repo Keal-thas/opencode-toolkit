@@ -66,7 +66,7 @@ Check whether `$CONFIG_DIR/opencode.json` already exists.
 
   If an `"agent"` key already exists with other agents configured, merge `build`/`plan`/`general` into it rather than replacing the whole key. Produce valid JSON and verify it parses (e.g. `python -c "import json,sys; json.load(open(sys.argv[1]))" "$CONFIG_DIR/opencode.json"` or equivalent) before moving on.
 
-## 3. (Optional) Point the models.dev catalog at a local file
+## 3. Point the models.dev catalog at a local file
 
 This machine has no internet, so opencode's hourly background refresh of its models.dev metadata catalog can never succeed here — harmless on its own (non-blocking, fails silently), but writes a failed-fetch log line every hour forever. Not required either way: this setup's Qwen provider is defined by hand in `opencode.json`, not looked up from that catalog.
 
@@ -81,7 +81,7 @@ OPENCODE_MODELS_PATH="$CONFIG_DIR/models-dev-snapshot.json"
 OPENCODE_DISABLE_MODELS_FETCH=1
 ```
 
-## 4. (Optional but recommended) Install the viewer plugin
+## 4. Install the viewer plugin
 
 This lets you actually see what gets sent to the model — a JSON-valid `opencode.json` doesn't guarantee the override actually took effect at runtime, and this is the only way to check. Published as a real npm package, `@kealthas-dev/opencode-system-prompt-tools` — opencode's own npm-plugin loader installs it itself, no manual packaging or cache-seeding needed. If step 2 copied `deploy/opencode.json.example` fresh (the "does NOT exist yet" branch), this entry — along with step 5's two plugins — is already in there by default; skip straight to the verification note below unless you want to remove one. Otherwise (the more likely case — you merged into an existing `opencode.json`), add it to `opencode.json`'s top level (merge, don't replace, same rule as step 2), by bare package name, no version:
 
@@ -108,7 +108,7 @@ If step 2 merged into an existing `opencode.json` rather than copying the exampl
 
 Merge into the same `plugin` array as step 4's entry rather than replacing it — `opencode.json`'s `plugin` field accepts multiple entries, and each entry here is independent: include just one by adding just its own array entry above.
 
-## 6. (Optional) Add the Oracle MCP server
+## 6. Add the Oracle MCP server
 
 `mcp-servers/oracle/` needs its npm dependencies (`@modelcontextprotocol/sdk`, `oracledb`) installed — this machine has no public internet, but does have a working internal npm registry (a full mirror of public npm), so a plain `npm install` below resolves them from there (this repo doesn't vendor them, unlike the plugins in steps 4/5, which needed no dependencies at all). If `npm install` unexpectedly fails here, report it rather than working around by guessing at a substitute package or an unofficial mirror.
 
@@ -127,7 +127,7 @@ Start the server with the real Oracle credentials as environment variables (`ORA
 cd "$CONFIG_DIR/mcp-servers/oracle" && npm install && npm start
 ```
 
-Leave that running (in its own terminal, or under whatever supervisor was chosen above), then add this to `opencode.json`'s top level (merge, don't replace, same rule as step 2) — `deploy/opencode.json.example` already carries this same block with a placeholder port, `enabled: false`:
+Leave that running (in its own terminal, or under whatever supervisor was chosen above). `deploy/opencode.json.example` already carries this same block, enabled, with a placeholder port — if step 2 merged into an existing `opencode.json` instead of copying the example fresh, add it to `opencode.json`'s top level (merge, don't replace, same rule as step 2):
 
 ```json
 "mcp": {
@@ -143,7 +143,7 @@ Two things need real values that this repo or an executing agent should never gu
 
 `oracle_query` is a full passthrough (no read-only enforcement — see `mcp-servers/oracle/README.md`) by deliberate design, not an oversight; unrelated to this deployment step.
 
-## 7. (Optional) Add the Loki MCP server
+## 7. Add the Loki MCP server
 
 Same shape as step 6: `mcp-servers/loki/` needs `@modelcontextprotocol/sdk` installed via `npm install` against the internal registry (one dependency instead of Oracle's two — no driver like `oracledb`, see `mcp-servers/loki/README.md`'s Design section for why).
 
@@ -160,7 +160,7 @@ Start the server with `LOKI_BASE_URL` pointing at the real internal Loki instanc
 cd "$CONFIG_DIR/mcp-servers/loki" && npm install && npm start
 ```
 
-Leave that running, then add this to `opencode.json`'s top level (merge, don't replace) — `deploy/opencode.json.example` already carries this same block with a placeholder port, `enabled: false`:
+Leave that running. `deploy/opencode.json.example` already carries this same block, enabled, with a placeholder port — if step 2 merged into an existing `opencode.json` instead of copying the example fresh, add it to `opencode.json`'s top level (merge, don't replace):
 
 ```json
 "mcp": {
@@ -176,7 +176,7 @@ One thing needs a real value that this repo or an executing agent should never g
 
 `loki_query_range` is a full passthrough (any LogQL, no restriction — see `mcp-servers/loki/README.md`) by deliberate design; unrelated to this deployment step.
 
-## 8. (Optional) Add the Memory MCP server
+## 8. Add the Memory MCP server
 
 Unlike steps 6/7, this isn't a server this repo wrote — it's the official upstream `@modelcontextprotocol/server-memory` package (a local knowledge-graph memory: entities/relations/observations in a JSONL file, keyword search only, no embeddings). See `docs/feature-points/15-opencode-memory-mcp.md` for why this one and not a vector/RAG approach. It's also wired as `type: "local"` (opencode spawns and owns the process itself), unlike Oracle/Loki's `type: "remote"` — no separate terminal or process supervisor to keep running.
 
@@ -195,7 +195,7 @@ MEMORY_FILE_PATH="$CONFIG_DIR/memory.jsonl"
 echo "$MEMORY_FILE_PATH"
 ```
 
-Add this to `opencode.json`'s top level (merge, don't replace, same rule as step 2) — `deploy/opencode.json.example` already carries this same block with `enabled: false` and no `environment` (the example can't know this machine's `$CONFIG_DIR` in advance). Substitute the real path you just echoed for `<MEMORY_FILE_PATH>` below:
+`deploy/opencode.json.example` already carries this same block, enabled, but with no `environment` (the example can't know this machine's `$CONFIG_DIR` in advance) — add that `environment` block to `opencode.json`'s top level (merge, don't replace, same rule as step 2). Substitute the real path you just echoed for `<MEMORY_FILE_PATH>` below:
 
 ```json
 "mcp": {

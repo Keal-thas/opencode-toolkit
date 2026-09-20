@@ -19,7 +19,7 @@
 | `docker/` | 本地开发/测试沙箱 |
 | `plugins/` | opencode 插件(system-prompt-tools / hook-logger / llm-review-gate),各自独立发布到 npm |
 | `toolkits/` | 以客户端方式驱动 opencode 的独立脚本,目前只有 `module-analysis/`(给大代码库生成架构分析文档) |
-| `mcp-servers/` | MCP 服务器:Oracle/Loki 运维工具,以及 Java/Spring 的 LSP 桥接 |
+| `mcp-servers/` | MCP 服务器:Oracle/Loki 运维工具、官方 memory server 接入,以及 Java/Spring 的 LSP 桥接 |
 | `docs/` | 研究笔记、opencode 官方文档本地镜像、功能点清单 |
 | `tests/` | 自动化测试,入口是 `./tests/run-all.sh` |
 | `memory/` | Git 跟踪的项目记忆(跨环境共享,不放在某台机器本地的 AI 工具记忆里) |

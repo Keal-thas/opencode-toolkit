@@ -29,7 +29,7 @@ OPENCODE_MODELS_PATH=<拷贝后那个 json 文件的绝对路径>
 OPENCODE_DISABLE_MODELS_FETCH=1
 ```
 
-## 4. (建议做)装查看器插件
+## 4. 装查看器插件
 
 装这个插件是为了能亲眼看到真正发给模型的 prompt——opencode.json 语法没错不代表覆盖真的在运行时生效了,这是唯一能确认的办法.这插件是发布到 npm 的正式包(`@kealthas-dev/opencode-system-prompt-tools`),不用手动解包进缓存目录——opencode 自己的 npm 插件加载器会装.如果第 2 步是直接拷贝 `opencode.json.example` 新建的,这一项(连同第 5 步那两个)默认已经在里面了,不用再加.如果是合并进已有的 opencode.json,在 plugin 数组里写裸包名(不带版本号)就行:
 
@@ -49,25 +49,30 @@ opencode 第一次用到这条配置时会自己跑一次真正的 `npm install`
 
 合并进第 4 步已有的 plugin 数组,不要覆盖.`hook-logger.ts` 把 hook 事件记成 JSONL,纯调试用.`llm-review-gate.ts` 给每次 bash 调用加一道隐藏的 LLM 审核(会真的改变运行时行为,装之前确认这是想要的效果).
 
-## 6. (可选)Oracle MCP server
+## 6. Oracle MCP server
 
 `mcp-servers/oracle/` 需要 `@modelcontextprotocol/sdk` 和 `oracledb` 这两个 npm 依赖——这台机器没有公网,但内网 registry 是公共 npm 的完整镜像,正常 `npm install` 就能装上(仓库没打包这两个依赖,跟第 4/5 步那种零依赖的插件不一样).如果 `npm install` 意外失败了,汇报出来,不要瞎猜替代方案.`type: "remote"`——server 得有人自己单独 `npm start` 并保持运行,opencode 不管它的死活.真实连接信息(ORACLE_CONNECT_STRING/USER/PASSWORD)问操作的人要.
 
-## 7. (可选)Loki MCP server
+## 7. Loki MCP server
 
 跟第 6 步同样情况:`mcp-servers/loki/` 只需要 `@modelcontextprotocol/sdk` 一个依赖(没有 oracledb 那种驱动),同样走 `npm install`.同样 `type: "remote"`,同样要人单独启动并保持运行.只有 `LOKI_BASE_URL` 是必须问的,账号密码/租户 ID 视那台 Loki 是否要求而定.
 
-## 8. 验证
+## 8. Memory MCP server
+
+这个不是仓库自己写的服务器,是官方的 `@modelcontextprotocol/server-memory`(本地知识图谱,存成一个 JSONL 文件,关键词搜索,没有向量检索).全局装一次:`npm install -g @modelcontextprotocol/server-memory`,会在 PATH 上装出一个 `mcp-server-memory` 命令.`type: "local"`——跟第 6/7 步的 Oracle/Loki 不一样,这个是 opencode 自己启动和管理的子进程,不用单独开一个终端保持运行.记忆文件路径要挑一个稳定的绝对路径(不要用这个 npm 包自己的默认位置,升级时可能被清掉),比如 `$CONFIG_DIR/memory.jsonl`,通过 `opencode.json` 里 `mcp.memory.environment.MEMORY_FILE_PATH` 设置.`deploy/system-prompt.txt` 里已经有一段 `# Memory` policy,告诉模型什么时候该用这个工具,不用额外再写.
+
+## 9. 验证
 
 跑一句最简单的测试请求,装了第 4 步插件的话再打开 `~/.local/share/opencode/last-system-prompt.txt`——应该以 system-prompt.txt 的内容开头,后面跟着 opencode 自己生成的 `<env>` 信息块.如果看到的还是原来啰嗦的开场白,说明 opencode.json 没生效,先查 JSON 有没有写错.
 
-## 9. (可选)清理
+## 10. (可选)清理
 
-zip 和解压出来的文件夹用完可以删,长期要留的只有 $CONFIG_DIR 里的 system-prompt.txt(装了插件的话,$CACHE_DIR/packages/ 下那几个对应的目录;装了 MCP server 的话,那些文件也要留着).删之前问一下操作的人要不要留,不要自作主张.
+zip 和解压出来的文件夹用完可以删,长期要留的只有 $CONFIG_DIR 里的 system-prompt.txt(装了插件的话,$CACHE_DIR/packages/ 下那几个对应的目录;装了 MCP server 的话,那些文件也要留着;第 8 步全局装的 `mcp-server-memory` 不受这次清理影响,本来就不在 $SRC_DIR 底下).删之前问一下操作的人要不要留,不要自作主张.
 
 ## 跑完之后要说清楚的事
 
 - opencode.json 之前有没有?是新建的还是合并进去的?
-- 第 8 步验证有没有确认新 prompt 真的生效了?没生效的话实际看到的输出长什么样?
+- 第 9 步验证有没有确认新 prompt 真的生效了?没生效的话实际看到的输出长什么样?
 - 第 4/5 步装了哪些插件?包缓存目录是不是按预期被 opencode 识别了(`opencode debug config` 的 plugin_origins)?
 - 第 6/7 步的 `npm install` 有没有真的跑通(内网 registry 是否如预期可用)?
+- 如果装了第 8 步,`npm install -g` 是否真的把 `mcp-server-memory` 装到了 PATH 上?验证时模型有没有真的调用记忆相关的工具?
