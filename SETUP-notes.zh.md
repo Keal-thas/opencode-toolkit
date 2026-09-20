@@ -41,7 +41,7 @@ opencode 第一次用到这条配置时会自己跑一次真正的 `npm install`
 
 ## 5. (默认已包含)hook-logger / llm-review-gate
 
-跟 prompt 覆盖无关,`opencode.json.example` 默认把这两个也一起打包进去了(Franco 决定的).`llm-review-gate.ts` 会真的改变运行时行为(每次 bash 调用前多一次隐藏的 LLM 审核)——不想要的话把 `@kealthas-dev/opencode-llm-review-gate` 从 plugin 数组里删掉.如果第 2 步是合并进已有的 opencode.json,同第 4 步一样手动加上:
+跟 prompt 覆盖无关,`opencode.json.example` 默认把这两个也一起打包进去了(Franco 决定的).`llm-review-gate.ts` 会真的改变运行时行为(每次 bash 调用前多一次隐藏的 LLM 审核).如果第 2 步是合并进已有的 opencode.json,同第 4 步一样手动加上:
 
 ```json
 "plugin": ["@kealthas-dev/opencode-hook-logger", "@kealthas-dev/opencode-llm-review-gate"]
