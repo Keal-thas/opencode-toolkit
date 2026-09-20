@@ -11,6 +11,11 @@
       "prompt": "{file:./system-prompt.txt}"
     }
   },
+  "plugin": [
+    "@kealthas-dev/opencode-system-prompt-tools",
+    "@kealthas-dev/opencode-hook-logger",
+    "@kealthas-dev/opencode-llm-review-gate"
+  ],
   "mcp": {
     "oracle": {
       "type": "remote",

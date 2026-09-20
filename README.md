@@ -33,12 +33,12 @@ opencode overrides the system prompt it sends to a model using its own config �
 
 ### What's in `plugins/`
 
-One subdirectory per plugin, each its own npm package (`package.json` + the `.ts` source), shipped as a committed, pre-packed tarball — mirroring `mcp-servers/`'s one-thing-per-subdirectory shape:
+One subdirectory per plugin, each its own npm package (`package.json` + the `.ts` source), published to the public npm registry — mirroring `mcp-servers/`'s one-thing-per-subdirectory shape:
 
-- `system-prompt-tools/` — optional plugin that dumps the fully-assembled system prompt to a local file on every request. Diagnostic only, not required, but the only way to confirm the override is actually reaching the real model. See `docs/feature-points/02-system-prompt-tools-plugin.md`.
-- `hook-logger/` / `llm-review-gate/` — general-purpose opencode tooling, unrelated to the prompt override, independently installable from each other. See `docs/feature-points/03-hook-logger-plugin.md` / `04-llm-review-gate-plugin.md`.
+- `system-prompt-tools/` (`@kealthas-dev/opencode-system-prompt-tools`) — optional plugin that dumps the fully-assembled system prompt to a local file on every request. Diagnostic only, not required, but the only way to confirm the override is actually reaching the real model. See `docs/feature-points/02-system-prompt-tools-plugin.md`.
+- `hook-logger/` (`@kealthas-dev/opencode-hook-logger`) / `llm-review-gate/` (`@kealthas-dev/opencode-llm-review-gate`) — general-purpose opencode tooling, unrelated to the prompt override, independently installable from each other. See `docs/feature-points/03-hook-logger-plugin.md` / `04-llm-review-gate-plugin.md`.
 
-Installed by extracting the tarball by hand into opencode's own package cache and referencing it in `opencode.json`'s `plugin` array by a bare `name@version` — no registry, no path (SETUP.md steps 4/5). After editing a plugin's source, `npm pack` in its directory regenerates the tarball; `tests/unit/plugins-tarball.test.mjs` fails the build if they drift.
+Installed by opencode's own npm-plugin loader from just the bare package name in `opencode.json`'s `plugin` array — no version, no registry config, no path (SETUP.md steps 4/5).
 
 ### How the override works
 

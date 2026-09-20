@@ -1,11 +1,18 @@
 {
-  "name": "opencode-hook-logger",
+  "name": "@kealthas-dev/opencode-hook-logger",
   "version": "1.0.0",
   "type": "module",
-  "private": true,
-  "description": "hook-logger.ts opencode plugin (logs essentially every opencode hook event as JSONL under ~/opencode-hook-output/, for debugging/observability), packed and installed locally by extracting this tarball straight into opencode's own package cache under a bare name@version (no registry, no server - see CLAUDE.md). Written in TypeScript against @opencode-ai/plugin's Plugin type. Independently installable from llm-review-gate.ts - not bundled together. After editing hook-logger.ts, run `npm pack` in this directory to regenerate the committed opencode-hook-logger-1.0.0.tgz - tests/unit/plugins-tarball.test.mjs fails if it drifts from source.",
+  "description": "hook-logger.ts opencode plugin (logs essentially every opencode hook event as JSONL under ~/opencode-hook-output/, for debugging/observability), published to npm so opencode's own npm-plugin loader can install it directly from a bare package name in opencode.json's plugin array - see CLAUDE.md. Written in TypeScript against @opencode-ai/plugin's Plugin type. Independently installable from llm-review-gate.ts - not bundled together.",
   "main": "hook-logger.ts",
   "files": ["hook-logger.ts"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Keal-thas/opencode-toolkit.git",
+    "directory": "plugins/hook-logger"
+  },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.0.0",
     "@types/node": "^22.0.0"

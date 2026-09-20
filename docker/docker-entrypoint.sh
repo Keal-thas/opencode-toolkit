@@ -9,13 +9,11 @@ set -e
 # build/plan/general point at system-prompt.txt through the live
 # bind-mounted project dir (not a build-time copy), so host edits to
 # that file show up without a rebuild. The diagnostic dump plugin loads
-# by bare "name@version" instead - editing
-# plugins/system-prompt-tools/system-prompt-tools.ts now needs `npm
-# pack` in that directory *and* an image rebuild (`docker/dev.sh
-# build`) to take effect here, since the actual install (extracting the
-# tarball into opencode's own package cache, keyed by this exact spec
-# string) was pre-warmed into the image layer (see the Dockerfile) -
-# see docker-notes.md.
+# from the real published npm package by bare name instead - editing
+# plugins/system-prompt-tools/system-prompt-tools.ts and publishing a
+# new version needs the image rebuilt (`docker/dev.sh build`) to pick
+# it up here, since the actual install was pre-warmed into the image
+# layer at build time (see the Dockerfile) - see docker-notes.md.
 cat > /home/dev/.config/opencode/opencode.jsonc <<'EOF'
 {
   "$schema": "https://opencode.ai/config.json",
@@ -24,7 +22,7 @@ cat > /home/dev/.config/opencode/opencode.jsonc <<'EOF'
     "plan": { "prompt": "{file:/home/dev/project/deploy/system-prompt.txt}" },
     "general": { "prompt": "{file:/home/dev/project/deploy/system-prompt.txt}" }
   },
-  "plugin": ["opencode-system-prompt-tools@1.0.0"]
+  "plugin": ["@kealthas-dev/opencode-system-prompt-tools"]
 }
 EOF
 chown dev:dev /home/dev/.config/opencode/opencode.jsonc

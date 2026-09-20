@@ -1,0 +1,46 @@
+name: Publish plugins
+
+# Independent from release.yml's whole-repo, tag-triggered publish: each
+# plugin under plugins/ is its own npm package with its own version, not
+# tied to the repo's v* release tags. Triggered by a plain push to
+# master that touches a plugin's package.json - bump the version there,
+# merge, done. The "already published?" check below (not a git diff)
+# is what actually decides whether to publish, so this is safe to run
+# on any push touching these files without risking a duplicate-publish
+# failure.
+on:
+  push:
+    branches: [master]
+    paths:
+      - "plugins/*/package.json"
+
+permissions:
+  contents: read
+  id-token: write # for npm trusted publishing (OIDC) - see CLAUDE.md's "Whole-repo npm publish" entry
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node for npm trusted publishing
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish changed plugin packages
+        run: |
+          npm install -g npm@latest # trusted publishing needs npm >= 11.5.1
+          for dir in plugins/hook-logger plugins/llm-review-gate plugins/system-prompt-tools; do
+            name=$(node -p "require('./$dir/package.json').name")
+            version=$(node -p "require('./$dir/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version already published, skipping"
+            else
+              echo "Publishing $name@$version"
+              (cd "$dir" && npm publish)
+            fi
+          done
