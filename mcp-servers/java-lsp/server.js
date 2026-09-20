@@ -1,12 +1,17 @@
+#!/usr/bin/env node
 import http from "node:http";
 import path from "node:path";
+import { existsSync, readdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { LspClient, LspClientError } from "./lsp-client.js";
 
+const here = path.dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_ROOT = process.env.JAVA_LSP_WORKSPACE_ROOT;
-const JDTLS_COMMAND = process.env.JDTLS_COMMAND ?? "jdtls";
+const JDTLS_COMMAND_OVERRIDE = process.env.JDTLS_COMMAND;
 const JDTLS_DATA_DIR = process.env.JDTLS_DATA_DIR;
 const JAVA_EXECUTABLE = process.env.JAVA_EXECUTABLE; // see README - decoupled from whatever launches jdtls itself
 const JAVA_LSP_MCP_PORT = Number(process.env.JAVA_LSP_MCP_PORT ?? "8092");
@@ -27,6 +32,34 @@ if (!JDTLS_DATA_DIR) {
 const LINE_CHAR_DESCRIPTION =
   "0-indexed, per the LSP spec (not the 1-indexed line numbers most editors display) - line 0 is the file's first line, character 0 is the first column.";
 
+// vendor/jdt-language-server-<version>.tar.gz is committed (see README's
+// Vendoring section) - extracted lazily on first startup into a sibling
+// directory, not at npm-install time, mirroring mcp-servers/spring-lsp/server.js's
+// resolveLanguageServerDir() (same reasoning: a `git pull` that bumps the
+// vendored tarball is picked up automatically, no separate build step).
+// JDTLS_COMMAND still overrides this entirely, e.g. to point at a
+// system-installed jdtls (`brew install jdtls`) instead.
+function resolveJdtlsCommand() {
+  if (JDTLS_COMMAND_OVERRIDE) return JDTLS_COMMAND_OVERRIDE;
+  const vendorDir = path.join(here, "vendor");
+  const tarball = readdirSync(vendorDir).find((f) => f.endsWith(".tar.gz"));
+  if (!tarball) {
+    throw new Error(`No jdt-language-server-*.tar.gz found in ${vendorDir}, and JDTLS_COMMAND is not set.`);
+  }
+  const version = tarball.replace(/\.tar\.gz$/, "");
+  const extractedDir = path.join(vendorDir, version);
+  const launcher = path.join(extractedDir, "bin", "jdtls");
+  if (!existsSync(launcher)) {
+    console.error(`Extracting ${tarball} into ${extractedDir} (first run only)...`);
+    execFileSync("mkdir", ["-p", extractedDir]);
+    execFileSync("tar", ["-xzf", path.join(vendorDir, tarball), "-C", extractedDir]);
+  }
+  // bin/jdtls is Eclipse's own python3 launcher script (see README's
+  // Vendoring section) - it needs python3 on PATH, same as it would via
+  // `brew install jdtls`.
+  return launcher;
+}
+
 // One jdtls process per server lifetime, not per request or per tool call -
 // unlike mcp-servers/oracle's/mcp-servers/loki's per-request model, LSP is a genuinely
 // stateful session (project indexing alone easily takes seconds; redoing
@@ -39,7 +72,7 @@ let clientPromise;
 function getClient(log) {
   if (!clientPromise) {
     const client = new LspClient({
-      command: JDTLS_COMMAND,
+      command: resolveJdtlsCommand(),
       args: [
         "-data",
         JDTLS_DATA_DIR,

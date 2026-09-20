@@ -6,15 +6,15 @@ Index of files in this repo that are git-tracked but produced by a script rather
 |---|---|---|
 | [deploy/models-dev-snapshot.json](../deploy/models-dev-snapshot.json) | [deploy/fetch-models-snapshot.sh](../deploy/fetch-models-snapshot.sh) | the offline restricted target machine can't fetch opencode's models.dev catalog live, so a snapshot has to travel with the repo |
 | [docs/opencode-docs-reference/](opencode-docs-reference) | [docs/fetch-opencode-docs.sh](fetch-opencode-docs.sh) | same reason — a local mirror of upstream opencode docs for the same offline machine |
-| `plugins/*/opencode-<name>-1.0.0.tgz` (hook-logger, llm-review-gate, system-prompt-tools) | `npm pack`, run by hand in each plugin's directory after editing its source | the offline machine has no registry to `npm install` a local plugin package from — the tarball is extracted by hand straight into opencode's own package cache instead (see CLAUDE.md's `plugins/` row) |
 | [mcp-servers/spring-lsp/vendor/spring-boot-language-server-2.5.0-SNAPSHOT.tar.gz](../mcp-servers/spring-lsp/vendor/spring-boot-language-server-2.5.0-SNAPSHOT.tar.gz) | [mcp-servers/spring-lsp/fetch-spring-boot-language-server.sh](../mcp-servers/spring-lsp/fetch-spring-boot-language-server.sh) | `spring-boot-language-server` isn't published to Maven Central or any registry, only distributed inside VMware's VS Code extension `.vsix` — vendored directly since there's no install-from-registry alternative (see `mcp-servers/spring-lsp/README.md`'s Vendoring section) |
+| [mcp-servers/java-lsp/vendor/jdt-language-server-1.61.0-*.tar.gz](../mcp-servers/java-lsp/vendor/) | [mcp-servers/java-lsp/fetch-jdtls.sh](../mcp-servers/java-lsp/fetch-jdtls.sh) | same reason as spring-lsp's tarball above — jdtls vendored directly rather than depending on a machine-specific install like `brew install jdtls` (see `mcp-servers/java-lsp/README.md`'s Vendoring section) |
 
 ## Gitignored-but-tracked, not the same as untracked
 
 `deploy/models-dev-snapshot.json` and `docs/opencode-docs-reference/` also appear as entries in the root `.gitignore` — that doesn't untrack either one, both stay git-tracked and committed normally. The `.gitignore` entry only makes ripgrep-based recursive search (the `grep`/`glob` tools in both Claude Code and opencode itself) skip them by default, since their generated content is long and was getting swept into unrelated searches; reading a specific file or path still works. Because of this, a brand-new file added under either path by its fetch script needs `git add -f` — gitignored paths aren't auto-picked-up as untracked by a plain `git add`.
 
-The plugin tarballs and the spring-lsp vendor tarball are ordinary tracked files, not gitignored — they just happen to be binary/packed rather than text.
+The spring-lsp and java-lsp vendor tarballs are ordinary tracked files, not gitignored — they just happen to be binary/packed rather than text.
 
 ## Staleness enforcement
 
-Only the plugin tarballs have an automated staleness check: [tests/unit/plugins-tarball.test.mjs](../tests/unit/plugins-tarball.test.mjs) extracts each committed tarball and diffs it against the plugin's current source, failing the suite if someone edited source without re-running `npm pack`. Nothing currently checks whether `models-dev-snapshot.json`, `opencode-docs-reference/`, or the spring-lsp vendor tarball have drifted from their upstream source — refreshing those three is manual and on-demand only, driven by their fetch scripts above.
+Nothing currently checks whether any row above has drifted from its upstream source — refreshing all of them is manual and on-demand only, driven by their fetch scripts.

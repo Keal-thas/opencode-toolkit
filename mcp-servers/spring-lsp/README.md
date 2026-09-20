@@ -24,12 +24,21 @@ Copy `.env.example` to `.env` and fill in real values (see `mcp-servers/loki/REA
 
 ## Run
 
+Published as `@kealthas-dev/opencode-mcp-spring-lsp` (including the vendored tarball above — a global install is fully self-contained) — on a real deployment, install it globally and run the resulting binary:
+
+```bash
+npm install -g @kealthas-dev/opencode-mcp-spring-lsp
+SPRING_LSP_WORKSPACE_ROOT=... opencode-mcp-spring-lsp
+```
+
+For local dev/testing against this repo's own checkout (this directory, not the published package):
+
 ```bash
 npm install
 npm start
 ```
 
-Point opencode at it with a `type: "remote"` entry (see `deploy/opencode.json.example`).
+Either way, point opencode at it with a `type: "remote"` entry (see `deploy/opencode.json.example`).
 
 ## Status
 

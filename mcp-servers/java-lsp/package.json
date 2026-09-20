@@ -1,10 +1,21 @@
 {
-  "name": "mcp-java-lsp",
+  "name": "@kealthas-dev/opencode-mcp-java-lsp",
   "version": "1.0.0",
   "type": "module",
-  "private": true,
   "description": "MCP server exposing jdtls (Java LSP) code-intelligence tools - see README.md for design",
   "main": "server.js",
+  "bin": {
+    "opencode-mcp-java-lsp": "server.js"
+  },
+  "files": ["server.js", "lsp-client.js", "vendor/*.tar.gz"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Keal-thas/opencode-toolkit.git",
+    "directory": "mcp-servers/java-lsp"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"

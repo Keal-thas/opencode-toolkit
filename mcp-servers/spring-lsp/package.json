@@ -1,10 +1,21 @@
 {
-  "name": "mcp-spring-lsp",
+  "name": "@kealthas-dev/opencode-mcp-spring-lsp",
   "version": "1.0.0",
   "type": "module",
-  "private": true,
   "description": "MCP server exposing spring-boot-language-server (Spring-aware LSP) code-intelligence tools - see README.md for design",
   "main": "server.js",
+  "bin": {
+    "opencode-mcp-spring-lsp": "server.js"
+  },
+  "files": ["server.js", "lsp-client.js", "vendor/*.tar.gz"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Keal-thas/opencode-toolkit.git",
+    "directory": "mcp-servers/spring-lsp"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"
