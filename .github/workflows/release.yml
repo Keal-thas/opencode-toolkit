@@ -27,8 +27,22 @@ jobs:
       - name: Publish to npm
         run: |
           npm install -g npm@latest # trusted publishing needs npm >= 11.5.1
-          npm pkg set version="${GITHUB_REF_NAME#v}" # tag is the single source of truth for the published version, not the committed package.json
-          npm publish --access public
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Every npm package in this repo shares this one version number -
+          # none of their committed package.json version fields are the
+          # source of truth, this tag is (see CLAUDE.md's "Whole-repo npm
+          # publish" entry). The "already published?" check makes a
+          # workflow re-run for the same tag safe (e.g. after the release
+          # step below fails transiently).
+          for dir in . plugins/hook-logger plugins/llm-review-gate plugins/system-prompt-tools mcp-servers/oracle mcp-servers/loki mcp-servers/java-lsp mcp-servers/spring-lsp; do
+            name=$(node -p "require('./$dir/package.json').name")
+            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "$name@$VERSION already published, skipping"
+              continue
+            fi
+            echo "Publishing $name@$VERSION"
+            (cd "$dir" && npm pkg set version="$VERSION" && npm publish --access public)
+          done
 
       - name: Build zip with .git included
         run: |

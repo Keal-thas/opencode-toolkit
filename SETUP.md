@@ -1,6 +1,6 @@
 # Setup instructions (for an agent to execute)
 
-You are being asked to configure the local opencode installation on this machine to use a custom system prompt instead of the built-in default. This environment is git-bash on Windows with no public internet access (an internal npm registry is reachable for downloading dependencies, e.g. in steps 6/7 — but not for publishing anything). The repo itself gets here one of two ways: (a) downloaded elsewhere as a zip and transferred over, already extracted, or (b) pulled directly through the internal npm mirror with `npm pack @kealthas-dev/opencode-toolkit` and extracted (`tar -xzf kealthas-dev-opencode-toolkit-*.tgz`), landing in a `package/` directory. The npm flow depends on `@kealthas-dev/opencode-toolkit` already being published and mirrored internally; verify that first if using option (b). Either way you end up with one plain extracted directory; step 0 below just needs to find it, whichever name it has. Do not attempt `git clone` or any other network fetch beyond that. Follow these steps in order, running the commands yourself. Don't skip the verification step.
+You are being asked to configure the local opencode installation on this machine to use a custom system prompt instead of the built-in default. This environment is git-bash on Windows with no public internet access (an internal npm registry is reachable for downloading dependencies, e.g. in steps 6-9 — but not for publishing anything). The repo itself gets here one of two ways: (a) downloaded elsewhere as a zip and transferred over, already extracted, or (b) pulled directly through the internal npm mirror with `npm pack @kealthas-dev/opencode-toolkit` and extracted (`tar -xzf kealthas-dev-opencode-toolkit-*.tgz`), landing in a `package/` directory. The npm flow depends on `@kealthas-dev/opencode-toolkit` already being published and mirrored internally; verify that first if using option (b). Either way you end up with one plain extracted directory; step 0 below just needs to find it, whichever name it has. Do not attempt `git clone` or any other network fetch beyond that. Follow these steps in order, running the commands yourself. Don't skip the verification step.
 
 ## 0. Find the opencode config directory and the extracted source
 
@@ -91,7 +91,7 @@ This lets you actually see what gets sent to the model — a JSON-valid `opencod
 
 opencode does a real `npm install` of this on first use, against whatever registry this machine's npm is configured for (this machine's internal registry mirror — confirmed working via steps 6/7's `npm install` calls), and caches the result so later runs skip straight past it. Leaving off a version means every fresh cache picks up whatever's currently tagged `latest` on the registry at install time — it won't silently update again after that first install.
 
-**Important:** `opencode debug config` showing a `plugin_origins` entry for this spec is NOT proof the install actually succeeded — a bad/unreachable package name fails completely silently (exit 0, no log line, a `plugin_origins` entry that looks identical to a real success) and leaves behind a permanently-empty `$CACHE_DIR/packages/@kealthas-dev/opencode-system-prompt-tools@latest/` that will never retry on its own. The real proof is step 9's check: after `opencode run`, does `~/.local/share/opencode/last-system-prompt.txt` actually exist and contain the expected content? If not, check whether `$CACHE_DIR/packages/@kealthas-dev/opencode-system-prompt-tools@latest/` actually has files in it (a real install has `package.json`/`node_modules`; a failed one is empty) — if it's empty, delete that directory by hand and retry rather than assuming the plugin config itself is wrong.
+**Important:** `opencode debug config` showing a `plugin_origins` entry for this spec is NOT proof the install actually succeeded — a bad/unreachable package name fails completely silently (exit 0, no log line, a `plugin_origins` entry that looks identical to a real success) and leaves behind a permanently-empty `$CACHE_DIR/packages/@kealthas-dev/opencode-system-prompt-tools@latest/` that will never retry on its own. The real proof is step 11's check: after `opencode run`, does `~/.local/share/opencode/last-system-prompt.txt` actually exist and contain the expected content? If not, check whether `$CACHE_DIR/packages/@kealthas-dev/opencode-system-prompt-tools@latest/` actually has files in it (a real install has `package.json`/`node_modules`; a failed one is empty) — if it's empty, delete that directory by hand and retry rather than assuming the plugin config itself is wrong.
 
 ## 5. (Included by default) hook-logger / llm-review-gate plugins
 
@@ -176,11 +176,88 @@ One thing needs a real value that this repo or an executing agent should never g
 
 `loki_query_range` is a full passthrough (any LogQL, no restriction — see `mcp-servers/loki/README.md`) by deliberate design; unrelated to this deployment step.
 
-## 8. Add the Memory MCP server
+## 8. Add the java-lsp MCP server
 
-Unlike steps 6/7, this isn't a server this repo wrote — it's the official upstream `@modelcontextprotocol/server-memory` package (a local knowledge-graph memory: entities/relations/observations in a JSONL file, keyword search only, no embeddings). See `docs/feature-points/15-opencode-memory-mcp.md` for why this one and not a vector/RAG approach. It's also wired as `type: "local"` (opencode spawns and owns the process itself), unlike Oracle/Loki's `type: "remote"` — no separate terminal or process supervisor to keep running.
+Same install shape as steps 6/7: published as `@kealthas-dev/opencode-mcp-java-lsp`, install it globally the same way. Unlike Oracle/Loki, the vendored `jdtls` (Eclipse JDT Language Server) it drives ships inside the npm package itself (see `mcp-servers/java-lsp/README.md`'s Vendoring section) — nothing extra to download:
 
-Install it globally via the internal npm registry (same registry steps 6/7 already confirmed works for third-party packages):
+```bash
+npm install -g @kealthas-dev/opencode-mcp-java-lsp
+```
+
+This puts an `opencode-mcp-java-lsp` binary on `PATH`.
+
+**Needs `python3` and a JDK 21+ `java` on `PATH` on this machine** (separate from whatever JDK the Java project being analyzed targets — see the README's JDK version section) — neither has been confirmed present on the actual restricted target machine yet. Check both before relying on this step:
+
+```bash
+python3 --version
+java -version
+```
+
+If either is missing, report that back rather than guessing at how to install one on this machine.
+
+Wired as `type: "remote"` in `opencode.json`, same reasoning as step 6.
+
+Start the server with `JAVA_LSP_WORKSPACE_ROOT` (the Java project to analyze) and `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch directory dedicated to this project, not the project root itself; see `mcp-servers/java-lsp/README.md`'s Configuration section), and `JAVA_LSP_MCP_PORT` if the default port (`8092`) isn't free:
+
+```bash
+JAVA_LSP_WORKSPACE_ROOT=... JDTLS_DATA_DIR=... opencode-mcp-java-lsp
+```
+
+Leave that running (in its own terminal, or under whatever supervisor was chosen in step 6). `deploy/opencode.json.example` already carries this same block, enabled, with a placeholder port — if step 2 merged into an existing `opencode.json` instead of copying the example fresh, add it to `opencode.json`'s top level (merge, don't replace):
+
+```json
+"mcp": {
+  "java-lsp": {
+    "type": "remote",
+    "url": "http://localhost:8092/mcp",
+    "enabled": true
+  }
+}
+```
+
+Two things need real values that this repo or an executing agent should never guess — ask the human running this: the real `JAVA_LSP_WORKSPACE_ROOT` (which Java project to analyze), and the port, only if `JAVA_LSP_MCP_PORT` had to be overridden because `8092` was taken.
+
+## 9. Add the spring-lsp MCP server
+
+Same install shape as step 8: published as `@kealthas-dev/opencode-mcp-spring-lsp`, including its own vendored `spring-boot-language-server` (see `mcp-servers/spring-lsp/README.md`'s Vendoring section) — nothing extra to download here either:
+
+```bash
+npm install -g @kealthas-dev/opencode-mcp-spring-lsp
+```
+
+This puts an `opencode-mcp-spring-lsp` binary on `PATH`.
+
+**Needs a JDK 21+ `java` on `PATH`** (same check as step 8's `java -version`; `python3` is not needed for this one).
+
+Wired as `type: "remote"` in `opencode.json`, same reasoning as step 6.
+
+Start the server with `SPRING_LSP_WORKSPACE_ROOT` (the Spring Boot project to analyze; see `mcp-servers/spring-lsp/README.md`'s Configuration section), and `SPRING_LSP_MCP_PORT` if the default port (`8093`) isn't free:
+
+```bash
+SPRING_LSP_WORKSPACE_ROOT=... opencode-mcp-spring-lsp
+```
+
+Leave that running. `deploy/opencode.json.example` already carries this same block, enabled, with a placeholder port — if step 2 merged into an existing `opencode.json` instead of copying the example fresh, add it to `opencode.json`'s top level (merge, don't replace):
+
+```json
+"mcp": {
+  "spring-lsp": {
+    "type": "remote",
+    "url": "http://localhost:8093/mcp",
+    "enabled": true
+  }
+}
+```
+
+One thing needs a real value that this repo or an executing agent should never guess — ask the human running this: the real `SPRING_LSP_WORKSPACE_ROOT` (which Spring Boot project to analyze).
+
+`spring-lsp`'s classpath-aware richness (real bean/config-property results, not empty arrays) needs pairing with a `java-lsp` jdtls instance via a "classpath listener" mechanism that isn't implemented yet — see `mcp-servers/TODO.md`; unrelated to this deployment step.
+
+## 10. Add the Memory MCP server
+
+Unlike steps 6-9, this isn't a server this repo wrote — it's the official upstream `@modelcontextprotocol/server-memory` package (a local knowledge-graph memory: entities/relations/observations in a JSONL file, keyword search only, no embeddings). See `docs/feature-points/15-opencode-memory-mcp.md` for why this one and not a vector/RAG approach. It's also wired as `type: "local"` (opencode spawns and owns the process itself), unlike steps 6-9's `type: "remote"` — no separate terminal or process supervisor to keep running.
+
+Install it globally via the internal npm registry (same registry steps 6-9 already confirmed works for third-party packages):
 
 ```bash
 npm install -g @modelcontextprotocol/server-memory
@@ -214,7 +291,7 @@ echo "$MEMORY_FILE_PATH"
 
 This knowledge graph will contain whatever the model decides is worth remembering about the user/project over time — unlike this repo's own git-tracked `memory/`, `$CONFIG_DIR/memory.jsonl` is local machine state, not backed up or version-controlled by anything in this repo. If that's not the durability/privacy tradeoff wanted here, that's a real open decision, not something to guess at — flag it back rather than silently changing where the file lives.
 
-## 9. Verify
+## 11. Verify
 
 Run a trivial request against your actual local model:
 
@@ -230,12 +307,12 @@ cat ~/.local/share/opencode/last-system-prompt.txt
 
 Confirm: the output should start with the content of `system-prompt.txt` (not the original hand-holding `default.txt` identity paragraph), and should still have an `<env>` block further down with the real working directory/platform/date. If it still looks like the original verbose default, the `agent.prompt` config wasn't picked up — check for a JSON syntax error in `opencode.json` first.
 
-If you installed either plugin (steps 4/5) and `opencode run` errors out instead, that's more likely this machine's `npm install` failing against its registry (network/proxy issue, same class of failure as steps 6/7) than a problem with the prompt override itself — check `opencode debug config` output for a `plugin_origins` entry resolving correctly before assuming the whole setup is broken.
+If you installed either plugin (steps 4/5) and `opencode run` errors out instead, that's more likely this machine's `npm install` failing against its registry (network/proxy issue, same class of failure as steps 6-9) than a problem with the prompt override itself — check `opencode debug config` output for a `plugin_origins` entry resolving correctly before assuming the whole setup is broken.
 
-## 10. Cleanup (optional)
+## 12. Cleanup (optional)
 
-`$SRC_DIR` (the extracted zip) and the original zip file can be deleted once `$CONFIG_DIR/system-prompt.txt` and the globally-installed `@kealthas-dev/opencode-mcp-oracle`/`@kealthas-dev/opencode-mcp-loki`/`@modelcontextprotocol/server-memory` (whichever of steps 6/7/8 were installed — nothing under `$SRC_DIR` to clean up for any of them, they're global installs, not copied-in source trees) are in place — those are the only files that matter going forward. Steps 4/5's plugins install themselves into `$CACHE_DIR/packages/<name>@latest/` the first time opencode runs with them configured — nothing under `$SRC_DIR` to clean up for those either. Ask the human running this before deleting anything, don't assume.
+`$SRC_DIR` (the extracted zip) and the original zip file can be deleted once `$CONFIG_DIR/system-prompt.txt` and the globally-installed `@kealthas-dev/opencode-mcp-oracle`/`@kealthas-dev/opencode-mcp-loki`/`@kealthas-dev/opencode-mcp-java-lsp`/`@kealthas-dev/opencode-mcp-spring-lsp`/`@modelcontextprotocol/server-memory` (whichever of steps 6-10 were installed — nothing under `$SRC_DIR` to clean up for any of them, they're global installs, not copied-in source trees) are in place — those are the only files that matter going forward. Steps 4/5's plugins install themselves into `$CACHE_DIR/packages/<name>@latest/` the first time opencode runs with them configured — nothing under `$SRC_DIR` to clean up for those either. Ask the human running this before deleting anything, don't assume.
 
 ## Report back
 
-State plainly: did `opencode.json` already exist (merged or created fresh)? Did step 9's verification confirm the custom prompt is actually being sent? If not, what did the actual output look like instead? Which `plugin` entries did you end up installing (step 4, step 5, both, neither), and did opencode's own `npm install` against this machine's registry succeed cleanly for them? Did steps 6/7's `npm install` actually succeed against the internal registry, or was there a real blocker there? If you installed step 8, did `npm install -g` actually put `mcp-server-memory` on `PATH` the same way it did for `opencode` itself — and separately, did the model actually call the memory tools during step 9's verification, or does `deploy/system-prompt.txt`'s `# Memory` section need stronger wording for this specific model?
+State plainly: did `opencode.json` already exist (merged or created fresh)? Did step 11's verification confirm the custom prompt is actually being sent? If not, what did the actual output look like instead? Which `plugin` entries did you end up installing (step 4, step 5, both, neither), and did opencode's own `npm install` against this machine's registry succeed cleanly for them? Did steps 6-9's `npm install` actually succeed against the internal registry, or was there a real blocker there — and for steps 8/9 specifically, were `python3`/a JDK 21+ `java` actually present on this machine, or did those need installing first? If you installed step 10, did `npm install -g` actually put `mcp-server-memory` on `PATH` the same way it did for `opencode` itself — and separately, did the model actually call the memory tools during step 11's verification, or does `deploy/system-prompt.txt`'s `# Memory` section need stronger wording for this specific model?

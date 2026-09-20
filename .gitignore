@@ -22,6 +22,10 @@ mcp-servers/**/.env
 # server.js). Only the tar.gz itself is committed.
 mcp-servers/spring-lsp/vendor/spring-boot-language-server-*/
 
+# Same pattern for the vendored jdtls (see resolveJdtlsCommand() in
+# mcp-servers/java-lsp/server.js). Only the tar.gz itself is committed.
+mcp-servers/java-lsp/vendor/jdt-language-server-*/
+
 # Still git-tracked and committed normally (see docs/fetch-opencode-docs.sh) -
 # this entry doesn't untrack anything. It only makes ripgrep-based tools
 # (grep/glob in both Claude Code and opencode itself) skip this directory
