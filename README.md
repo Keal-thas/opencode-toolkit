@@ -2,7 +2,7 @@
 
 A workspace for building on top of `opencode` (the CLI coding agent): a system-prompt override, custom opencode plugins, a script for using opencode to analyze a large codebase, and MCP servers for LAN-internal ops tooling plus LSP-backed Java/Spring code intelligence. See "Repo layout" below for the rest.
 
-[SETUP.md](SETUP.md) has the prompt override's setup instructions, written to be handed directly to an agent and executed step by step (the target machine is network-restricted, not something to do by hand repeatedly). This README is the human-readable explanation of what it does and why. [SETUP-notes.zh.md](SETUP-notes.zh.md) is a separate Chinese walkthrough of the same steps, for a human watching the deployment — not meant to be executed literally (hence not named `SETUP.zh.md`).
+[SETUP.md](SETUP.md) has the prompt override's setup instructions, written to be handed directly to an agent and executed step by step (the target machine is network-restricted, not something to do by hand repeatedly). This README is the human-readable explanation of what it does and why. [SETUP-notes.zh.md](SETUP-notes.zh.md) is a separate Chinese walkthrough of the same steps, for a human watching the deployment — not meant to be executed literally (hence not named `SETUP.zh.md`). [USAGE.zh.md](USAGE.zh.md) is a short Chinese day-to-day usage manual (local dev/test, directory map, where to look for more) — this README doesn't have an English equivalent since it already covers that ground.
 
 ## Repo layout
 
