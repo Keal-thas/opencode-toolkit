@@ -9,9 +9,8 @@ services:
   opencode-dev:
     build:
       # This compose file lives in docker/, but the build needs the whole
-      # repo as context (the Dockerfile COPYs docker/docker-entrypoint.sh
-      # and deploy/ for the plugin pre-warm step, and the bind mount below
-      # needs the repo root too).
+      # repo as context (the Dockerfile COPYs docker/docker-entrypoint.sh,
+      # and the bind mount below needs the repo root too).
       context: ..
       dockerfile: docker/Dockerfile
       args:
@@ -45,15 +44,10 @@ services:
       # var at container start (this container's process tree only,
       # nothing written back to the host).
       - ${HOME}/.keys/.deepseek-key:/home/dev/.keys/.deepseek-key:ro
-    # No opencode-config/opencode-data named volumes anymore - opencode's
-    # config/data live entirely in the container's own writable layer and
-    # reset with it on every `--rm`. docker-entrypoint.sh (re)generates
-    # opencode.jsonc fresh on every start instead of relying on a
-    # persisted, hand-edited copy. The plugin's node_modules that used to
-    # make a cold config volume slow are pre-installed at image build
-    # time instead (see Dockerfile) - not relying on a volume for them
-    # either. See docs/lessons-learned.md for the measurements behind
-    # dropping these volumes.
+    # No opencode-config/opencode-data named volumes - opencode's
+    # config/data live in the container's writable layer and reset with
+    # it on every `--rm`. docker-entrypoint.sh (re)generates
+    # opencode.jsonc fresh on every start instead.
     #
     # ORACLE_*/LOKI_BASE_URL pre-wire mcp-servers/oracle/ and mcp-servers/loki/ to the
     # sibling `oracle`/`loki` services in docker-compose.oracle.yml/
