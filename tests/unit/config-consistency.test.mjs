@@ -45,7 +45,7 @@ test("deploy/models-dev-snapshot.json parses as JSON", async () => {
   assert.doesNotThrow(() => JSON.parse(raw));
 });
 
-test("SETUP.md's documented agent-merge JSON snippet matches deploy/opencode.json.example (no config drift)", async () => {
+test("SETUP.md's documented agent/permission merge JSON snippet matches deploy/opencode.json.example (no config drift)", async () => {
   const [setup, exampleRaw] = await Promise.all([
     readFile(join(repoRoot, "SETUP.md"), "utf-8"),
     readFile(join(repoRoot, "deploy", "opencode.json.example"), "utf-8"),
@@ -53,9 +53,10 @@ test("SETUP.md's documented agent-merge JSON snippet matches deploy/opencode.jso
   const example = JSON.parse(exampleRaw);
 
   const fences = extractJsonFences(setup);
-  const agentFence = fences.find((f) => f.trim().startsWith('"agent"'));
-  assert.ok(agentFence, "expected a fenced ```json block starting with \"agent\" in SETUP.md step 2");
+  const mergeFence = fences.find((f) => f.trim().startsWith('"permission"'));
+  assert.ok(mergeFence, "expected a fenced ```json block starting with \"permission\" in SETUP.md step 2");
 
-  const documented = JSON.parse(`{${agentFence}}`);
+  const documented = JSON.parse(`{${mergeFence}}`);
   assert.deepEqual(documented.agent, example.agent);
+  assert.deepEqual(documented.permission, example.permission);
 });

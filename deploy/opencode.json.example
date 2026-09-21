@@ -1,5 +1,8 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "review_verdict": "deny"
+  },
   "agent": {
     "build": {
       "prompt": "{file:./system-prompt.txt}"
@@ -9,6 +12,25 @@
     },
     "general": {
       "prompt": "{file:./system-prompt.txt}"
+    },
+    "review-gate": {
+      "description": "Internal ALLOW/BLOCK safety reviewer used by the llm-review-gate plugin. Not user-facing.",
+      "mode": "subagent",
+      "hidden": true,
+      "permission": {
+        "read": "deny",
+        "edit": "deny",
+        "glob": "deny",
+        "grep": "deny",
+        "list": "deny",
+        "bash": "deny",
+        "task": "deny",
+        "webfetch": "deny",
+        "websearch": "deny",
+        "todowrite": "deny",
+        "skill": "deny",
+        "review_verdict": "allow"
+      }
     }
   },
   "plugin": [

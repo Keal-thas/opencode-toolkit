@@ -14,6 +14,13 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 echo "== unit tests (node --test) =="
+# plugins/llm-review-gate/ is the one plugin in this repo with a real
+# runtime dependency (zod, for its review_verdict tool's argument schema -
+# every other plugin here is zero-runtime-dependency by design, see its
+# package.json) - install it before its unit test tries to import the
+# plugin module, same reasoning as toolkits/module-analysis below.
+(cd plugins/llm-review-gate && npm install --no-audit --no-fund)
+
 # Explicit glob, not a bare directory: Node 20 auto-detected "tests/unit"
 # as a directory to scan for test files, but Node 22 (this sandbox's
 # base image as of 2026-09-13, see docker/docker-notes.md) does not -

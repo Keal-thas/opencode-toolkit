@@ -48,9 +48,12 @@ Check whether `$CONFIG_DIR/opencode.json` already exists.
   cp "$SRC_DIR/deploy/opencode.json.example" "$CONFIG_DIR/opencode.json"
   ```
 
-- **If it already exists** (most likely — your vLLM provider is probably already configured there): read it, then add this exact key to the top-level JSON object, merging with whatever is already there. Do not remove or alter any existing keys (provider config, permissions, etc.) — only add/merge the `agent` key:
+- **If it already exists** (most likely — your vLLM provider is probably already configured there): read it, then add these exact keys to the top-level JSON object, merging with whatever is already there. Do not remove or alter any existing keys (provider config, permissions, etc.) — only add/merge the `agent` and `permission` keys:
 
   ```json
+  "permission": {
+    "review_verdict": "deny"
+  },
   "agent": {
     "build": {
       "prompt": "{file:./system-prompt.txt}"
@@ -60,11 +63,32 @@ Check whether `$CONFIG_DIR/opencode.json` already exists.
     },
     "general": {
       "prompt": "{file:./system-prompt.txt}"
+    },
+    "review-gate": {
+      "description": "Internal ALLOW/BLOCK safety reviewer used by the llm-review-gate plugin. Not user-facing.",
+      "mode": "subagent",
+      "hidden": true,
+      "permission": {
+        "read": "deny",
+        "edit": "deny",
+        "glob": "deny",
+        "grep": "deny",
+        "list": "deny",
+        "bash": "deny",
+        "task": "deny",
+        "webfetch": "deny",
+        "websearch": "deny",
+        "todowrite": "deny",
+        "skill": "deny",
+        "review_verdict": "allow"
+      }
     }
   }
   ```
 
-  If an `"agent"` key already exists with other agents configured, merge `build`/`plan`/`general` into it rather than replacing the whole key. Produce valid JSON and verify it parses (e.g. `python -c "import json,sys; json.load(open(sys.argv[1]))" "$CONFIG_DIR/opencode.json"` or equivalent) before moving on.
+  `review-gate` has no `prompt` override on purpose — it's the internal session the `llm-review-gate` plugin (step 5) uses to get an ALLOW/BLOCK verdict, and it must NOT inherit `build`/`plan`/`general`'s `system-prompt.txt` persona (an agent's per-request `system` field is appended after its configured `prompt`, not a replacement for it, so without this dedicated agent the review call would be fighting the full coding-agent persona for the model's attention). `review_verdict` is a custom tool the plugin registers for recording that verdict as a real function call rather than free text — a plugin-registered tool is available to every agent by name like a built-in one, so the top-level `permission.review_verdict: "deny"` keeps it out of `build`/`plan`/`general`'s toolset, and `review-gate`'s own `permission` overrides that back to `"allow"` — the only agent that should ever see or call it.
+
+  If an `"agent"` key already exists with other agents configured, merge `build`/`plan`/`general`/`review-gate` into it rather than replacing the whole key; same for `"permission"` if one already exists. Produce valid JSON and verify it parses (e.g. `python -c "import json,sys; json.load(open(sys.argv[1]))" "$CONFIG_DIR/opencode.json"` or equivalent) before moving on.
 
 ## 3. Point the models.dev catalog at a local file
 

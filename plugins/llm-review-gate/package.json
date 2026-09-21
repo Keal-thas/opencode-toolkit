@@ -2,7 +2,7 @@
   "name": "@kealthas-dev/opencode-llm-review-gate",
   "version": "1.0.0",
   "type": "module",
-  "description": "llm-review-gate.ts opencode plugin (gates bash tool calls behind an LLM safety review before they run), published to npm so opencode's own npm-plugin loader can install it directly from a bare package name in opencode.json's plugin array - see CLAUDE.md. Written in TypeScript against @opencode-ai/plugin's Plugin type. Independently installable from hook-logger.ts - not bundled together.",
+  "description": "llm-review-gate.ts opencode plugin (gates bash tool calls behind an LLM safety review before they run, via a real review_verdict function-call tool with a text-parsing fallback), published to npm so opencode's own npm-plugin loader can install it directly from a bare package name in opencode.json's plugin array - see CLAUDE.md. Written in TypeScript against @opencode-ai/plugin's Plugin type (type-only) plus a real `zod` runtime dependency for the tool's argument schema - the one plugin in this repo with an actual runtime dependency, unlike hook-logger.ts/system-prompt-tools.ts's zero-dependency design. Independently installable from hook-logger.ts - not bundled together.",
   "main": "llm-review-gate.ts",
   "files": ["llm-review-gate.ts"],
   "publishConfig": {
@@ -12,6 +12,9 @@
     "type": "git",
     "url": "https://github.com/Keal-thas/opencode-toolkit.git",
     "directory": "plugins/llm-review-gate"
+  },
+  "dependencies": {
+    "zod": "^4.1.8"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.0.0",
