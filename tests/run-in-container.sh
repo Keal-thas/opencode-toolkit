@@ -5,9 +5,8 @@
 # tests, the analyze-modules.mjs integration test (real opencode server,
 # fake model provider), the oracle MCP server test (needs a real Oracle
 # instance), and the loki MCP server test (needs a real Loki instance) -
-# both guaranteed reachable here because docker/dev.sh brings the shared
-# `oracle`/`loki` services up before this container even starts, see
-# docker/docker-notes.md. Also the memory MCP server test - needs only
+# both reachable here because the shared `oracle`/`loki` services are
+# started separately first, see docker/docker-notes.md. Also the memory MCP server test - needs only
 # network access to install the real upstream npm package, no backing
 # service.
 set -euo pipefail

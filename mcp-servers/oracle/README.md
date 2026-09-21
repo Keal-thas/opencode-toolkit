@@ -60,13 +60,14 @@ Either way, this starts a persistent HTTP server on `ORACLE_MCP_PORT` (default `
 
 ## Testing against a real Oracle instance
 
-`docker/docker-compose.oracle.yml`'s `oracle` service (`gvenzl/oracle-free` — see `docker/docker-notes.md`'s "Oracle test instance" section) comes up automatically via `docker/dev.sh`, no separate step needed:
+`docker/docker-compose.oracle.yml`'s `oracle` service (`gvenzl/oracle-free` — see `docker/docker-notes.md`'s "Oracle test instance" section) is a shared fixture started separately, not by `docker/dev.sh`:
 
 ```sh
+docker compose -f docker/docker-compose.oracle.yml up -d --wait
 docker/dev.sh run --rm opencode-dev bash
 ```
 
-`ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD` are already set inside that shell — `cd mcp-servers/oracle && npm install && npm start`, then hit `http://localhost:8090/mcp` from an MCP client or `curl`. First time on a fresh machine/volume, the `run` command itself takes 1-3 minutes before the shell opens (Oracle's first-time DB init).
+`ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD` are already set inside that shell — `cd mcp-servers/oracle && npm install && npm start`, then hit `http://localhost:8090/mcp` from an MCP client or `curl`.
 
 `oracle.test.mjs` (see `tests/README.md`) doesn't need this manual dance — it starts and stops its own `server.js` process on its own port as part of the test run.
 

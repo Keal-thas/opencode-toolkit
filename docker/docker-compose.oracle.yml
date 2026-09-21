@@ -1,28 +1,18 @@
-# Separate compose file/project from docker-compose.yml on purpose: this
-# is the one piece of the sandbox meant to stay genuinely shared across
-# every worktree, not isolated per worktree the way opencode-dev now is
-# (see docker/dev.sh and docs/lessons-learned.md for why opencode-dev
-# needed per-worktree isolation). A fixed project name here, unlike the
-# worktree-hashed one dev.sh exports for the other file.
+# Shared machine-wide fixture: one Oracle for every worktree (a single instance uses ~2 GiB RAM), so it lives in its own fixed-name project, started separately - not by dev.sh.
 name: opencode-toolkit-oracle
 
 services:
-  # Real Oracle instance backing mcp-servers/oracle/'s tests and interactive use.
-  # Brought up once per machine (see docker/dev.sh, which does this
-  # idempotently before every opencode-dev invocation) rather than every
-  # worktree's own opencode-dev bringing up its own copy - it's a shared,
-  # read-mostly test fixture, not per-session state.
   oracle:
     image: gvenzl/oracle-free:${ORACLE_FREE_VERSION:?set ORACLE_FREE_VERSION in .env}
     container_name: opencode-toolkit-oracle-test
+    ports:
+      # Host debugging only.
+      - "127.0.0.1:1521:1521"
     environment:
       - ORACLE_PASSWORD=${ORACLE_SYS_PASSWORD:?set ORACLE_SYS_PASSWORD in .env}
       - APP_USER=${ORACLE_APP_USER:?set ORACLE_APP_USER in .env}
       - APP_USER_PASSWORD=${ORACLE_APP_USER_PASSWORD:?set ORACLE_APP_USER_PASSWORD in .env}
     volumes:
-      # First-time init (creating the FREE database + FREEPDB1 pluggable
-      # DB) takes 1-3 minutes - this volume means that only happens once,
-      # not on every `docker compose up`.
       - oracle-data:/opt/oracle/oradata
     networks:
       - oracle-net
@@ -35,10 +25,8 @@ services:
 
 volumes:
   oracle-data:
+    name: opencode-toolkit-oracle-data
 
 networks:
-  # Named explicitly (not this project's auto-generated default network)
-  # so docker-compose.yml can reference it by a fixed name as `external:
-  # true`, regardless of which worktree-hashed project is asking.
   oracle-net:
     name: opencode-toolkit-oracle-net

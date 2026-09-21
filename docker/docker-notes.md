@@ -1,10 +1,17 @@
 # Docker dev/test sandbox — working notes
 
-`Dockerfile` + `docker-compose.yml` + `docker-compose.oracle.yml` (all in `docker/`) give a local, isolated container for exercising this repo's prompt/plugins against a real `opencode` install, without touching the host's own opencode config or trusting an all-permission agent with anything outside the container.
+`Dockerfile` + `docker-compose.yml` + the two shared-fixture files (`docker-compose.oracle.yml`, `docker-compose.loki.yml`), all in `docker/`, give a local, isolated container for exercising this repo's prompt/plugins against a real `opencode` install, without touching the host's own opencode config or trusting an all-permission agent with anything outside the container.
 
 ## Launching it
 
-Always go through `docker/dev.sh`, not `docker compose` directly — it isolates each worktree's Compose project so two worktrees running the sandbox at the same time never collide (see "Per-worktree isolation" below). Run from the repo root:
+The `oracle`/`loki` fixtures are machine-wide external resources, started separately from the sandbox (see "Oracle test instance" and "Loki test instance" below). Bring them up once, then launch the sandbox:
+
+```sh
+docker compose -f docker/docker-compose.oracle.yml up -d --wait
+docker compose -f docker/docker-compose.loki.yml up -d
+```
+
+The sandbox itself always goes through `docker/dev.sh`, not `docker compose` directly — it isolates each worktree's Compose project so two worktrees running the sandbox at the same time never collide (see "Per-worktree isolation" below). Run from the repo root:
 
 ```sh
 docker/dev.sh run --rm opencode-dev
@@ -62,14 +69,15 @@ Claude never reads these key files' contents directly (only checks filenames/len
 
 ## Oracle test instance, for exercising mcp-servers/oracle/
 
-Lives in its own compose file/project, `docker/docker-compose.oracle.yml` (fixed project name `opencode-toolkit-oracle`), separate from `docker-compose.yml`'s per-worktree one — it's a genuinely shared, read-mostly test fixture, not per-worktree state, and would be forced into per-worktree isolation if it stayed in the same file (see "Per-worktree isolation" above). `oracle` (image `gvenzl/oracle-free`, version pinned via `ORACLE_FREE_VERSION` in `docker/.env`, same reasoning as `OPENCODE_VERSION`) gives `mcp-servers/oracle/` a real Oracle instance to test against.
+Lives in its own compose file/project, `docker/docker-compose.oracle.yml` (fixed project name `opencode-toolkit-oracle`), separate from `docker-compose.yml`'s per-worktree one — it's a genuinely shared, read-mostly test fixture, not per-worktree state, and would be forced into per-worktree isolation if it stayed in the same file (see "Per-worktree isolation" above) — and it has to stay a singleton because one `oracle` instance uses ~2 GiB RAM (measured), so a copy per worktree would exhaust memory. `oracle` (image `gvenzl/oracle-free`, version pinned via `ORACLE_FREE_VERSION` in `docker/.env`, same reasoning as `OPENCODE_VERSION`) gives `mcp-servers/oracle/` a real Oracle instance to test against.
 
-**`docker/dev.sh` brings it up automatically before `run`/`up`, by deliberate choice** — `docker compose -f docker/docker-compose.oracle.yml up -d --wait`, idempotent, blocking until healthy. This replaces the `depends_on: condition: service_healthy` the old single-file design used; `depends_on` can't reach across separate compose projects, which is what splitting `oracle` out required. Accepted tradeoffs (weighed against the risk of a forgotten manual start):
-- idle RAM/CPU for `oracle` on every sandbox session, even ones unrelated to it
-- on a fresh machine or wiped volume, first-time DB init (1-3 min) blocks every `opencode-dev` invocation via `dev.sh`, not just ones touching `mcp-servers/oracle/`
-- `docker/dev.sh` fails outright if `oracle` can't become healthy
+Start it manually — it's a machine-wide fixture independent of the per-worktree sandbox, so it stays up across worktrees and `run --rm` sessions:
 
-First-time init takes 1-3 minutes and only happens once — the `oracle-data` volume (in `docker-compose.oracle.yml`'s own project) persists it. Once warm, later starts are `healthy` within seconds. `oracle` keeps running after a `run --rm opencode-dev` session exits, and across every worktree — stop it explicitly with `docker compose -f docker/docker-compose.oracle.yml down`.
+```sh
+docker compose -f docker/docker-compose.oracle.yml up -d --wait
+```
+
+`--wait` blocks until its healthcheck passes. First-time init takes ~10 seconds (measured against `23.26.3-slim`) and only happens once — the `oracle-data` volume persists it; once warm, later starts are `healthy` within seconds. Stop it explicitly with `docker compose -f docker/docker-compose.oracle.yml down`.
 
 Reachable from `opencode-dev` as `oracle:1521/FREEPDB1` via Compose service-name DNS, even though the two containers belong to different compose projects — `docker-compose.yml` joins `docker-compose.oracle.yml`'s network as `external: true` (both declare the same fixed network name, `opencode-toolkit-oracle-net`), and Compose's service-name DNS resolution works per-network, not per-project. `opencode-dev`'s `environment` block pre-wires `ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD` to match, so `cd mcp-servers/oracle && npm install && npm start` just works with zero setup. Credentials (`ORACLE_APP_USER`/`ORACLE_APP_USER_PASSWORD` in `docker/.env`) are throwaway sandbox fixtures, never exposed outside this docker network.
 
@@ -77,7 +85,13 @@ Reachable from `opencode-dev` as `oracle:1521/FREEPDB1` via Compose service-name
 
 Same shared-fixture shape as the Oracle section above: its own compose file/project, `docker/docker-compose.loki.yml` (fixed project name `opencode-toolkit-loki`), separate from `docker-compose.yml`'s per-worktree one. `loki` (image `grafana/loki`, version pinned via `LOKI_VERSION` in `docker/.env`, same reasoning as `OPENCODE_VERSION`/`ORACLE_FREE_VERSION` — pins the *sandbox's test instance* only, not a requirement `mcp-servers/loki/server.js` itself imposes, since the Loki HTTP query API it calls has been stable across 2.x/3.x) gives `mcp-servers/loki/` a real Loki instance to test against. Runs with its stock default config (`auth_enabled: false`, filesystem storage) — no mounted config file needed, confirmed by reading the image's real upstream `cmd/loki/loki-docker-config.yaml` rather than assumed.
 
-**`docker/dev.sh` brings it up automatically before `run`/`up`**, same as `oracle`, but readiness is checked differently: `loki`'s official image is built `FROM gcr.io/distroless/static:nonroot` (confirmed from its real upstream `cmd/loki/Dockerfile`) — no shell, `wget`, or `curl` inside the container, so it can't run a Docker `HEALTHCHECK` the way `gvenzl/oracle-free` does. `docker/dev.sh` instead publishes the container's port to `127.0.0.1:3100` and polls `/ready` from the host in a short retry loop after `up -d` (no `--wait`, since there's no healthcheck for it to wait on). Loki has no slow first-time DB init like Oracle's, so this is normally sub-second — the retry loop is a safety margin, not an expected wait.
+Start it manually, same as `oracle`:
+
+```sh
+docker compose -f docker/docker-compose.loki.yml up -d
+```
+
+No `--wait` here: `loki`'s official image is built `FROM gcr.io/distroless/static:nonroot` (confirmed from its real upstream `cmd/loki/Dockerfile`) — no shell, `wget`, or `curl` inside the container, so it can't run a Docker `HEALTHCHECK` the way `gvenzl/oracle-free` does. Loki has no slow first-time DB init, so it's ready within a second of `up -d`.
 
 First-time init is effectively instant (no schema/DB bootstrap) — the `loki-data` volume (in `docker-compose.loki.yml`'s own project) still persists ingested test data across container restarts, same pattern as `oracle-data`. `loki` keeps running after a `run --rm opencode-dev` session exits, and across every worktree — stop it explicitly with `docker compose -f docker/docker-compose.loki.yml down`.
 

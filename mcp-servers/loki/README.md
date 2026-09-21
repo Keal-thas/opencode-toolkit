@@ -41,9 +41,10 @@ Either way, this starts a persistent HTTP server on `LOKI_MCP_PORT` (default `80
 
 ## Testing against a real Loki instance
 
-`docker/docker-compose.loki.yml`'s `loki` service comes up automatically via `docker/dev.sh`, no separate step needed:
+`docker/docker-compose.loki.yml`'s `loki` service is a shared fixture started separately, not by `docker/dev.sh`:
 
 ```sh
+docker compose -f docker/docker-compose.loki.yml up -d
 docker/dev.sh run --rm opencode-dev bash
 ```
 

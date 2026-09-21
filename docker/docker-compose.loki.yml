@@ -1,46 +1,23 @@
-# Separate compose file/project from docker-compose.yml on purpose, same
-# reasoning as docker-compose.oracle.yml's own header comment: this is a
-# genuinely shared test fixture across every worktree, not per-worktree
-# state. A fixed project name here, unlike the worktree-hashed one dev.sh
-# exports for the other file.
+# Shared machine-wide fixture, same singleton rationale as oracle (fixed-name project, started separately).
 name: opencode-toolkit-loki
 
 services:
-  # Real Loki instance backing mcp-servers/loki/'s tests and interactive use.
-  # Brought up once per machine (see docker/dev.sh) rather than every
-  # worktree's own opencode-dev bringing up its own copy.
-  #
-  # No Docker HEALTHCHECK on this service, unlike docker-compose.oracle.yml's
-  # `oracle` - grafana/loki's official image is built FROM
-  # gcr.io/distroless/static:nonroot (confirmed from its real upstream
-  # Dockerfile, not assumed), so there's no shell/wget/curl inside the
-  # container for a HEALTHCHECK to exec. docker/dev.sh polls the published
-  # port from the host instead - see that script's own comment.
+  # No HEALTHCHECK: grafana/loki is built FROM distroless (no shell/wget/curl inside), so there's nothing to exec a healthcheck command with.
   loki:
     image: grafana/loki:${LOKI_VERSION:?set LOKI_VERSION in .env}
     container_name: opencode-toolkit-loki-test
     ports:
-      # Host-side only, for docker/dev.sh's own readiness polling (the
-      # distroless image can't self-report readiness via a container-
-      # internal HEALTHCHECK - see above). opencode-dev reaches this
-      # service over loki-net by service-name DNS instead, not through
-      # this mapping.
+      # Host debugging only.
       - "127.0.0.1:3100:3100"
     volumes:
-      # Loki's image chowns /loki to its own non-root user at build time;
-      # Docker copies that ownership into a fresh named volume on first
-      # mount, so no separate chown step is needed here.
       - loki-data:/loki
     networks:
       - loki-net
 
 volumes:
   loki-data:
+    name: opencode-toolkit-loki-data
 
 networks:
-  # Named explicitly (not this project's auto-generated default network)
-  # so docker-compose.yml can reference it by a fixed name as `external:
-  # true`, regardless of which worktree-hashed project is asking - same
-  # pattern as oracle-net in docker-compose.oracle.yml.
   loki-net:
     name: opencode-toolkit-loki-net

@@ -1,60 +1,20 @@
-# No top-level `name:` here on purpose - it's set per invocation via the
-# COMPOSE_PROJECT_NAME env var that docker/dev.sh exports (hashed from the
-# calling worktree's absolute path), so two worktrees never collide on
-# the same project/container/network names. Always launch this file
-# through docker/dev.sh, not `docker compose` directly - see that
-# script's own comment and docs/lessons-learned.md.
-
+# No top-level `name:` on purpose - dev.sh sets COMPOSE_PROJECT_NAME (hashed from the worktree path) so concurrent worktrees never collide. Launch via docker/dev.sh only.
 services:
   opencode-dev:
     build:
-      # This compose file lives in docker/, but the build needs the whole
-      # repo as context (the Dockerfile COPYs docker/docker-entrypoint.sh,
-      # and the bind mount below needs the repo root too).
       context: ..
       dockerfile: docker/Dockerfile
       args:
         UID: "${UID:-1000}"
         GID: "${GID:-1000}"
-        # Sourced from .env - that file is the single place to bump this.
         OPENCODE_VERSION: "${OPENCODE_VERSION:?set OPENCODE_VERSION in .env}"
-    # Fixed image tag on purpose, unlike container_name below: the image
-    # is a multi-GB toolchain build that's meant to stay global/shared
-    # across every worktree (rebuilding it per worktree would be
-    # wasteful and the toolchain doesn't depend on worktree identity) -
-    # so it deliberately sits outside the per-worktree isolation this
-    # file otherwise has. Known residual risk: two worktrees building
-    # concurrently with different uncommitted Dockerfile content can
-    # race on this tag (see TODO.md) - accepted, not fixed here.
+    # Fixed image tag (shared across worktrees - multi-GB toolchain), but no fixed container_name: Compose derives it from the hashed project so each worktree gets its own. Race risk if two worktrees build concurrently with different Dockerfile content - accepted.
     image: opencode-toolkit-dev:latest
-    # No fixed `container_name:` though - letting Compose auto-derive it
-    # from (the now worktree-hashed) COMPOSE_PROJECT_NAME is what makes
-    # 20 concurrent `run --rm` calls in the same project never collide
-    # (verified live - see docs/lessons-learned.md), and what keeps two
-    # different worktrees from fighting over one container name.
     working_dir: /home/dev/project
     volumes:
-      # Live bind mount of the repo root (this compose file lives in
-      # docker/, so it's ".." from here): edits to deploy/system-prompt.txt
-      # or the plugins on the Mac host show up immediately, no rebuild.
       - ..:/home/dev/project
-      # Read-only, single file (not the whole ~/.keys dir - least
-      # privilege, other keys that might live there stay out of this
-      # container entirely). docker-entrypoint.sh loads it into an env
-      # var at container start (this container's process tree only,
-      # nothing written back to the host).
       - ${HOME}/.keys/.deepseek-key:/home/dev/.keys/.deepseek-key:ro
-    # No opencode-config/opencode-data named volumes - opencode's
-    # config/data live in the container's writable layer and reset with
-    # it on every `--rm`. docker-entrypoint.sh (re)generates
-    # opencode.jsonc fresh on every start instead.
-    #
-    # ORACLE_*/LOKI_BASE_URL pre-wire mcp-servers/oracle/ and mcp-servers/loki/ to the
-    # sibling `oracle`/`loki` services in docker-compose.oracle.yml/
-    # docker-compose.loki.yml (matching the env var names each server.js
-    # reads) - no per-session setup needed. Reachable by service-name DNS
-    # because these containers share the oracle-net/loki-net networks
-    # below, even though those services live in separate compose projects.
+    # No opencode config/data named volumes - they live in the container's writable layer and reset on every --rm; docker-entrypoint.sh regenerates opencode.jsonc each start.
     environment:
       - DEEPSEEK_API_KEY
       - ORACLE_CONNECT_STRING=oracle:1521/FREEPDB1
@@ -65,17 +25,12 @@ services:
       - default
       - oracle-net
       - loki-net
-    # No `depends_on: oracle`/`loki` - depends_on can't reach across
-    # compose projects. docker/dev.sh brings both up (idempotently, on
-    # their own fixed shared projects) before invoking this file instead.
+    # No depends_on oracle/loki - it can't reach across compose projects; start them separately (see docker-notes.md).
     stdin_open: true
     tty: true
     command: bash
 
 networks:
-  # Owned by docker-compose.oracle.yml/docker-compose.loki.yml's own
-  # projects; declared external here so this (worktree-scoped) project
-  # can join them without owning or namespacing them.
   oracle-net:
     name: opencode-toolkit-oracle-net
     external: true

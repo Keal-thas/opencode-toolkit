@@ -1,7 +1,7 @@
 // Requires a live Oracle instance reachable via the env vars checked below -
 // the docker/ sandbox's `oracle` compose service (see docker/docker-notes.md's
-// "Oracle test instance" section), which opencode-dev's depends_on always
-// brings up automatically. Not something this test can mock: it exercises
+// "Oracle test instance" section), started separately as a shared fixture.
+// Not something this test can mock: it exercises
 // the real oracledb round-trip, including the per-request-connection /
 // autoCommit design decisions server.js makes. Lives here (not under
 // tests/) so Node's module resolution finds this package's own
