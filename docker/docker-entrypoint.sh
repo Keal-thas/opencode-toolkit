@@ -1,19 +1,13 @@
 #!/bin/bash
 set -e
 
-# Regenerate opencode's config fresh on every start. There's no
-# persistent opencode-config volume anymore (see docker-compose.yml and
-# docs/lessons-learned.md), so nothing else would ever populate this
-# file - matches the container's own writable layer resetting on every
-# `--rm`. Mirrors SETUP.md steps 1/2/4 for the real deployment:
-# build/plan/general point at system-prompt.txt through the live
-# bind-mounted project dir (not a build-time copy), so host edits to
-# that file show up without a rebuild. The diagnostic dump plugin loads
-# from the real published npm package by bare name instead - editing
-# plugins/system-prompt-tools/system-prompt-tools.ts and publishing a
-# new version needs the image rebuilt (`docker/dev.sh build`) to pick
-# it up here, since the actual install was pre-warmed into the image
-# layer at build time (see the Dockerfile) - see docker-notes.md.
+# Regenerate opencode's config fresh on every start - the container's
+# writable layer resets on every `--rm`, so nothing else would populate
+# this file. Mirrors SETUP.md steps 1/2/4: build/plan/general point at
+# the bind-mounted deploy/system-prompt.txt, so host edits show up
+# without a rebuild. The diagnostic plugin loads from the published npm
+# package by bare name - opencode installs it fresh each container
+# start (see docker-notes.md's "Plugin loading" section).
 cat > /home/dev/.config/opencode/opencode.jsonc <<'EOF'
 {
   "$schema": "https://opencode.ai/config.json",
