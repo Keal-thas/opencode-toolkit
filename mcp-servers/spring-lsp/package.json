@@ -19,7 +19,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
-    "dev": "tsx watch src/server.ts"
+    "dev": "tsx watch src/server.ts",
+    "test": "tsx --test spring-lsp.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0"
