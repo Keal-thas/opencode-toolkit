@@ -1,19 +1,91 @@
 #!/usr/bin/env node
 import http from "node:http";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import oracledb from "oracledb";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import type { DatabaseConfig, ServerConfig } from "./types/config.js";
 
-const ORACLE_CONNECT_STRING = process.env.ORACLE_CONNECT_STRING;
-const ORACLE_USER = process.env.ORACLE_USER;
-const ORACLE_PASSWORD = process.env.ORACLE_PASSWORD;
-const ORACLE_MCP_PORT = Number(process.env.ORACLE_MCP_PORT ?? "8090");
+const DEFAULT_PORT = 8090;
+const CONFIG_DIR = join(homedir(), ".config", "kealthas-dev", "opencode-mcp-oracle");
+const SERVER_CONFIG_PATH = join(CONFIG_DIR, "server.json");
 
-if (!ORACLE_CONNECT_STRING || !ORACLE_USER || !ORACLE_PASSWORD) {
-  console.error("Missing Oracle connection details. Set ORACLE_CONNECT_STRING, ORACLE_USER, ORACLE_PASSWORD.");
-  process.exit(1);
+const SAMPLE_SERVER_CONFIG = { ORACLE_MCP_PORT: DEFAULT_PORT };
+const SAMPLE_DATABASE_CONFIG = {
+  ORACLE_CONNECT_STRING: "hostname:1521/service_name (Easy Connect or TNS, either works)",
+  ORACLE_USER: "username",
+  ORACLE_PASSWORD: "password",
+};
+
+function printSampleConfig(label: string, path: string, sample: unknown): void {
+  console.error(`\nExpected ${label} at: ${path}\n`);
+  console.error(JSON.stringify(sample, null, 2));
+  console.error("");
 }
+
+// server.json is infrastructure config (which port to bind) that doesn't
+// vary per environment, so it lives at one fixed path rather than being
+// pointed at like the database config below. Missing entirely just means
+// "use the default port" - only a present-but-broken file is treated as a
+// real error, since its existence signals intent to override the default.
+function loadServerConfig(): ServerConfig {
+  if (!existsSync(SERVER_CONFIG_PATH)) {
+    return { ORACLE_MCP_PORT: DEFAULT_PORT };
+  }
+
+  try {
+    const raw = JSON.parse(readFileSync(SERVER_CONFIG_PATH, "utf8"));
+    const port = Number(raw.ORACLE_MCP_PORT ?? DEFAULT_PORT);
+    if (!Number.isInteger(port) || port <= 0) {
+      throw new Error(`ORACLE_MCP_PORT must be a positive integer, got: ${JSON.stringify(raw.ORACLE_MCP_PORT)}`);
+    }
+    return { ORACLE_MCP_PORT: port };
+  } catch (err) {
+    console.error(`Failed to load server config: ${(err as Error).message}`);
+    printSampleConfig("server config", SERVER_CONFIG_PATH, SAMPLE_SERVER_CONFIG);
+    process.exit(1);
+  }
+}
+
+// Database config is per-environment (prod/staging/dev/...) and read from
+// whatever path ORACLE_CONFIG_FILE points at - the filename and location are
+// unrestricted, so the same install can be pointed at any environment's
+// connection details just by changing this one env var.
+function loadDatabaseConfig(): DatabaseConfig {
+  const configPath = process.env.ORACLE_CONFIG_FILE;
+  if (!configPath) {
+    console.error("Missing ORACLE_CONFIG_FILE environment variable - point it at a database config file, e.g.:");
+    console.error("  ORACLE_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-oracle/configs/prod.json opencode-mcp-oracle");
+    printSampleConfig("database config file (path set via ORACLE_CONFIG_FILE)", "<ORACLE_CONFIG_FILE>", SAMPLE_DATABASE_CONFIG);
+    process.exit(1);
+  }
+
+  const resolvedPath = resolve(configPath);
+  if (!existsSync(resolvedPath)) {
+    console.error(`Database config file not found: ${resolvedPath}`);
+    printSampleConfig("database config file", resolvedPath, SAMPLE_DATABASE_CONFIG);
+    process.exit(1);
+  }
+
+  try {
+    const raw = JSON.parse(readFileSync(resolvedPath, "utf8"));
+    const { ORACLE_CONNECT_STRING, ORACLE_USER, ORACLE_PASSWORD } = raw;
+    if (!ORACLE_CONNECT_STRING || !ORACLE_USER || !ORACLE_PASSWORD) {
+      throw new Error("missing one of ORACLE_CONNECT_STRING, ORACLE_USER, ORACLE_PASSWORD");
+    }
+    return { ORACLE_CONNECT_STRING, ORACLE_USER, ORACLE_PASSWORD };
+  } catch (err) {
+    console.error(`Failed to load database config from ${resolvedPath}: ${(err as Error).message}`);
+    printSampleConfig("database config file", resolvedPath, SAMPLE_DATABASE_CONFIG);
+    process.exit(1);
+  }
+}
+
+const serverConfig = loadServerConfig();
+const dbConfig = loadDatabaseConfig();
 
 // Extension point for the audit layer this tool intentionally ships without:
 // a rule-based (regex/keyword denylist) or LLM-based check (mirroring
@@ -21,7 +93,7 @@ if (!ORACLE_CONNECT_STRING || !ORACLE_USER || !ORACLE_PASSWORD) {
 // later without touching executeQuery(). Until then this is a no-op that
 // allows everything - oracle_query is a full passthrough by design, not an
 // oversight. See mcp-servers/oracle/README.md for why.
-async function auditQuery(sql) {
+async function auditQuery(sql: string): Promise<{ allow: boolean; reason?: string }> {
   return { allow: true };
 }
 
@@ -36,18 +108,18 @@ async function auditQuery(sql) {
 //   in flight, never every request after it until the process is restarted
 // Tradeoff: connection-setup latency on every call - fine for an
 // interactive/low-QPS internal tool, not for anything latency-sensitive.
-async function executeQuery(sql) {
+async function executeQuery(sql: string) {
   const verdict = await auditQuery(sql);
   if (!verdict.allow) {
     return { success: false, error: `Blocked by audit hook: ${verdict.reason ?? "no reason given"}` };
   }
 
-  let connection;
+  let connection: oracledb.Connection | undefined;
   try {
     connection = await oracledb.getConnection({
-      connectString: ORACLE_CONNECT_STRING,
-      user: ORACLE_USER,
-      password: ORACLE_PASSWORD,
+      connectString: dbConfig.ORACLE_CONNECT_STRING,
+      user: dbConfig.ORACLE_USER,
+      password: dbConfig.ORACLE_PASSWORD,
     });
 
     const result = await connection.execute(sql, [], {
@@ -77,7 +149,7 @@ async function executeQuery(sql) {
       message: "Statement executed, no result set",
     };
   } catch (err) {
-    return { success: false, error: err.message };
+    return { success: false, error: (err as Error).message };
   } finally {
     if (connection) {
       try {
@@ -89,7 +161,7 @@ async function executeQuery(sql) {
   }
 }
 
-function createMcpServer() {
+function createMcpServer(): Server {
   const server = new Server({ name: "oracle-mcp", version: "1.0.0" }, { capabilities: { tools: {} } });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -119,7 +191,7 @@ function createMcpServer() {
       return { content: [{ type: "text", text: "Missing required argument: sql" }], isError: true };
     }
 
-    const result = await executeQuery(args.sql);
+    const result = await executeQuery(args.sql as string);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   });
 
@@ -134,7 +206,7 @@ function createMcpServer() {
 // requests, and doing so would mean concurrent requests fighting over the
 // same transport instance.
 const httpServer = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host ?? "localhost"}`);
+  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
   if (url.pathname !== "/mcp") {
     res.writeHead(404).end();
     return;
@@ -171,6 +243,6 @@ httpServer.on("error", (err) => {
   process.exit(1);
 });
 
-httpServer.listen(ORACLE_MCP_PORT, () => {
-  console.error(`Oracle MCP server listening on http://localhost:${ORACLE_MCP_PORT}/mcp`);
+httpServer.listen(serverConfig.ORACLE_MCP_PORT, () => {
+  console.error(`Oracle MCP server listening on http://localhost:${serverConfig.ORACLE_MCP_PORT}/mcp`);
 });

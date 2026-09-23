@@ -12,7 +12,7 @@
 2. 把 `deploy/system-prompt.txt` 拷贝到 `$CONFIG_DIR`。
 3. `$CONFIG_DIR/opencode.json` 不存在就直接拷贝 `deploy/opencode.json.example`;已经存在就只合并它的 `agent`/`plugin`/`mcp` 三个字段,不要动已有的 provider、权限等配置。
 4. `deploy/opencode.json.example` 里三个插件(system-prompt-tools 查看器、hook-logger、llm-review-gate)和五个 MCP 服务器(oracle、loki、java-lsp、spring-lsp、memory)默认全部启用,要不要真的用、要不要关掉哪个,自己决定:
-   - oracle/loki/java-lsp/spring-lsp 是 `remote` 类型,要自己单独 `npm install && npm start` 常驻,并把真实的连接信息(数据库地址、Loki 地址等)配成环境变量。
+   - oracle/loki/java-lsp/spring-lsp 是 `remote` 类型,要自己单独 `npm install && npm start` 常驻。loki/java-lsp/spring-lsp 的真实连接信息配成环境变量;oracle 不一样,是配置文件驱动的(`ORACLE_CONFIG_FILE` 指向一个 JSON 文件,详见 `mcp-servers/oracle/README.md`)。
    - memory 是 `local` 类型,opencode 自己启动,只要 `npm install -g @modelcontextprotocol/server-memory` 装一次。
 5. 跑一句 `opencode run --model <provider>/<model> "say hi"`,再看 `~/.local/share/opencode/last-system-prompt.txt`——内容应该以 `system-prompt.txt` 开头,而不是原来那段啰嗦的自我介绍,这样才算真的生效。
 

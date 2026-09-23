@@ -144,10 +144,23 @@ This puts an `opencode-mcp-oracle` binary on `PATH`. If `npm install` unexpected
 
 The Oracle MCP server is wired as `type: "remote"` in `opencode.json` (see `mcp-servers/oracle/README.md`'s Design section for why): opencode connects to it as an already-running HTTP endpoint rather than spawning and owning it. The server process has to be started independently, before opencode ever tries to use it — a persistent terminal/session running the binary, a process supervisor, or a container, whichever fits this machine. opencode itself never starts, stops, or restarts it.
 
-Start the server with the real Oracle credentials as environment variables (`ORACLE_CONNECT_STRING`, `ORACLE_USER`, `ORACLE_PASSWORD` — see `mcp-servers/oracle/README.md`'s Configuration section), and `ORACLE_MCP_PORT` too if the default port (`8090`) isn't free — however the process supervisor chosen above lets you set environment variables (there's no longer a project directory for a `.env` file to live next to, since this is a global install, not a copied-in source tree):
+Unlike the other MCP servers in this doc, the Oracle server reads its config from files, not environment variables (see `mcp-servers/oracle/README.md`'s Configuration section) — a database config file (real connection details, path unrestricted) plus an optional, fixed-path `server.json` (just the port, only needed if `8090` isn't free). Create the database config file — real values only, never guessed by an executing agent, ask the human running this:
 
 ```bash
-ORACLE_CONNECT_STRING=... ORACLE_USER=... ORACLE_PASSWORD=... opencode-mcp-oracle
+mkdir -p ~/.config/kealthas-dev/opencode-mcp-oracle/configs
+cat > ~/.config/kealthas-dev/opencode-mcp-oracle/configs/prod.json <<'EOF'
+{
+  "ORACLE_CONNECT_STRING": "...",
+  "ORACLE_USER": "...",
+  "ORACLE_PASSWORD": "..."
+}
+EOF
+```
+
+Then start the server pointed at it:
+
+```bash
+ORACLE_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-oracle/configs/prod.json opencode-mcp-oracle
 ```
 
 Leave that running (in its own terminal, or under whatever supervisor was chosen above). `deploy/opencode.json.example` already carries this same block, enabled, with a placeholder port — if step 2 merged into an existing `opencode.json` instead of copying the example fresh, add it to `opencode.json`'s top level (merge, don't replace, same rule as step 2):
@@ -162,7 +175,7 @@ Leave that running (in its own terminal, or under whatever supervisor was chosen
 }
 ```
 
-Two things need real values that this repo or an executing agent should never guess — ask the human running this: the real `ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD` for whatever internal Oracle instance this is meant to reach, and the port, only if `ORACLE_MCP_PORT` had to be overridden because `8090` was taken.
+If the port had to be overridden because `8090` was taken, write `~/.config/kealthas-dev/opencode-mcp-oracle/server.json` (`{"ORACLE_MCP_PORT": <port>}`) and update the `url` above to match.
 
 `oracle_query` is a full passthrough (no read-only enforcement — see `mcp-servers/oracle/README.md`) by deliberate design, not an oversight; unrelated to this deployment step.
 

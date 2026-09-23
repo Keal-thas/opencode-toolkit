@@ -40,6 +40,15 @@ jobs:
               echo "$name@$VERSION already published, skipping"
               continue
             fi
+            # A package with a "build" script publishes compiled output
+            # (e.g. mcp-servers/oracle's dist/, see its package.json's
+            # "files" field), not its TypeScript source directly - build it
+            # before packing the tarball. Packages with no "build" script
+            # (plain JS/loaded-as-TS, everything else here) skip this.
+            if node -e "process.exit(require('./$dir/package.json').scripts?.build ? 0 : 1)"; then
+              echo "Building $name"
+              (cd "$dir" && npm ci && npm run build)
+            fi
             echo "Publishing $name@$VERSION"
             (cd "$dir" && npm pkg set version="$VERSION" && npm publish --access public)
           done

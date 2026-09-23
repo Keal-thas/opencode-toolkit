@@ -38,8 +38,10 @@ node tests/integration/analyze-modules.test.mjs
 echo
 echo "== oracle MCP server integration test (real Oracle instance) =="
 # mcp-servers/oracle/ is its own npm package - its test lives alongside it (not
-# under tests/) so Node's module resolution finds its node_modules.
-(cd mcp-servers/oracle && npm install --no-audit --no-fund && node --test oracle.test.mjs)
+# under tests/) so Node's module resolution finds its node_modules. It's
+# written in TypeScript (see its README's Design section), so the test needs
+# a build (dist/server.js) before it can spawn the compiled server.
+(cd mcp-servers/oracle && npm install --no-audit --no-fund && npm run build && node --test oracle.test.mjs)
 
 echo
 echo "== loki MCP server integration test (real Loki instance) =="

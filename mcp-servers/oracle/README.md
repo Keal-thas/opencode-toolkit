@@ -1,12 +1,12 @@
 # oracle mcp server
 
-A minimal MCP server exposing one tool, `oracle_query`, that runs an arbitrary SQL statement against a configured Oracle database and returns the result as JSON. Built directly against `@modelcontextprotocol/sdk` and `oracledb` (thin mode, no Oracle Instant Client needed — works fully offline), same hand-rolled-against-the-raw-API pattern as `plugins/`. Speaks MCP over Streamable HTTP, as a persistent process opencode connects to (`type: "remote"`) rather than spawns and owns (`type: "local"`) — see below for why.
+A minimal MCP server exposing one tool, `oracle_query`, that runs an arbitrary SQL statement against a configured Oracle database and returns the result as JSON. Written in TypeScript (`src/server.ts` + `src/types/config.ts`, compiled to `dist/` — see Run below), built directly against `@modelcontextprotocol/sdk` and `oracledb` (thin mode, no Oracle Instant Client needed — works fully offline), same hand-rolled-against-the-raw-API pattern as `plugins/`. Speaks MCP over Streamable HTTP, as a persistent process opencode connects to (`type: "remote"`) rather than spawns and owns (`type: "local"`) — see below for why.
 
 ## Design, and why it looks the way it does
 
 - **Remote, not local.** A `local`/stdio server would have opencode spawning and owning the process, tying the server's uptime to opencode's own restarts. Instead this runs as a persistent HTTP server, started independently (`npm start` under a process supervisor — see `deploy/opencode.json.example`/SETUP.md step 6) and reachable at a fixed URL. Still runs on the same machine as opencode in this repo's deployment — "remote" describes the connection model, not a different host.
 - **Stateless HTTP, one `Server`/transport pair per request** (`sessionIdGenerator: undefined`, matching the SDK's own reference example). No session state is worth keeping between calls — each `oracle_query` is already a fresh, independent Oracle connection (below) — so sharing one pair across requests would only let concurrent requests interfere with each other for no benefit.
-- **Full passthrough, by design.** `oracle_query` executes whatever SQL it's given — no read-only enforcement, no keyword filtering, DDL/DML included. Safety is meant to live elsewhere: the DB account's own grants, and the `auditQuery()` hook in `server.js` — currently a no-op that allows everything, a drop-in point for a rule-based or LLM-based check later (mirroring `plugins/llm-review-gate/llm-review-gate.ts`'s gate).
+- **Full passthrough, by design.** `oracle_query` executes whatever SQL it's given — no read-only enforcement, no keyword filtering, DDL/DML included. Safety is meant to live elsewhere: the DB account's own grants, and the `auditQuery()` hook in `src/server.ts` — currently a no-op that allows everything, a drop-in point for a rule-based or LLM-based check later (mirroring `plugins/llm-review-gate/llm-review-gate.ts`'s gate).
 - **One Oracle connection per request**, opened and closed within the call, not pooled. A stray DML statement can't outlive its request (closing a session with uncommitted work rolls it back); concurrent calls never race on the same session; a session killed on the DB side only fails the one request in flight. Cost: connection-setup latency on every call — fine for a low-QPS internal tool, not for anything latency-sensitive.
 - **`autoCommit: true`** on every execute — otherwise a successful UPDATE/INSERT would report no error and then silently roll back the moment its connection closes right after (immediately, given one connection per request).
 
@@ -33,12 +33,34 @@ See `mcp-servers/TODO.md` for planned follow-ups that go further than DB grants 
 
 ## Configuration
 
-Copy `.env.example` to `.env` and fill in real values, or set them however the process supervisor that starts this server (see Run below) is configured. A `remote` MCP entry in `opencode.json` carries no `environment` field (just a `url`) — opencode never starts this process, so wherever it actually gets started is what needs these set:
+Config is file-based, not env-var-based (unlike `loki/`/`java-lsp/`/`spring-lsp/`) — two separate files, matching how the port (infrastructure, fixed per machine) and the database connection (per-environment: prod/staging/dev/...) actually vary independently:
 
-- `ORACLE_CONNECT_STRING` — an Oracle Easy Connect string (`host:port/service_name`), not a JDBC URL
-- `ORACLE_USER`
-- `ORACLE_PASSWORD`
-- `ORACLE_MCP_PORT` — port to listen on (optional, defaults to `8090`)
+- **`$HOME/.config/kealthas-dev/opencode-mcp-oracle/server.json`** — the port to listen on, at this one fixed path always. Optional: if missing, defaults to `8090`; if present, must be valid JSON or the server refuses to start. Shape (see `server.example.json`):
+  ```json
+  { "ORACLE_MCP_PORT": 8090 }
+  ```
+- **A database config file at whatever path the `ORACLE_CONFIG_FILE` env var points at** — filename and location are unrestricted (absolute, `~`-relative, or relative to the current directory all work), so one install can be pointed at any environment just by changing this one env var per launch. Required — the server prints a sample and exits if `ORACLE_CONFIG_FILE` is unset, the file doesn't exist, or it's missing a required key. Shape (see `config.example.json`):
+  ```json
+  {
+    "ORACLE_CONNECT_STRING": "hostname:1521/service_name",
+    "ORACLE_USER": "username",
+    "ORACLE_PASSWORD": "password"
+  }
+  ```
+  `ORACLE_CONNECT_STRING` accepts either an Easy Connect string (`host:port/service_name`) or a full TNS descriptor — both are passed straight through to `oracledb.getConnection()`, which supports both natively. Not a JDBC URL either way.
+
+A typical multi-environment layout:
+
+```
+~/.config/kealthas-dev/opencode-mcp-oracle/
+├── server.json                    # port - one per machine
+└── configs/
+    ├── prod.json                  # ORACLE_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-oracle/configs/prod.json
+    ├── staging.json
+    └── dev.json
+```
+
+Real credentials never need to live inside this repo's checkout at all (unlike the other three servers' `.env`, which needs the `mcp-servers/**/.env` `.gitignore` rule to stay out of git) — the config directory lives under `$HOME`, entirely outside the working tree.
 
 ## Run
 
@@ -46,17 +68,20 @@ Published as `@kealthas-dev/opencode-mcp-oracle` — on a real deployment, insta
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-oracle
-ORACLE_CONNECT_STRING=... ORACLE_USER=... ORACLE_PASSWORD=... opencode-mcp-oracle
+ORACLE_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-oracle/configs/prod.json opencode-mcp-oracle
 ```
 
-For local dev/testing against this repo's own checkout (this directory, not the published package):
+For local dev/testing against this repo's own checkout (this directory, not the published package), point `ORACLE_CONFIG_FILE` at a real database config file (see `config.example.json` for the shape — the sandbox's docker-entrypoint.sh generates one automatically, see Testing below):
 
 ```bash
 npm install
-npm start
+npm run build
+ORACLE_CONFIG_FILE=/path/to/a/real/config.json npm start
 ```
 
-Either way, this starts a persistent HTTP server on `ORACLE_MCP_PORT` (default `8090`), serving MCP over Streamable HTTP at `/mcp`. Point opencode at it with a `type: "remote"` entry (see `deploy/opencode.json.example`) — it needs to already be running and stay running, since opencode connects rather than spawns it (either command alone exits when its terminal closes; see Design above for real supervisor options).
+`npm run dev` runs `src/server.ts` directly via `tsx watch` instead, for a compile-on-save loop.
+
+Either way, this starts a persistent HTTP server on the configured port (default `8090`), serving MCP over Streamable HTTP at `/mcp`. Point opencode at it with a `type: "remote"` entry (see `deploy/opencode.json.example`) — it needs to already be running and stay running, since opencode connects rather than spawns it (either command alone exits when its terminal closes; see Design above for real supervisor options).
 
 ## Testing against a real Oracle instance
 
@@ -67,9 +92,9 @@ docker compose -f docker/docker-compose.oracle.yml up -d --wait
 docker/dev.sh run --rm opencode-dev bash
 ```
 
-`ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD` are already set inside that shell — `cd mcp-servers/oracle && npm install && npm start`, then hit `http://localhost:8090/mcp` from an MCP client or `curl`.
+`ORACLE_CONFIG_FILE` is already set inside that shell — `docker-entrypoint.sh` generates a database config file from the sandbox's `ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD` compose env vars and points `ORACLE_CONFIG_FILE` at it, matching a real deployment's file-based config rather than passing those three straight through. `cd mcp-servers/oracle && npm install && npm run build && npm start`, then hit `http://localhost:8090/mcp` from an MCP client or `curl`.
 
-`oracle.test.mjs` (see `tests/README.md`) doesn't need this manual dance — it starts and stops its own `server.js` process on its own port as part of the test run.
+`oracle.test.mjs` (see `tests/README.md`) doesn't need this manual dance — it builds against `process.env.ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD` (still plain env vars at the test level) to write its own config files into a fake `$HOME` per spawned server, and starts/stops its own `dist/server.js` process on its own port as part of the test run.
 
 ## Status
 

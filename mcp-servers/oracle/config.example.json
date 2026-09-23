@@ -1,0 +1,5 @@
+{
+  "ORACLE_CONNECT_STRING": "hostname:1521/service_name",
+  "ORACLE_USER": "username",
+  "ORACLE_PASSWORD": "password"
+}

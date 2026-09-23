@@ -21,6 +21,24 @@ cat > /home/dev/.config/opencode/opencode.jsonc <<'EOF'
 EOF
 chown dev:dev /home/dev/.config/opencode/opencode.jsonc
 
+# mcp-servers/oracle/ reads its database connection from a JSON file
+# pointed at by ORACLE_CONFIG_FILE, not from env vars directly (see
+# mcp-servers/oracle/README.md's Configuration section) - generate one from
+# docker-compose.yml's ORACLE_CONNECT_STRING/ORACLE_USER/ORACLE_PASSWORD so
+# `cd mcp-servers/oracle && npm install && npm run build && npm start`
+# still works with zero manual setup, matching a real deployment's
+# file-based config rather than passing those three straight through.
+mkdir -p /home/dev/.config/kealthas-dev/opencode-mcp-oracle
+cat > /home/dev/.config/kealthas-dev/opencode-mcp-oracle/docker.json <<EOF
+{
+  "ORACLE_CONNECT_STRING": "$ORACLE_CONNECT_STRING",
+  "ORACLE_USER": "$ORACLE_USER",
+  "ORACLE_PASSWORD": "$ORACLE_PASSWORD"
+}
+EOF
+chown -R dev:dev /home/dev/.config/kealthas-dev
+export ORACLE_CONFIG_FILE=/home/dev/.config/kealthas-dev/opencode-mcp-oracle/docker.json
+
 # Load provider API keys from the read-only ~/.keys mount into this
 # container's env only - never written back to the host, never logged.
 # An already-set env var (passed through docker-compose.yml) wins.

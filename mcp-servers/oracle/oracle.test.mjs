@@ -3,46 +3,83 @@
 // "Oracle test instance" section), started separately as a shared fixture.
 // Not something this test can mock: it exercises
 // the real oracledb round-trip, including the per-request-connection /
-// autoCommit design decisions server.js makes. Lives here (not under
+// autoCommit design decisions server.ts makes. Lives here (not under
 // tests/) so Node's module resolution finds this package's own
-// node_modules - run via `node --test mcp-servers/oracle/oracle.test.mjs` after
-// `npm install` in this directory (see tests/run-in-container.sh).
+// node_modules - run via `npm run build && node --test mcp-servers/oracle/oracle.test.mjs`
+// after `npm install` in this directory (see tests/run-in-container.sh).
 //
-// server.js is now a persistent HTTP server (opencode connects to it as
+// server.ts is a persistent HTTP server (opencode connects to it as
 // type: "remote", not something it spawns - see README.md's Design
-// section), so this test spawns it itself with `node:child_process.spawn`
-// the same way a real process supervisor would, waits for its "listening"
-// line on stderr, then drives it over the real Streamable HTTP transport -
-// unlike the StdioClientTransport this replaced, `spawn` inherits the
-// parent's environment by default, so no explicit `env: process.env` is
-// needed just to make the child see ORACLE_*.
+// section) that reads its database connection details from a JSON file
+// pointed at by ORACLE_CONFIG_FILE and its port from a fixed-path
+// server.json under $HOME/.config/kealthas-dev/opencode-mcp-oracle/ (see
+// README.md's Configuration section). This test spawns the built
+// dist/server.js itself with `node:child_process.spawn` the same way a real
+// process supervisor would, giving each spawned process its own fake $HOME
+// (createFakeHome() below) so concurrent test servers never share one
+// machine-wide config directory, then drives it over the real Streamable
+// HTTP transport once it reports its "listening" line on stderr.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const DIST_SERVER_PATH = join(here, "dist", "server.js");
 const READY_TIMEOUT_MS = 15_000;
 
 for (const key of ["ORACLE_CONNECT_STRING", "ORACLE_USER", "ORACLE_PASSWORD"]) {
   if (!process.env[key]) {
     throw new Error(
       `${key} not set - this test needs a live Oracle instance (the docker/ sandbox's ` +
-        "oracle service, see docker-notes.md), not a bare `node --test` on the host",
+        "oracle service, see docker-notes.md) to build a database config file from, not a bare `node --test` on the host",
     );
   }
 }
 
-function startServer(extraEnv) {
+// Each spawned server process gets its own fake $HOME containing its own
+// server.json (port) and its own database config file (an arbitrary path
+// under that fake $HOME, pointed at via ORACLE_CONFIG_FILE) - real isolation
+// between concurrent test servers without server.ts needing any test-only
+// escape hatch. Node's os.homedir() reads $HOME at call time, so this is
+// enough to give each spawned process its own config, the same as a real
+// multi-instance deployment would have separate machines/accounts.
+function createFakeHome(port, dbConfigOverrides) {
+  const home = mkdtempSync(join(tmpdir(), "oracle-mcp-test-"));
+  const configDir = join(home, ".config", "kealthas-dev", "opencode-mcp-oracle");
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(join(configDir, "server.json"), JSON.stringify({ ORACLE_MCP_PORT: port }));
+
+  const dbConfigPath = join(home, "db-config.json");
+  writeFileSync(
+    dbConfigPath,
+    JSON.stringify({
+      ORACLE_CONNECT_STRING: process.env.ORACLE_CONNECT_STRING,
+      ORACLE_USER: process.env.ORACLE_USER,
+      ORACLE_PASSWORD: process.env.ORACLE_PASSWORD,
+      ...dbConfigOverrides,
+    }),
+  );
+
+  return { home, dbConfigPath };
+}
+
+function startServer(port, dbConfigOverrides = {}) {
+  const { home, dbConfigPath } = createFakeHome(port, dbConfigOverrides);
+
   return new Promise((resolve, reject) => {
-    const child = spawn("node", [join(here, "server.js")], { env: { ...process.env, ...extraEnv } });
+    const child = spawn("node", [DIST_SERVER_PATH], {
+      env: { ...process.env, HOME: home, ORACLE_CONFIG_FILE: dbConfigPath },
+    });
 
     const timeout = setTimeout(() => {
       child.kill();
-      reject(new Error("server.js did not report listening within the timeout"));
+      reject(new Error("server did not report listening within the timeout"));
     }, READY_TIMEOUT_MS);
 
     let stderr = "";
@@ -55,7 +92,7 @@ function startServer(extraEnv) {
     });
     child.on("exit", (code) => {
       clearTimeout(timeout);
-      reject(new Error(`server.js exited early (code ${code}) before listening - stderr:\n${stderr}`));
+      reject(new Error(`server exited early (code ${code}) before listening - stderr:\n${stderr}`));
     });
   });
 }
@@ -72,7 +109,7 @@ let client;
 
 before(async () => {
   serverPort = 8135;
-  serverProcess = await startServer({ ORACLE_MCP_PORT: String(serverPort) });
+  serverProcess = await startServer(serverPort);
   const transport = new StreamableHTTPClientTransport(new URL(`http://localhost:${serverPort}/mcp`));
   client = new Client({ name: "oracle-mcp-test", version: "1.0.0" }, { capabilities: {} });
   await client.connect(transport);
@@ -109,7 +146,7 @@ test("a write survives the per-request connection closing (autoCommit)", async (
     assert.equal(insertResult.rowsAffected, 1);
 
     // A fresh tool call gets its own fresh Oracle connection (see
-    // server.js's design notes) - if the INSERT above hadn't actually
+    // server.ts's design notes) - if the INSERT above hadn't actually
     // committed before that connection closed, this SELECT (on a
     // different connection) would come back empty.
     const selectResult = await callOracleQuery(`SELECT * FROM ${table}`);
@@ -131,14 +168,11 @@ test("a connection failure returns a clean error, not an MCP protocol crash", as
   // (see git history / mcp-servers/oracle/README.md): oracledb.getConnection()
   // must be inside executeQuery()'s try block, or a connection failure
   // surfaces as a raw McpError instead of a normal {success: false} tool
-  // result. Runs its own server on a separate port with a bad password,
-  // since the "good" server above already has a live connection pool of
-  // its own credentials baked into its process env.
+  // result. Runs its own server on a separate port with a bad password in
+  // its own fake $HOME's config file, since the "good" server above already
+  // has its own real credentials baked into its own fake $HOME's config.
   const badPort = serverPort + 1;
-  const badServerProcess = await startServer({
-    ORACLE_MCP_PORT: String(badPort),
-    ORACLE_PASSWORD: "definitely-wrong-password",
-  });
+  const badServerProcess = await startServer(badPort, { ORACLE_PASSWORD: "definitely-wrong-password" });
   const badTransport = new StreamableHTTPClientTransport(new URL(`http://localhost:${badPort}/mcp`));
   const badClient = new Client({ name: "oracle-mcp-test-bad-creds", version: "1.0.0" }, { capabilities: {} });
   try {
