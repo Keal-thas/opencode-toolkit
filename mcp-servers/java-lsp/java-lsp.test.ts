@@ -4,19 +4,19 @@
 // this test can mock: LSP is a genuinely stateful protocol (project
 // indexing, incremental document sync), and the whole point of this
 // package is that it talks to a real jdtls process - see
-// mcp-servers/loki/loki.test.mjs for the same reasoning applied to a different
+// mcp-servers/loki/loki.test.ts for the same reasoning applied to a different
 // real backend.
 //
 // Not yet wired into tests/run-in-container.sh / the docker/ sandbox - the
 // sandbox's image (docker/Dockerfile, `FROM node:22-bookworm`) has no JDK
 // or jdtls installed, and adding a jdtls download to the image wasn't done
 // here (see mcp-servers/TODO.md). Run this directly on a machine with jdtls
-// installed: `cd mcp-servers/java-lsp && npm install && npm run build && node --test java-lsp.test.mjs`.
+// installed: `cd mcp-servers/java-lsp && npm install && npm run build && npm test`.
 //
 // server.ts reads its workspace/data-dir config from a JSON file pointed at
 // by JAVA_LSP_CONFIG_FILE and its port from a fixed-path server.json under
 // $HOME/.config/kealthas-dev/opencode-mcp-java-lsp/ (see README.md's
-// Configuration section, and mcp-servers/oracle/oracle.test.mjs for the
+// Configuration section, and mcp-servers/oracle/oracle.test.ts for the
 // same fake-$HOME pattern this test reuses) - this test spawns the compiled
 // dist/server.js with its own fake $HOME so it never shares config with a
 // real server that might be running in the same environment.
@@ -24,7 +24,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn, execSync } from "node:child_process";
+import { spawn, execSync, type ChildProcess } from "node:child_process";
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -71,7 +71,7 @@ writeFileSync(
 );
 const relativeFile = "src/main/java/com/example/Hello.java";
 
-function startServer(port) {
+function startServer(port: number): Promise<ChildProcess> {
   const home = mkdtempSync(join(tmpdir(), "java-lsp-mcp-test-home-"));
   const configDir = join(home, ".config", "kealthas-dev", "opencode-mcp-java-lsp");
   mkdirSync(configDir, { recursive: true });
@@ -94,7 +94,7 @@ function startServer(port) {
     }, READY_TIMEOUT_MS);
 
     let stderr = "";
-    child.stderr.on("data", (chunk) => {
+    child.stderr!.on("data", (chunk) => {
       stderr += chunk;
       if (stderr.includes("listening on")) {
         clearTimeout(timeout);
@@ -108,14 +108,14 @@ function startServer(port) {
   });
 }
 
-async function stopServer(child) {
+async function stopServer(child: ChildProcess): Promise<void> {
   child.removeAllListeners("exit");
   child.kill();
   await new Promise((resolve) => child.once("exit", resolve));
 }
 
-let serverProcess;
-let client;
+let serverProcess: ChildProcess;
+let client: Client;
 
 before(async () => {
   const serverPort = 8298;
@@ -132,9 +132,10 @@ after(async () => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-async function callTool(name, args) {
+async function callTool(name: string, args: Record<string, unknown>): Promise<any> {
   const result = await client.callTool({ name, arguments: args });
-  return JSON.parse(result.content[0].text);
+  const content = result.content as Array<{ type: string; text: string }>;
+  return JSON.parse(content[0].text);
 }
 
 test("lists all seven java-lsp tools", async () => {
@@ -156,7 +157,7 @@ test("lists all seven java-lsp tools", async () => {
 test("java_document_symbols finds the real class and both methods, structurally", async () => {
   const result = await callTool("java_document_symbols", { file: relativeFile });
   assert.equal(result.success, true);
-  const names = result.data.map((s) => s.name).sort();
+  const names = result.data.map((s: any) => s.name).sort();
   assert.deepEqual(names, ["Hello", "greet(String)", "main(String[])"]);
 });
 
@@ -176,7 +177,7 @@ test("java_references finds the declaration and the one real call site, not name
 test("java_workspace_symbols finds Hello by a fuzzy name query", async () => {
   const result = await callTool("java_workspace_symbols", { query: "Hello" });
   assert.equal(result.success, true);
-  assert.ok(result.data.some((s) => s.name === "Hello"), `expected Hello in ${JSON.stringify(result.data)}`);
+  assert.ok(result.data.some((s: any) => s.name === "Hello"), `expected Hello in ${JSON.stringify(result.data)}`);
 });
 
 test("an out-of-range file path outside the workspace root is rejected", async () => {
