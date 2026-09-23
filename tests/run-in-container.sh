@@ -41,7 +41,7 @@ echo "== oracle MCP server integration test (real Oracle instance) =="
 # under tests/) so Node's module resolution finds its node_modules. It's
 # written in TypeScript (see its README's Design section), so the test needs
 # a build (dist/server.js) before it can spawn the compiled server.
-(cd mcp-servers/oracle && npm install --no-audit --no-fund && npm run build && node --test oracle.test.mjs)
+(cd mcp-servers/oracle && npm install --no-audit --no-fund && npm run build && npm test)
 
 echo
 echo "== loki MCP server integration test (real Loki instance) =="

@@ -5,8 +5,10 @@
 // the real oracledb round-trip, including the per-request-connection /
 // autoCommit design decisions server.ts makes. Lives here (not under
 // tests/) so Node's module resolution finds this package's own
-// node_modules - run via `npm run build && node --test mcp-servers/oracle/oracle.test.mjs`
-// after `npm install` in this directory (see tests/run-in-container.sh).
+// node_modules - run via `npm run build && npx tsx --test mcp-servers/oracle/oracle.test.ts`
+// after `npm install` in this directory (see tests/run-in-container.sh). Run
+// via tsx rather than compiled like server.ts itself - a test file isn't
+// published, so there's no reason to route it through `dist/`.
 //
 // server.ts is a persistent HTTP server (opencode connects to it as
 // type: "remote", not something it spawns - see README.md's Design
@@ -23,7 +25,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -49,7 +51,7 @@ for (const key of ["ORACLE_CONNECT_STRING", "ORACLE_USER", "ORACLE_PASSWORD"]) {
 // escape hatch. Node's os.homedir() reads $HOME at call time, so this is
 // enough to give each spawned process its own config, the same as a real
 // multi-instance deployment would have separate machines/accounts.
-function createFakeHome(port, dbConfigOverrides) {
+function createFakeHome(port: number, dbConfigOverrides?: Record<string, string>): { home: string; dbConfigPath: string } {
   const home = mkdtempSync(join(tmpdir(), "oracle-mcp-test-"));
   const configDir = join(home, ".config", "kealthas-dev", "opencode-mcp-oracle");
   mkdirSync(configDir, { recursive: true });
@@ -69,7 +71,7 @@ function createFakeHome(port, dbConfigOverrides) {
   return { home, dbConfigPath };
 }
 
-function startServer(port, dbConfigOverrides = {}) {
+function startServer(port: number, dbConfigOverrides: Record<string, string> = {}): Promise<ChildProcess> {
   const { home, dbConfigPath } = createFakeHome(port, dbConfigOverrides);
 
   return new Promise((resolve, reject) => {
@@ -83,7 +85,7 @@ function startServer(port, dbConfigOverrides = {}) {
     }, READY_TIMEOUT_MS);
 
     let stderr = "";
-    child.stderr.on("data", (chunk) => {
+    child.stderr!.on("data", (chunk) => {
       stderr += chunk;
       if (stderr.includes("listening on")) {
         clearTimeout(timeout);
@@ -97,15 +99,15 @@ function startServer(port, dbConfigOverrides = {}) {
   });
 }
 
-async function stopServer(child) {
+async function stopServer(child: ChildProcess): Promise<void> {
   child.removeAllListeners("exit");
   child.kill();
   await new Promise((resolve) => child.once("exit", resolve));
 }
 
-let serverProcess;
-let serverPort;
-let client;
+let serverProcess: ChildProcess;
+let serverPort: number;
+let client: Client;
 
 before(async () => {
   serverPort = 8135;
@@ -120,9 +122,10 @@ after(async () => {
   if (serverProcess) await stopServer(serverProcess);
 });
 
-async function callOracleQuery(sql) {
+async function callOracleQuery(sql: string): Promise<any> {
   const result = await client.callTool({ name: "oracle_query", arguments: { sql } });
-  return JSON.parse(result.content[0].text);
+  const content = result.content as Array<{ type: string; text: string }>;
+  return JSON.parse(content[0].text);
 }
 
 test("lists exactly the oracle_query tool", async () => {
@@ -178,7 +181,8 @@ test("a connection failure returns a clean error, not an MCP protocol crash", as
   try {
     await badClient.connect(badTransport);
     const result = await badClient.callTool({ name: "oracle_query", arguments: { sql: "SELECT 1 FROM dual" } });
-    const parsed = JSON.parse(result.content[0].text);
+    const content = result.content as Array<{ type: string; text: string }>;
+    const parsed = JSON.parse(content[0].text);
     assert.equal(parsed.success, false);
     assert.ok(parsed.error, "expected a clean error message, not a crash");
   } finally {
