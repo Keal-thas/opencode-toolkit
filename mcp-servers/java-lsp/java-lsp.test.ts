@@ -13,9 +13,10 @@
 // here (see mcp-servers/TODO.md). Run this directly on a machine with jdtls
 // installed: `cd mcp-servers/java-lsp && npm install && npm run build && npm test`.
 //
-// server.ts reads its workspace/data-dir config from a JSON file pointed at
-// by JAVA_LSP_CONFIG_FILE and its port from a fixed-path server.json under
-// $HOME/.config/kealthas-dev/opencode-mcp-java-lsp/ (see README.md's
+// server.ts reads its workspace/data-dir config from config.json (or
+// configs/<JAVA_LSP_CONFIG_ENV>.json) and its port from a fixed-path
+// server.json, both under $HOME/.config/kealthas-dev/opencode-mcp-java-lsp/
+// (see README.md's
 // Configuration section, and mcp-servers/oracle/oracle.test.ts for the
 // same fake-$HOME pattern this test reuses) - this test spawns the compiled
 // dist/server.js with its own fake $HOME so it never shares config with a
@@ -77,16 +78,19 @@ function startServer(port: number): Promise<ChildProcess> {
   mkdirSync(configDir, { recursive: true });
   writeFileSync(join(configDir, "server.json"), JSON.stringify({ JAVA_LSP_MCP_PORT: port }));
 
-  const configPath = join(home, "java-lsp-config.json");
+  // Written straight to the default config.json location (not pointed at via
+  // an env var) - JAVA_LSP_CONFIG_ENV only takes a bare name, never a path,
+  // so there's nothing for this test to point at beyond that fixed default.
   writeFileSync(
-    configPath,
+    join(configDir, "config.json"),
     JSON.stringify({ JAVA_LSP_WORKSPACE_ROOT: workspaceRoot, JDTLS_DATA_DIR: dataDir }),
   );
 
+  const env = { ...process.env, HOME: home };
+  delete env.JAVA_LSP_CONFIG_ENV;
+
   return new Promise((resolve, reject) => {
-    const child = spawn("node", [DIST_SERVER_PATH], {
-      env: { ...process.env, HOME: home, JAVA_LSP_CONFIG_FILE: configPath },
-    });
+    const child = spawn("node", [DIST_SERVER_PATH], { env });
 
     const timeout = setTimeout(() => {
       child.kill();

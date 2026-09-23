@@ -21,9 +21,10 @@
 // Not yet wired into tests/run-in-container.sh / the docker/ sandbox - see
 // mcp-servers/java-lsp/java-lsp.test.ts's header for why (no JDK in that image).
 //
-// server.ts reads its workspace config from a JSON file pointed at by
-// SPRING_LSP_CONFIG_FILE and its port from a fixed-path server.json under
-// $HOME/.config/kealthas-dev/opencode-mcp-spring-lsp/ (see README.md's
+// server.ts reads its workspace config from config.json (or
+// configs/<SPRING_LSP_CONFIG_ENV>.json) and its port from a fixed-path
+// server.json, both under $HOME/.config/kealthas-dev/opencode-mcp-spring-lsp/
+// (see README.md's
 // Configuration section, and mcp-servers/oracle/oracle.test.ts for the
 // same fake-$HOME pattern this test reuses) - this test spawns the compiled
 // dist/server.js with its own fake $HOME so it never shares config with a
@@ -73,13 +74,17 @@ function startServer(port: number): Promise<ChildProcess> {
   mkdirSync(configDir, { recursive: true });
   writeFileSync(join(configDir, "server.json"), JSON.stringify({ SPRING_LSP_MCP_PORT: port }));
 
-  const configPath = join(home, "spring-lsp-config.json");
-  writeFileSync(configPath, JSON.stringify({ SPRING_LSP_WORKSPACE_ROOT: workspaceRoot }));
+  // Written straight to the default config.json location (not pointed at via
+  // an env var) - SPRING_LSP_CONFIG_ENV only takes a bare name, never a
+  // path, so there's nothing for this test to point at beyond that fixed
+  // default.
+  writeFileSync(join(configDir, "config.json"), JSON.stringify({ SPRING_LSP_WORKSPACE_ROOT: workspaceRoot }));
+
+  const env = { ...process.env, HOME: home };
+  delete env.SPRING_LSP_CONFIG_ENV;
 
   return new Promise((resolve, reject) => {
-    const child = spawn("node", [DIST_SERVER_PATH], {
-      env: { ...process.env, HOME: home, SPRING_LSP_CONFIG_FILE: configPath },
-    });
+    const child = spawn("node", [DIST_SERVER_PATH], { env });
     const timeout = setTimeout(() => {
       child.kill();
       reject(new Error("server did not report listening within the timeout"));

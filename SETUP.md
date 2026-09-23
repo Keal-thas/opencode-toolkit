@@ -144,11 +144,11 @@ This puts an `opencode-mcp-oracle` binary on `PATH`. If `npm install` unexpected
 
 The Oracle MCP server is wired as `type: "remote"` in `opencode.json` (see `mcp-servers/oracle/README.md`'s Design section for why): opencode connects to it as an already-running HTTP endpoint rather than spawning and owning it. The server process has to be started independently, before opencode ever tries to use it — a persistent terminal/session running the binary, a process supervisor, or a container, whichever fits this machine. opencode itself never starts, stops, or restarts it.
 
-Unlike the other MCP servers in this doc, the Oracle server reads its config from files, not environment variables (see `mcp-servers/oracle/README.md`'s Configuration section) — a database config file (real connection details, path unrestricted) plus an optional, fixed-path `server.json` (just the port, only needed if `8090` isn't free). Create the database config file — real values only, never guessed by an executing agent, ask the human running this:
+The Oracle server reads its config from files, not raw environment variables (see `mcp-servers/oracle/README.md`'s Configuration section) — a database config file plus an optional, fixed-path `server.json` (just the port, only needed if `8090` isn't free). The database config file's *location* is fixed too, not an arbitrary path: with no `ORACLE_CONFIG_ENV` env var set it's read from `~/.config/kealthas-dev/opencode-mcp-oracle/config.json`; setting `ORACLE_CONFIG_ENV=prod` reads `configs/prod.json` instead, for multi-environment setups. Create the database config file — real values only, never guessed by an executing agent, ask the human running this:
 
 ```bash
-mkdir -p ~/.config/kealthas-dev/opencode-mcp-oracle/configs
-cat > ~/.config/kealthas-dev/opencode-mcp-oracle/configs/prod.json <<'EOF'
+mkdir -p ~/.config/kealthas-dev/opencode-mcp-oracle
+cat > ~/.config/kealthas-dev/opencode-mcp-oracle/config.json <<'EOF'
 {
   "ORACLE_CONNECT_STRING": "...",
   "ORACLE_USER": "...",
@@ -157,10 +157,10 @@ cat > ~/.config/kealthas-dev/opencode-mcp-oracle/configs/prod.json <<'EOF'
 EOF
 ```
 
-Then start the server pointed at it:
+Then start the server:
 
 ```bash
-ORACLE_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-oracle/configs/prod.json opencode-mcp-oracle
+opencode-mcp-oracle
 ```
 
 Leave that running (in its own terminal, or under whatever supervisor was chosen above). `deploy/opencode.json.example` already carries this same block, enabled, with a placeholder port — if step 2 merged into an existing `opencode.json` instead of copying the example fresh, add it to `opencode.json`'s top level (merge, don't replace, same rule as step 2):
@@ -191,21 +191,21 @@ This puts an `opencode-mcp-loki` binary on `PATH`.
 
 Wired as `type: "remote"` in `opencode.json`, same reasoning as step 6 — opencode connects to an already-running HTTP endpoint, started independently rather than spawned by opencode.
 
-Same file-based config model as step 6 (see `mcp-servers/loki/README.md`'s Configuration section) — a Loki config file (real `LOKI_BASE_URL`, plus `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` too only if that Loki instance actually requires them — unlike Oracle's credentials, all of these are optional) plus an optional `server.json` for the port. Create the config file — real values only, never guessed by an executing agent, ask the human running this:
+Same file-based config model as step 6 (see `mcp-servers/loki/README.md`'s Configuration section) — a Loki config file (real `LOKI_BASE_URL`, plus `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` too only if that Loki instance actually requires them — unlike Oracle's credentials, all of these are optional) plus an optional `server.json` for the port. Same fixed-location scheme as step 6 too: default at `config.json`, or `configs/<name>.json` via `LOKI_CONFIG_ENV=<name>` for multiple environments. Create the config file — real values only, never guessed by an executing agent, ask the human running this:
 
 ```bash
-mkdir -p ~/.config/kealthas-dev/opencode-mcp-loki/configs
-cat > ~/.config/kealthas-dev/opencode-mcp-loki/configs/prod.json <<'EOF'
+mkdir -p ~/.config/kealthas-dev/opencode-mcp-loki
+cat > ~/.config/kealthas-dev/opencode-mcp-loki/config.json <<'EOF'
 {
   "LOKI_BASE_URL": "..."
 }
 EOF
 ```
 
-Then start the server pointed at it:
+Then start the server:
 
 ```bash
-LOKI_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-loki/configs/prod.json opencode-mcp-loki
+opencode-mcp-loki
 ```
 
 Leave that running (in its own terminal, or under whatever supervisor was chosen in step 6). `deploy/opencode.json.example` already carries this same block, enabled, with a placeholder port — if step 2 merged into an existing `opencode.json` instead of copying the example fresh, add it to `opencode.json`'s top level (merge, don't replace):
@@ -245,11 +245,11 @@ If either is missing, report that back rather than guessing at how to install on
 
 Wired as `type: "remote"` in `opencode.json`, same reasoning as step 6.
 
-Same file-based config model as step 6 (see `mcp-servers/java-lsp/README.md`'s Configuration section) — a config file with `JAVA_LSP_WORKSPACE_ROOT` (the Java project to analyze) and `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch directory dedicated to this project, not the project root itself) plus an optional `server.json` for the port. Create the config file — real values only, never guessed by an executing agent, ask the human running this:
+Same file-based config model as step 6 (see `mcp-servers/java-lsp/README.md`'s Configuration section) — a config file with `JAVA_LSP_WORKSPACE_ROOT` (the Java project to analyze) and `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch directory dedicated to this project, not the project root itself) plus an optional `server.json` for the port. Same fixed-location scheme as step 6: default at `config.json`, or `configs/<name>.json` via `JAVA_LSP_CONFIG_ENV=<name>` for multiple projects. Create the config file — real values only, never guessed by an executing agent, ask the human running this:
 
 ```bash
-mkdir -p ~/.config/kealthas-dev/opencode-mcp-java-lsp/configs
-cat > ~/.config/kealthas-dev/opencode-mcp-java-lsp/configs/my-project.json <<'EOF'
+mkdir -p ~/.config/kealthas-dev/opencode-mcp-java-lsp
+cat > ~/.config/kealthas-dev/opencode-mcp-java-lsp/config.json <<'EOF'
 {
   "JAVA_LSP_WORKSPACE_ROOT": "...",
   "JDTLS_DATA_DIR": "..."
@@ -257,10 +257,10 @@ cat > ~/.config/kealthas-dev/opencode-mcp-java-lsp/configs/my-project.json <<'EO
 EOF
 ```
 
-Then start the server pointed at it:
+Then start the server:
 
 ```bash
-JAVA_LSP_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-java-lsp/configs/my-project.json opencode-mcp-java-lsp
+opencode-mcp-java-lsp
 ```
 
 Leave that running (in its own terminal, or under whatever supervisor was chosen in step 6). `deploy/opencode.json.example` already carries this same block, enabled, with a placeholder port — if step 2 merged into an existing `opencode.json` instead of copying the example fresh, add it to `opencode.json`'s top level (merge, don't replace):
@@ -291,21 +291,21 @@ This puts an `opencode-mcp-spring-lsp` binary on `PATH`.
 
 Wired as `type: "remote"` in `opencode.json`, same reasoning as step 6.
 
-Same file-based config model as step 6 (see `mcp-servers/spring-lsp/README.md`'s Configuration section) — a config file with `SPRING_LSP_WORKSPACE_ROOT` (the Spring Boot project to analyze) plus an optional `server.json` for the port. Create the config file — real values only, never guessed by an executing agent, ask the human running this:
+Same file-based config model as step 6 (see `mcp-servers/spring-lsp/README.md`'s Configuration section) — a config file with `SPRING_LSP_WORKSPACE_ROOT` (the Spring Boot project to analyze) plus an optional `server.json` for the port. Same fixed-location scheme as step 6: default at `config.json`, or `configs/<name>.json` via `SPRING_LSP_CONFIG_ENV=<name>` for multiple projects. Create the config file — real values only, never guessed by an executing agent, ask the human running this:
 
 ```bash
-mkdir -p ~/.config/kealthas-dev/opencode-mcp-spring-lsp/configs
-cat > ~/.config/kealthas-dev/opencode-mcp-spring-lsp/configs/my-project.json <<'EOF'
+mkdir -p ~/.config/kealthas-dev/opencode-mcp-spring-lsp
+cat > ~/.config/kealthas-dev/opencode-mcp-spring-lsp/config.json <<'EOF'
 {
   "SPRING_LSP_WORKSPACE_ROOT": "..."
 }
 EOF
 ```
 
-Then start the server pointed at it:
+Then start the server:
 
 ```bash
-SPRING_LSP_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-spring-lsp/configs/my-project.json opencode-mcp-spring-lsp
+opencode-mcp-spring-lsp
 ```
 
 Leave that running. `deploy/opencode.json.example` already carries this same block, enabled, with a placeholder port — if step 2 merged into an existing `opencode.json` instead of copying the example fresh, add it to `opencode.json`'s top level (merge, don't replace):

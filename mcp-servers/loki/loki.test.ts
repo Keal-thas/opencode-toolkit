@@ -11,10 +11,11 @@
 //
 // server.ts is a persistent HTTP server (opencode connects to it as
 // type: "remote", not something it spawns - see README.md's Design
-// section) that reads its Loki connection details from a JSON file pointed
-// at by LOKI_CONFIG_FILE and its port from a fixed-path server.json under
-// $HOME/.config/kealthas-dev/opencode-mcp-loki/ (see README.md's
-// Configuration section, and mcp-servers/oracle/oracle.test.ts for the
+// section) that reads its Loki connection details from config.json (or
+// configs/<LOKI_CONFIG_ENV>.json) and its port from a fixed-path
+// server.json, both under $HOME/.config/kealthas-dev/opencode-mcp-loki/
+// (see README.md's Configuration section, and
+// mcp-servers/oracle/oracle.test.ts for the
 // same fake-$HOME pattern this test reuses). This test spawns the built
 // dist/server.js itself with `node:child_process.spawn` the same way a
 // real process supervisor would, giving it its own fake $HOME so it never
@@ -54,9 +55,11 @@ function startServer(port: number): Promise<ChildProcess> {
   mkdirSync(configDir, { recursive: true });
   writeFileSync(join(configDir, "server.json"), JSON.stringify({ LOKI_MCP_PORT: port }));
 
-  const configPath = join(home, "loki-config.json");
+  // Written straight to the default config.json location (not pointed at via
+  // an env var) - LOKI_CONFIG_ENV only takes a bare name, never a path, so
+  // there's nothing for this test to point at beyond that fixed default.
   writeFileSync(
-    configPath,
+    join(configDir, "config.json"),
     JSON.stringify({
       LOKI_BASE_URL: process.env.LOKI_BASE_URL,
       LOKI_USERNAME: process.env.LOKI_USERNAME,
@@ -65,10 +68,11 @@ function startServer(port: number): Promise<ChildProcess> {
     }),
   );
 
+  const env = { ...process.env, HOME: home };
+  delete env.LOKI_CONFIG_ENV;
+
   return new Promise((resolve, reject) => {
-    const child = spawn("node", [DIST_SERVER_PATH], {
-      env: { ...process.env, HOME: home, LOKI_CONFIG_FILE: configPath },
-    });
+    const child = spawn("node", [DIST_SERVER_PATH], { env });
 
     const timeout = setTimeout(() => {
       child.kill();

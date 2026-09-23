@@ -52,22 +52,36 @@ function loadServerConfig(): ServerConfig {
   }
 }
 
-// The Spring Boot project to analyze is per-environment/per-project and
-// read from whatever path SPRING_LSP_CONFIG_FILE points at - unrestricted
-// filename/location, so the same install can be pointed at a different
-// project just by changing this one env var.
+// The Spring Boot project to analyze is per-environment/per-project, but
+// the *location* it's read from is never user-supplied - only a short env
+// name is (e.g. "my-project"), which selects a fixed file under
+// CONFIG_DIR/configs/. This avoids the class of bug an arbitrary-path env
+// var invites: a caller's shell not expanding "~", a quoted value
+// suppressing that expansion, a typo'd relative path resolving against
+// whatever cwd happens to be - all of which point path.resolve() somewhere
+// unintended, silently. A bare name has none of that surface. No env var
+// set falls back to config.json directly in CONFIG_DIR (not configs/) for
+// the common single-project case.
+const DEFAULT_SPRING_LSP_CONFIG_PATH = path.join(CONFIG_DIR, "config.json");
+const SPRING_LSP_CONFIGS_DIR = path.join(CONFIG_DIR, "configs");
+const CONFIG_ENV_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+
 function loadSpringLspConfig(): SpringLspConfig {
-  const configPath = process.env.SPRING_LSP_CONFIG_FILE;
-  if (!configPath) {
-    console.error("Missing SPRING_LSP_CONFIG_FILE environment variable - point it at a spring-lsp config file, e.g.:");
-    console.error("  SPRING_LSP_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-spring-lsp/configs/my-project.json opencode-mcp-spring-lsp");
-    printSampleConfig("spring-lsp config file (path set via SPRING_LSP_CONFIG_FILE)", "<SPRING_LSP_CONFIG_FILE>", SAMPLE_SPRING_LSP_CONFIG);
+  const envName = process.env.SPRING_LSP_CONFIG_ENV;
+  if (envName !== undefined && !CONFIG_ENV_NAME_RE.test(envName)) {
+    console.error(`SPRING_LSP_CONFIG_ENV must be a plain name (letters, digits, "-", "_"), got: ${JSON.stringify(envName)}`);
     process.exit(1);
   }
-
-  const resolvedPath = path.resolve(configPath);
+  const resolvedPath = envName ? path.join(SPRING_LSP_CONFIGS_DIR, `${envName}.json`) : DEFAULT_SPRING_LSP_CONFIG_PATH;
   if (!existsSync(resolvedPath)) {
-    console.error(`spring-lsp config file not found: ${resolvedPath}`);
+    if (envName) {
+      console.error(`spring-lsp config file not found: ${resolvedPath}`);
+      console.error(`(SPRING_LSP_CONFIG_ENV=${envName} looks for "${envName}.json" under ${SPRING_LSP_CONFIGS_DIR})`);
+    } else {
+      console.error(`No SPRING_LSP_CONFIG_ENV set and no default config file at: ${resolvedPath}`);
+      console.error(`Either create that file, or set SPRING_LSP_CONFIG_ENV to the name of a file under ${SPRING_LSP_CONFIGS_DIR}/, e.g.:`);
+      console.error("  SPRING_LSP_CONFIG_ENV=my-project opencode-mcp-spring-lsp");
+    }
     printSampleConfig("spring-lsp config file", resolvedPath, SAMPLE_SPRING_LSP_CONFIG);
     process.exit(1);
   }

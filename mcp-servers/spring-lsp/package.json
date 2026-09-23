@@ -2,7 +2,7 @@
   "name": "@kealthas-dev/opencode-mcp-spring-lsp",
   "version": "1.0.0",
   "type": "module",
-  "description": "MCP server exposing spring-boot-language-server (Spring-aware LSP) code-intelligence tools - see README.md for design and the SPRING_LSP_CONFIG_FILE-driven config",
+  "description": "MCP server exposing spring-boot-language-server (Spring-aware LSP) code-intelligence tools - see README.md for design and the config.json-driven config",
   "main": "dist/server.js",
   "bin": {
     "opencode-mcp-spring-lsp": "dist/server.js"

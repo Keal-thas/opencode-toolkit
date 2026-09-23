@@ -21,32 +21,30 @@ cat > /home/dev/.config/opencode/opencode.jsonc <<'EOF'
 EOF
 chown dev:dev /home/dev/.config/opencode/opencode.jsonc
 
-# mcp-servers/oracle/ reads its database connection from a JSON file
-# pointed at by ORACLE_CONFIG_FILE, not from env vars directly (see
-# mcp-servers/oracle/README.md's Configuration section) - generate one from
-# docker-compose.yml's ORACLE_CONNECT_STRING/ORACLE_USER/ORACLE_PASSWORD so
+# mcp-servers/oracle/ reads its database connection from a fixed
+# config.json (no env var points at it - see mcp-servers/oracle/README.md's
+# Configuration section) - generate one from docker-compose.yml's
+# ORACLE_CONNECT_STRING/ORACLE_USER/ORACLE_PASSWORD so
 # `cd mcp-servers/oracle && npm install && npm run build && npm start`
 # still works with zero manual setup, matching a real deployment's
 # file-based config rather than passing those three straight through.
 mkdir -p /home/dev/.config/kealthas-dev/opencode-mcp-oracle
-cat > /home/dev/.config/kealthas-dev/opencode-mcp-oracle/docker.json <<EOF
+cat > /home/dev/.config/kealthas-dev/opencode-mcp-oracle/config.json <<EOF
 {
   "ORACLE_CONNECT_STRING": "$ORACLE_CONNECT_STRING",
   "ORACLE_USER": "$ORACLE_USER",
   "ORACLE_PASSWORD": "$ORACLE_PASSWORD"
 }
 EOF
-export ORACLE_CONFIG_FILE=/home/dev/.config/kealthas-dev/opencode-mcp-oracle/docker.json
 
-# Same pattern for mcp-servers/loki/ - LOKI_CONFIG_FILE instead of
-# LOKI_BASE_URL directly, generated from docker-compose.yml's LOKI_BASE_URL.
+# Same pattern for mcp-servers/loki/, generated from docker-compose.yml's
+# LOKI_BASE_URL.
 mkdir -p /home/dev/.config/kealthas-dev/opencode-mcp-loki
-cat > /home/dev/.config/kealthas-dev/opencode-mcp-loki/docker.json <<EOF
+cat > /home/dev/.config/kealthas-dev/opencode-mcp-loki/config.json <<EOF
 {
   "LOKI_BASE_URL": "$LOKI_BASE_URL"
 }
 EOF
-export LOKI_CONFIG_FILE=/home/dev/.config/kealthas-dev/opencode-mcp-loki/docker.json
 
 chown -R dev:dev /home/dev/.config/kealthas-dev
 

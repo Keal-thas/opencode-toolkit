@@ -33,13 +33,13 @@ See `mcp-servers/TODO.md` for planned follow-ups that go further than DB grants 
 
 ## Configuration
 
-Config is file-based, not env-var-based (unlike `loki/`/`java-lsp/`/`spring-lsp/`) — two separate files, matching how the port (infrastructure, fixed per machine) and the database connection (per-environment: prod/staging/dev/...) actually vary independently:
+Config is file-based, not env-var-based — two separate files, matching how the port (infrastructure, fixed per machine) and the database connection (per-environment: prod/staging/dev/...) actually vary independently. Same shape across all four `mcp-servers/*` packages (`loki/`/`java-lsp/`/`spring-lsp/` included) — this is the fullest writeup of it.
 
 - **`$HOME/.config/kealthas-dev/opencode-mcp-oracle/server.json`** — the port to listen on, at this one fixed path always. Optional: if missing, defaults to `8090`; if present, must be valid JSON or the server refuses to start. Shape (see `server.example.json`):
   ```json
   { "ORACLE_MCP_PORT": 8090 }
   ```
-- **A database config file at whatever path the `ORACLE_CONFIG_FILE` env var points at** — filename and location are unrestricted (absolute, `~`-relative, or relative to the current directory all work), so one install can be pointed at any environment just by changing this one env var per launch. Required — the server prints a sample and exits if `ORACLE_CONFIG_FILE` is unset, the file doesn't exist, or it's missing a required key. Shape (see `config.example.json`):
+- **A database config file.** The *location* it's read from is never user-supplied — only a short environment name is, via `ORACLE_CONFIG_ENV` (plain letters/digits/`-`/`_` only; anything else is rejected outright, exit code 1). With no `ORACLE_CONFIG_ENV` set, it's read from `$HOME/.config/kealthas-dev/opencode-mcp-oracle/config.json`. With `ORACLE_CONFIG_ENV=prod`, it's read from `$HOME/.config/kealthas-dev/opencode-mcp-oracle/configs/prod.json` instead. Deliberately not an arbitrary-path env var: a caller's shell not expanding `~`, a quoted value suppressing that expansion, or a typo'd relative path resolving against whatever `cwd` happens to be would each silently point `path.resolve()` at the wrong file — a bare name has none of that surface. Required (one file or the other must exist) — the server prints a sample and exits if the resolved file doesn't exist or is missing a required key. Shape (see `config.example.json`):
   ```json
   {
     "ORACLE_CONNECT_STRING": "hostname:1521/service_name",
@@ -54,10 +54,11 @@ A typical multi-environment layout:
 ```
 ~/.config/kealthas-dev/opencode-mcp-oracle/
 ├── server.json                    # port - one per machine
+├── config.json                    # used when ORACLE_CONFIG_ENV is unset
 └── configs/
-    ├── prod.json                  # ORACLE_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-oracle/configs/prod.json
-    ├── staging.json
-    └── dev.json
+    ├── prod.json                  # ORACLE_CONFIG_ENV=prod
+    ├── staging.json                # ORACLE_CONFIG_ENV=staging
+    └── dev.json                    # ORACLE_CONFIG_ENV=dev
 ```
 
 Real credentials never need to live inside this repo's checkout at all (unlike the other three servers' `.env`, which needs the `mcp-servers/**/.env` `.gitignore` rule to stay out of git) — the config directory lives under `$HOME`, entirely outside the working tree.
@@ -68,15 +69,17 @@ Published as `@kealthas-dev/opencode-mcp-oracle` — on a real deployment, insta
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-oracle
-ORACLE_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-oracle/configs/prod.json opencode-mcp-oracle
+mkdir -p ~/.config/kealthas-dev/opencode-mcp-oracle/configs
+# real config at ~/.config/kealthas-dev/opencode-mcp-oracle/configs/prod.json (see config.example.json for the shape)
+ORACLE_CONFIG_ENV=prod opencode-mcp-oracle
 ```
 
-For local dev/testing against this repo's own checkout (this directory, not the published package), point `ORACLE_CONFIG_FILE` at a real database config file (see `config.example.json` for the shape — the sandbox's docker-entrypoint.sh generates one automatically, see Testing below):
+For local dev/testing against this repo's own checkout (this directory, not the published package), same idea — drop a real config file at the default location, or a named one under `configs/` (see `config.example.json` for the shape — the sandbox's docker-entrypoint.sh generates the default one automatically, see Testing below):
 
 ```bash
 npm install
 npm run build
-ORACLE_CONFIG_FILE=/path/to/a/real/config.json npm start
+npm start   # reads ~/.config/kealthas-dev/opencode-mcp-oracle/config.json
 ```
 
 `npm run dev` runs `src/server.ts` directly via `tsx watch` instead, for a compile-on-save loop.
@@ -92,7 +95,7 @@ docker compose -f docker/docker-compose.oracle.yml up -d --wait
 docker/dev.sh run --rm opencode-dev bash
 ```
 
-`ORACLE_CONFIG_FILE` is already set inside that shell — `docker-entrypoint.sh` generates a database config file from the sandbox's `ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD` compose env vars and points `ORACLE_CONFIG_FILE` at it, matching a real deployment's file-based config rather than passing those three straight through. `cd mcp-servers/oracle && npm install && npm run build && npm start`, then hit `http://localhost:8090/mcp` from an MCP client or `curl`.
+The default config file is already in place inside that shell — `docker-entrypoint.sh` generates `~/.config/kealthas-dev/opencode-mcp-oracle/config.json` from the sandbox's `ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD` compose env vars, matching a real deployment's file-based config rather than passing those three straight through. `cd mcp-servers/oracle && npm install && npm run build && npm start`, then hit `http://localhost:8090/mcp` from an MCP client or `curl`.
 
 `oracle.test.ts` (see `tests/README.md`) doesn't need this manual dance — it builds against `process.env.ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD` (still plain env vars at the test level) to write its own config files into a fake `$HOME` per spawned server, and starts/stops its own `dist/server.js` process on its own port as part of the test run.
 
