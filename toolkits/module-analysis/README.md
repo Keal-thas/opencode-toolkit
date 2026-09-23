@@ -18,24 +18,27 @@ for `@opencode-ai/sdk` (see Usage below).
   placeholders: `@@MODULE_PATH@@` (the module directory being analyzed)
   and `@@MODULES_ROOT@@` (the parent directory holding all modules, so
   the agent has an actually-executable scope for its reverse-dependency
-  grep). This file is the single source of truth: `analyze-modules.mjs`
+  grep). This file is the single source of truth: `analyze-modules.ts`
   reads it and substitutes the placeholders rather than carrying its
   own copy of the prompt. See "Why the prompt looks like this" below
   for the thinking behind its structure.
-- `analyze-modules.mjs` — the driver script (Node, using
-  `@opencode-ai/sdk`). Starts one real opencode server for the whole
-  run and sends it one `agent: "plan"` prompt per module subdirectory
-  (edit/write denied by permission, so the model can't touch the
-  codebase it analyzes — see the script's own comment for why `plan`
+- `analyze-modules.ts` — the driver script (TypeScript, run directly via
+  its local `tsx` devDependency — no build step, since it's invoked
+  ad-hoc rather than published; see `npm run typecheck` below for how
+  it's actually type-checked, since `tsx` itself only strips types at
+  runtime), using `@opencode-ai/sdk`. Starts one real opencode server for
+  the whole run and sends it one `agent: "plan"` prompt per module
+  subdirectory (edit/write denied by permission, so the model can't touch
+  the codebase it analyzes — see the script's own comment for why `plan`
   rather than `explore`), taking the agent's captured answer straight
   from the SDK's typed response and writing it to the output file
   itself. Concurrency-limited (all concurrent runs share the one
   server, so raising it costs no extra startup overhead) and resumable
   — modules that already have a non-empty output file are skipped, so
   it's safe to interrupt and re-run.
-- `package.json` — this directory's own npm package (its only
-  dependency is `@opencode-ai/sdk`), the same pattern `mcp-servers/oracle/`
-  uses for its own SDK dependency.
+- `package.json` — this directory's own npm package (`@opencode-ai/sdk` as
+  its one real dependency, the same pattern `mcp-servers/oracle/` uses for
+  its own SDK dependency; `typescript`/`tsx`/`@types/node` as devDependencies).
 
 ## Why the prompt looks like this
 
@@ -72,11 +75,11 @@ Structural choices beyond that core rule:
 ## Usage
 
 ```bash
-cd toolkits/module-analysis && npm install   # once, pulls in @opencode-ai/sdk
+cd toolkits/module-analysis && npm install   # once, pulls in @opencode-ai/sdk + tsx
 
 MODULES_DIR=/path/to/project/src/modules \
 OUT_DIR=/path/to/project/docs/module-analysis \
-./analyze-modules.mjs
+npm start
 ```
 
 Optional env vars: `CONCURRENCY` (default `2` — raise once you've
@@ -86,7 +89,7 @@ raising this costs no extra server-startup overhead), `LOG_DIR`
 (defaults next to `OUT_DIR`), and `AGENT` (default `plan` — edit/write
 denied by permission, so a prompt failure can't turn into an actual
 code edit; doesn't restrict bash, so it's not a hard sandbox against a
-model that deliberately shells out — see `analyze-modules.mjs`'s own
+model that deliberately shells out — see `analyze-modules.ts`'s own
 comment, and [docs/lessons-learned.md](../docs/lessons-learned.md), for
 why `plan` beats `explore` here despite `explore` fitting the
 read-only framing better by name).
@@ -106,4 +109,4 @@ the final summary line in stdout.
   re-analyze each group together with shared context. Not built yet.
 - Not yet run against a real target codebase — designed and reviewed,
   but unverified end-to-end.
-- `analyze-modules.mjs` uses `@opencode-ai/sdk`'s typed `client.session.prompt()` against a real opencode server it starts itself. Verified against both a fake local model provider and a real DeepSeek-backed one; see `tests/integration/analyze-modules.test.mjs` (the `AGENT` entry above has why `plan` is the default). Untested: `createOpencode()` defaults to port 4096, same as an interactive `opencode` TUI session — running this alongside one on the same machine may collide.
+- `analyze-modules.ts` uses `@opencode-ai/sdk`'s typed `client.session.prompt()` against a real opencode server it starts itself. Verified against both a fake local model provider and a real DeepSeek-backed one; see `tests/integration/analyze-modules.test.mjs` (the `AGENT` entry above has why `plan` is the default). Untested: `createOpencode()` defaults to port 4096, same as an interactive `opencode` TUI session — running this alongside one on the same machine may collide.

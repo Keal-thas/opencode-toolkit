@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Unattended, concurrency-limited, resumable per-module analysis runner.
 //
 // Iterates every immediate subdirectory of MODULES_DIR, and for each one
@@ -17,7 +16,7 @@
 //   cd toolkits/module-analysis && npm install   # once, pulls in @opencode-ai/sdk
 //   MODULES_DIR=/path/to/project/src/modules \
 //   OUT_DIR=/path/to/project/docs/module-analysis \
-//   ./analyze-modules.mjs
+//   npm start
 //
 // Tune CONCURRENCY down if the shared vLLM server starts queuing/slowing
 // down under load; there's no hard reason to keep it low otherwise since
@@ -25,12 +24,12 @@
 // concurrent runs share the one opencode server this script starts, so
 // raising CONCURRENCY costs no extra server start-up overhead.
 
-import { createOpencode } from "@opencode-ai/sdk";
+import { createOpencode, type OpencodeClient, type Part } from "@opencode-ai/sdk";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
-function requireEnv(name, hint) {
+function requireEnv(name: string, hint: string): string {
   const value = process.env[name];
   if (!value) {
     console.error(`error: set ${name} to ${hint}`);
@@ -76,7 +75,7 @@ const PROMPT_TEMPLATE = RAW_TEMPLATE.replaceAll("@@MODULES_ROOT@@", MODULES_DIR)
 await mkdir(OUT_DIR, { recursive: true });
 await mkdir(LOG_DIR, { recursive: true });
 
-async function isNonEmptyFile(path) {
+async function isNonEmptyFile(path: string): Promise<boolean> {
   try {
     return (await stat(path)).size > 0;
   } catch {
@@ -84,14 +83,15 @@ async function isNonEmptyFile(path) {
   }
 }
 
-function lastTextPart(parts) {
+function lastTextPart(parts: Part[]): string | undefined {
   for (let i = parts.length - 1; i >= 0; i--) {
-    if (parts[i].type === "text") return parts[i].text;
+    const part = parts[i];
+    if (part.type === "text") return part.text;
   }
   return undefined;
 }
 
-async function analyzeOne(client, moduleDir) {
+async function analyzeOne(client: OpencodeClient, moduleDir: string): Promise<void> {
   const moduleName = basename(moduleDir);
   const outFile = join(OUT_DIR, `${moduleName}.md`);
   const logFile = join(LOG_DIR, `${moduleName}.log`);
@@ -112,11 +112,11 @@ async function analyzeOne(client, moduleDir) {
     // matching the old `opencode run` invocation, which never passed --model
     // either.
     result = await client.session.prompt({
-      path: { id: session.data.id },
+      path: { id: session.data!.id },
       body: { agent: AGENT, parts: [{ type: "text", text: prompt }] },
     });
   } catch (err) {
-    await writeFile(logFile, `request failed: ${err.name}: ${err.message}\n`);
+    await writeFile(logFile, `request failed: ${(err as Error).name}: ${(err as Error).message}\n`);
     console.log(`[FAIL] ${moduleName} (see ${logFile})`);
     return;
   }
@@ -140,9 +140,9 @@ async function analyzeOne(client, moduleDir) {
   }
 }
 
-async function runWithConcurrency(items, limit, worker) {
+async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
   let next = 0;
-  async function lane() {
+  async function lane(): Promise<void> {
     while (next < items.length) {
       const item = items[next++];
       await worker(item);

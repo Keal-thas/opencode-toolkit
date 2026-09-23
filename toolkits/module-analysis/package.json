@@ -3,8 +3,17 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Batch per-module opencode analysis driver (analyze-modules.mjs) - see README.md",
+  "description": "Batch per-module opencode analysis driver (analyze-modules.ts) - see README.md",
+  "scripts": {
+    "start": "tsx analyze-modules.ts",
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@opencode-ai/sdk": "^1.18.30"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
   }
 }

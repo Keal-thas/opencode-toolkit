@@ -10,7 +10,7 @@ echo "## Building the dev sandbox image (skipped if already up to date) =="
 docker/dev.sh build
 
 echo
-echo "## In-container tests: unit tests + analyze-modules.mjs (real opencode server, fake model) =="
+echo "## In-container tests: unit tests + analyze-modules.ts (real opencode server, fake model) =="
 docker/dev.sh run --rm opencode-dev bash tests/run-in-container.sh
 
 echo

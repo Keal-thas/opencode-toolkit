@@ -2,7 +2,7 @@
 # Meant to run *inside* the docker/ dev sandbox (see tests/README.md) -
 # not against whatever node/bash happens to be on the host. Covers
 # everything that needs no live opencode/model server: the plugin unit
-# tests, the analyze-modules.mjs integration test (real opencode server,
+# tests, the analyze-modules.ts integration test (real opencode server,
 # fake model provider), the oracle MCP server test (needs a real Oracle
 # instance), and the loki MCP server test (needs a real Loki instance) -
 # both reachable here because the shared `oracle`/`loki` services are
@@ -29,10 +29,15 @@ echo "== unit tests (node --test) =="
 node --test tests/unit/*.test.mjs
 
 echo
-echo "== analyze-modules.mjs integration test =="
+echo "== analyze-modules.ts integration test =="
 # toolkits/module-analysis/ is its own npm package (see its package.json) -
 # install @opencode-ai/sdk before driving it, same as mcp-servers/oracle below.
-(cd toolkits/module-analysis && npm install --no-audit --no-fund)
+# It's TypeScript run directly via its local tsx devDependency (no build
+# step, unlike the mcp-servers/*/ packages - see its package.json), so
+# `npm run typecheck` (tsc --noEmit) is the only thing that actually
+# type-checks it - tsx itself only strips types at runtime, it doesn't
+# verify them.
+(cd toolkits/module-analysis && npm install --no-audit --no-fund && npm run typecheck)
 node tests/integration/analyze-modules.test.mjs
 
 echo
