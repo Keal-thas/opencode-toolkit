@@ -18,6 +18,7 @@ const SAMPLE_DATABASE_CONFIG = {
   ORACLE_CONNECT_STRING: "hostname:1521/service_name (Easy Connect or TNS, either works)",
   ORACLE_USER: "username",
   ORACLE_PASSWORD: "password",
+  ORACLE_DEFAULT_SCHEMA: "schema_name (optional)",
 };
 
 function printSampleConfig(label: string, path: string, sample: unknown): void {
@@ -26,12 +27,18 @@ function printSampleConfig(label: string, path: string, sample: unknown): void {
   console.error("");
 }
 
-// server.json is infrastructure config (which port to bind) that doesn't
-// vary per environment, so it lives at one fixed path rather than being
-// pointed at like the database config below. Missing entirely just means
-// "use the default port" - only a present-but-broken file is treated as a
-// real error, since its existence signals intent to override the default.
+// ORACLE_MCP_PORT env var overrides server.json, for running several
+// instances (different databases/ports) without separate port files.
 function loadServerConfig(): ServerConfig {
+  if (process.env.ORACLE_MCP_PORT !== undefined) {
+    const port = Number(process.env.ORACLE_MCP_PORT);
+    if (!Number.isInteger(port) || port <= 0) {
+      console.error(`ORACLE_MCP_PORT must be a positive integer, got: ${JSON.stringify(process.env.ORACLE_MCP_PORT)}`);
+      process.exit(1);
+    }
+    return { ORACLE_MCP_PORT: port };
+  }
+
   if (!existsSync(SERVER_CONFIG_PATH)) {
     return { ORACLE_MCP_PORT: DEFAULT_PORT };
   }
@@ -50,47 +57,23 @@ function loadServerConfig(): ServerConfig {
   }
 }
 
-// Database config is per-environment (prod/staging/dev/...), but the
-// *location* it's read from is never user-supplied - only a short env name
-// is (e.g. "prod"), which selects a fixed file under CONFIG_DIR/configs/.
-// This avoids the class of bug an arbitrary-path env var invites: a
-// caller's shell not expanding "~", a quoted value suppressing that
-// expansion, a typo'd relative path resolving against whatever cwd happens
-// to be - all of which point path.resolve() somewhere unintended, silently.
-// A bare name has none of that surface. No env var set falls back to
-// config.json directly in CONFIG_DIR (not configs/) for the common
-// single-database case.
-const DEFAULT_ORACLE_CONFIG_PATH = join(CONFIG_DIR, "config.json");
-const ORACLE_CONFIGS_DIR = join(CONFIG_DIR, "configs");
-const CONFIG_ENV_NAME_RE = /^[a-zA-Z0-9_-]+$/;
-
+// config.json by default, config-<name>.json when ORACLE_CONFIG_ENV is set.
 function loadDatabaseConfig(): DatabaseConfig {
   const envName = process.env.ORACLE_CONFIG_ENV;
-  if (envName !== undefined && !CONFIG_ENV_NAME_RE.test(envName)) {
-    console.error(`ORACLE_CONFIG_ENV must be a plain name (letters, digits, "-", "_"), got: ${JSON.stringify(envName)}`);
-    process.exit(1);
-  }
-  const resolvedPath = envName ? join(ORACLE_CONFIGS_DIR, `${envName}.json`) : DEFAULT_ORACLE_CONFIG_PATH;
+  const resolvedPath = join(CONFIG_DIR, envName ? `config-${envName}.json` : "config.json");
   if (!existsSync(resolvedPath)) {
-    if (envName) {
-      console.error(`Database config file not found: ${resolvedPath}`);
-      console.error(`(ORACLE_CONFIG_ENV=${envName} looks for "${envName}.json" under ${ORACLE_CONFIGS_DIR})`);
-    } else {
-      console.error(`No ORACLE_CONFIG_ENV set and no default config file at: ${resolvedPath}`);
-      console.error(`Either create that file, or set ORACLE_CONFIG_ENV to the name of a file under ${ORACLE_CONFIGS_DIR}/, e.g.:`);
-      console.error("  ORACLE_CONFIG_ENV=prod opencode-mcp-oracle");
-    }
+    console.error(`Database config file not found: ${resolvedPath}`);
     printSampleConfig("database config file", resolvedPath, SAMPLE_DATABASE_CONFIG);
     process.exit(1);
   }
 
   try {
     const raw = JSON.parse(readFileSync(resolvedPath, "utf8"));
-    const { ORACLE_CONNECT_STRING, ORACLE_USER, ORACLE_PASSWORD } = raw;
+    const { ORACLE_CONNECT_STRING, ORACLE_USER, ORACLE_PASSWORD, ORACLE_DEFAULT_SCHEMA } = raw;
     if (!ORACLE_CONNECT_STRING || !ORACLE_USER || !ORACLE_PASSWORD) {
       throw new Error("missing one of ORACLE_CONNECT_STRING, ORACLE_USER, ORACLE_PASSWORD");
     }
-    return { ORACLE_CONNECT_STRING, ORACLE_USER, ORACLE_PASSWORD };
+    return { ORACLE_CONNECT_STRING, ORACLE_USER, ORACLE_PASSWORD, ORACLE_DEFAULT_SCHEMA };
   } catch (err) {
     console.error(`Failed to load database config from ${resolvedPath}: ${(err as Error).message}`);
     printSampleConfig("database config file", resolvedPath, SAMPLE_DATABASE_CONFIG);
@@ -99,7 +82,6 @@ function loadDatabaseConfig(): DatabaseConfig {
 }
 
 const serverConfig = loadServerConfig();
-const dbConfig = loadDatabaseConfig();
 
 // Extension point for the audit layer this tool intentionally ships without:
 // a rule-based (regex/keyword denylist) or LLM-based check (mirroring
@@ -122,11 +104,14 @@ async function auditQuery(sql: string): Promise<{ allow: boolean; reason?: strin
 //   in flight, never every request after it until the process is restarted
 // Tradeoff: connection-setup latency on every call - fine for an
 // interactive/low-QPS internal tool, not for anything latency-sensitive.
-async function executeQuery(sql: string) {
+async function executeQuery(sql: string, schema?: string) {
   const verdict = await auditQuery(sql);
   if (!verdict.allow) {
     return { success: false, error: `Blocked by audit hook: ${verdict.reason ?? "no reason given"}` };
   }
+
+  const dbConfig = loadDatabaseConfig();
+  const effectiveSchema = schema ?? dbConfig.ORACLE_DEFAULT_SCHEMA;
 
   let connection: oracledb.Connection | undefined;
   try {
@@ -135,6 +120,13 @@ async function executeQuery(sql: string) {
       user: dbConfig.ORACLE_USER,
       password: dbConfig.ORACLE_PASSWORD,
     });
+
+    // No bind variables for identifiers in ALTER SESSION - same full-
+    // passthrough stance as sql itself, safety lives elsewhere (read-only
+    // DB account, see README).
+    if (effectiveSchema) {
+      await connection.execute(`ALTER SESSION SET CURRENT_SCHEMA = "${effectiveSchema}"`);
+    }
 
     const result = await connection.execute(sql, [], {
       outFormat: oracledb.OUT_FORMAT_OBJECT,
@@ -188,6 +180,10 @@ function createMcpServer(): Server {
           type: "object",
           properties: {
             sql: { type: "string", description: "The SQL statement to execute" },
+            schema: {
+              type: "string",
+              description: "Optional - run against this schema (ALTER SESSION SET CURRENT_SCHEMA) instead of ORACLE_DEFAULT_SCHEMA/the connecting user's own schema.",
+            },
           },
           required: ["sql"],
         },
@@ -205,7 +201,7 @@ function createMcpServer(): Server {
       return { content: [{ type: "text", text: "Missing required argument: sql" }], isError: true };
     }
 
-    const result = await executeQuery(args.sql as string);
+    const result = await executeQuery(args.sql as string, args.schema as string | undefined);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   });
 

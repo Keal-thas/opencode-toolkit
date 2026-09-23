@@ -144,7 +144,7 @@ This puts an `opencode-mcp-oracle` binary on `PATH`. If `npm install` unexpected
 
 The Oracle MCP server is wired as `type: "remote"` in `opencode.json` (see `mcp-servers/oracle/README.md`'s Design section for why): opencode connects to it as an already-running HTTP endpoint rather than spawning and owning it. The server process has to be started independently, before opencode ever tries to use it — a persistent terminal/session running the binary, a process supervisor, or a container, whichever fits this machine. opencode itself never starts, stops, or restarts it.
 
-The Oracle server reads its config from files, not raw environment variables (see `mcp-servers/oracle/README.md`'s Configuration section) — a database config file plus an optional, fixed-path `server.json` (just the port, only needed if `8090` isn't free). The database config file's *location* is fixed too, not an arbitrary path: with no `ORACLE_CONFIG_ENV` env var set it's read from `~/.config/kealthas-dev/opencode-mcp-oracle/config.json`; setting `ORACLE_CONFIG_ENV=prod` reads `configs/prod.json` instead, for multi-environment setups. Create the database config file — real values only, never guessed by an executing agent, ask the human running this:
+The Oracle server reads its config from files, not raw environment variables (see `mcp-servers/oracle/README.md`'s Configuration section) — a database config file plus an optional, fixed-path `server.json` (just the port, only needed if `8090` isn't free). The database config file's *location* is fixed too, not an arbitrary path: with no `ORACLE_CONFIG_ENV` env var set it's read from `~/.config/kealthas-dev/opencode-mcp-oracle/config.json`; setting `ORACLE_CONFIG_ENV=prod` reads `config-prod.json` instead, for multi-environment setups. Create the database config file — real values only, never guessed by an executing agent, ask the human running this:
 
 ```bash
 mkdir -p ~/.config/kealthas-dev/opencode-mcp-oracle
@@ -191,7 +191,7 @@ This puts an `opencode-mcp-loki` binary on `PATH`.
 
 Wired as `type: "remote"` in `opencode.json`, same reasoning as step 6 — opencode connects to an already-running HTTP endpoint, started independently rather than spawned by opencode.
 
-Same file-based config model as step 6 (see `mcp-servers/loki/README.md`'s Configuration section) — a Loki config file (real `LOKI_BASE_URL`, plus `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` too only if that Loki instance actually requires them — unlike Oracle's credentials, all of these are optional) plus an optional `server.json` for the port. Same fixed-location scheme as step 6 too: default at `config.json`, or `configs/<name>.json` via `LOKI_CONFIG_ENV=<name>` for multiple environments. Create the config file — real values only, never guessed by an executing agent, ask the human running this:
+Same file-based config model as step 6 (see `mcp-servers/loki/README.md`'s Configuration section) — a Loki config file (real `LOKI_BASE_URL`, plus `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` too only if that Loki instance actually requires them — unlike Oracle's credentials, all of these are optional) plus an optional `server.json` for the port. Same fixed-location scheme as step 6 too: default at `config.json`, or `config-<name>.json` via `LOKI_CONFIG_ENV=<name>` for multiple environments. Create the config file — real values only, never guessed by an executing agent, ask the human running this:
 
 ```bash
 mkdir -p ~/.config/kealthas-dev/opencode-mcp-loki
@@ -245,7 +245,7 @@ If either is missing, report that back rather than guessing at how to install on
 
 Wired as `type: "remote"` in `opencode.json`, same reasoning as step 6.
 
-Same file-based config model as step 6 (see `mcp-servers/java-lsp/README.md`'s Configuration section) — a config file with `JAVA_LSP_WORKSPACE_ROOT` (the Java project to analyze) and `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch directory dedicated to this project, not the project root itself) plus an optional `server.json` for the port. Same fixed-location scheme as step 6: default at `config.json`, or `configs/<name>.json` via `JAVA_LSP_CONFIG_ENV=<name>` for multiple projects. Create the config file — real values only, never guessed by an executing agent, ask the human running this:
+Same file-based config model as step 6 (see `mcp-servers/java-lsp/README.md`'s Configuration section) — a config file with `JAVA_LSP_WORKSPACE_ROOT` (the Java project to analyze) and `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch directory dedicated to this project, not the project root itself) plus an optional `server.json` for the port. Same fixed-location scheme as step 6: default at `config.json`, or `config-<name>.json` via `JAVA_LSP_CONFIG_ENV=<name>` for multiple projects. Create the config file — real values only, never guessed by an executing agent, ask the human running this:
 
 ```bash
 mkdir -p ~/.config/kealthas-dev/opencode-mcp-java-lsp
@@ -291,7 +291,7 @@ This puts an `opencode-mcp-spring-lsp` binary on `PATH`.
 
 Wired as `type: "remote"` in `opencode.json`, same reasoning as step 6.
 
-Same file-based config model as step 6 (see `mcp-servers/spring-lsp/README.md`'s Configuration section) — a config file with `SPRING_LSP_WORKSPACE_ROOT` (the Spring Boot project to analyze) plus an optional `server.json` for the port. Same fixed-location scheme as step 6: default at `config.json`, or `configs/<name>.json` via `SPRING_LSP_CONFIG_ENV=<name>` for multiple projects. Create the config file — real values only, never guessed by an executing agent, ask the human running this:
+Same file-based config model as step 6 (see `mcp-servers/spring-lsp/README.md`'s Configuration section) — a config file with `SPRING_LSP_WORKSPACE_ROOT` (the Spring Boot project to analyze) plus an optional `server.json` for the port. Same fixed-location scheme as step 6: default at `config.json`, or `config-<name>.json` via `SPRING_LSP_CONFIG_ENV=<name>` for multiple projects. Create the config file — real values only, never guessed by an executing agent, ask the human running this:
 
 ```bash
 mkdir -p ~/.config/kealthas-dev/opencode-mcp-spring-lsp

@@ -35,30 +35,30 @@ See `mcp-servers/TODO.md` for planned follow-ups that go further than DB grants 
 
 Config is file-based, not env-var-based — two separate files, matching how the port (infrastructure, fixed per machine) and the database connection (per-environment: prod/staging/dev/...) actually vary independently. Same shape across all four `mcp-servers/*` packages (`loki/`/`java-lsp/`/`spring-lsp/` included) — this is the fullest writeup of it.
 
-- **`$HOME/.config/kealthas-dev/opencode-mcp-oracle/server.json`** — the port to listen on, at this one fixed path always. Optional: if missing, defaults to `8090`; if present, must be valid JSON or the server refuses to start. Shape (see `server.example.json`):
+- **`$HOME/.config/kealthas-dev/opencode-mcp-oracle/server.json`** — the port to listen on. `ORACLE_MCP_PORT` env var overrides it, for running more than one instance. Otherwise optional: if missing, defaults to `8090`; if present, must be valid JSON or the server refuses to start. Shape (see `server.example.json`):
   ```json
   { "ORACLE_MCP_PORT": 8090 }
   ```
-- **A database config file.** The *location* it's read from is never user-supplied — only a short environment name is, via `ORACLE_CONFIG_ENV` (plain letters/digits/`-`/`_` only; anything else is rejected outright, exit code 1). With no `ORACLE_CONFIG_ENV` set, it's read from `$HOME/.config/kealthas-dev/opencode-mcp-oracle/config.json`. With `ORACLE_CONFIG_ENV=prod`, it's read from `$HOME/.config/kealthas-dev/opencode-mcp-oracle/configs/prod.json` instead. Deliberately not an arbitrary-path env var: a caller's shell not expanding `~`, a quoted value suppressing that expansion, or a typo'd relative path resolving against whatever `cwd` happens to be would each silently point `path.resolve()` at the wrong file — a bare name has none of that surface. Required (one file or the other must exist) — the server prints a sample and exits if the resolved file doesn't exist or is missing a required key. Shape (see `config.example.json`):
+- **A database config file, re-read on every query (no restart needed after editing it).** The *location* it's read from is never user-supplied — only a short environment name is, via `ORACLE_CONFIG_ENV`. Deliberately not an arbitrary-path env var: a caller's shell not expanding `~`, a quoted value suppressing that expansion, or a typo'd relative path resolving against whatever `cwd` happens to be would each silently point `path.resolve()` at the wrong file — a bare name has none of that surface. With no `ORACLE_CONFIG_ENV` set, it's read from `config.json`; with `ORACLE_CONFIG_ENV=prod`, from `config-prod.json` instead. Required (one file or the other must exist) — the server prints a sample and exits if the resolved file doesn't exist or is missing a required key. Shape (see `config.example.json`):
   ```json
   {
     "ORACLE_CONNECT_STRING": "hostname:1521/service_name",
     "ORACLE_USER": "username",
-    "ORACLE_PASSWORD": "password"
+    "ORACLE_PASSWORD": "password",
+    "ORACLE_DEFAULT_SCHEMA": "schema_name"
   }
   ```
-  `ORACLE_CONNECT_STRING` accepts either an Easy Connect string (`host:port/service_name`) or a full TNS descriptor — both are passed straight through to `oracledb.getConnection()`, which supports both natively. Not a JDBC URL either way.
+  `ORACLE_CONNECT_STRING` accepts either an Easy Connect string (`host:port/service_name`) or a full TNS descriptor — both are passed straight through to `oracledb.getConnection()`, which supports both natively. Not a JDBC URL either way. `ORACLE_DEFAULT_SCHEMA` is optional — when set, every connection runs `ALTER SESSION SET CURRENT_SCHEMA` before the agent's SQL, so queries don't need to qualify every table with `schema.table`. `oracle_query`'s own optional `schema` argument overrides this per call.
 
 A typical multi-environment layout:
 
 ```
 ~/.config/kealthas-dev/opencode-mcp-oracle/
-├── server.json                    # port - one per machine
-├── config.json                    # used when ORACLE_CONFIG_ENV is unset
-└── configs/
-    ├── prod.json                  # ORACLE_CONFIG_ENV=prod
-    ├── staging.json                # ORACLE_CONFIG_ENV=staging
-    └── dev.json                    # ORACLE_CONFIG_ENV=dev
+├── server.json          # port - one per machine
+├── config.json           # used when ORACLE_CONFIG_ENV is unset
+├── config-prod.json      # ORACLE_CONFIG_ENV=prod
+├── config-staging.json   # ORACLE_CONFIG_ENV=staging
+└── config-dev.json       # ORACLE_CONFIG_ENV=dev
 ```
 
 Real credentials never need to live inside this repo's checkout at all (unlike the other three servers' `.env`, which needs the `mcp-servers/**/.env` `.gitignore` rule to stay out of git) — the config directory lives under `$HOME`, entirely outside the working tree.
@@ -69,12 +69,12 @@ Published as `@kealthas-dev/opencode-mcp-oracle` — on a real deployment, insta
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-oracle
-mkdir -p ~/.config/kealthas-dev/opencode-mcp-oracle/configs
-# real config at ~/.config/kealthas-dev/opencode-mcp-oracle/configs/prod.json (see config.example.json for the shape)
+mkdir -p ~/.config/kealthas-dev/opencode-mcp-oracle
+# real config at ~/.config/kealthas-dev/opencode-mcp-oracle/config-prod.json (see config.example.json for the shape)
 ORACLE_CONFIG_ENV=prod opencode-mcp-oracle
 ```
 
-For local dev/testing against this repo's own checkout (this directory, not the published package), same idea — drop a real config file at the default location, or a named one under `configs/` (see `config.example.json` for the shape — the sandbox's docker-entrypoint.sh generates the default one automatically, see Testing below):
+For local dev/testing against this repo's own checkout (this directory, not the published package), same idea — drop a real config file at the default location, or a named `config-<name>.json` (see `config.example.json` for the shape — the sandbox's docker-entrypoint.sh generates the default one automatically, see Testing below):
 
 ```bash
 npm install
