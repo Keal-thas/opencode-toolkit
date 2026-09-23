@@ -30,6 +30,18 @@ Config is file-based, not env-var-based — same two-file split as `mcp-servers/
   ```
   Only `LOKI_BASE_URL` (no trailing path, e.g. `http://192.168.1.100:3100`) is required — Loki is commonly reachable unauthenticated on an internal LAN, unlike `mcp-servers/oracle/`. `LOKI_USERNAME`/`LOKI_PASSWORD` are HTTP basic auth; `LOKI_ORG_ID` sets `X-Scope-OrgID` for multi-tenant Loki / Grafana Cloud-style setups; `LOKI_DEFAULT_TZ_OFFSET` defaults to `+08:00` if omitted.
 
+  **When Loki has no directly reachable port of its own** — a common setup where Grafana is the only thing exposed and Loki sits behind it — set `LOKI_VIA_GRAFANA: true` and `LOKI_BASE_URL` becomes Grafana's own URL instead of Loki's. Every request routes through Grafana's datasource-proxy endpoint (`/api/datasources/proxy/<id>/loki/api/v1/...`) rather than hitting a Loki API root directly. `LOKI_USERNAME`/`LOKI_PASSWORD` still work unchanged in this mode — Basic Auth against a real Grafana user account, not Loki itself (Grafana's own default is `admin`/`admin` until changed). `LOKI_GRAFANA_DATASOURCE_ID` is the Loki datasource's ID as assigned inside that Grafana instance (visible in its Data Sources page URL) — optional, defaults to `"1"`, which is what a single-datasource Grafana instance almost always has:
+  ```json
+  {
+    "LOKI_BASE_URL": "http://192.168.1.100:3100",
+    "LOKI_USERNAME": "admin",
+    "LOKI_PASSWORD": "admin",
+    "LOKI_VIA_GRAFANA": true,
+    "LOKI_GRAFANA_DATASOURCE_ID": "1"
+  }
+  ```
+  A telltale sign you need this mode: querying with `LOKI_VIA_GRAFANA` unset returns an HTML page (often a 404) instead of a JSON error — real Loki's own error responses are always plain text/JSON, never HTML, so an HTML response means the request landed on Grafana's own web UI instead of Loki's API.
+
 ## Run
 
 Published as `@kealthas-dev/opencode-mcp-loki` — on a real deployment, install it globally and run the resulting binary (see SETUP.md step 7):
@@ -68,4 +80,6 @@ The default config file is already in place inside that shell — `docker-entryp
 
 ## Status
 
-**Verified end-to-end and automated.** `loki.test.ts` covers tool listing, `loki_labels`/`loki_label_values` finding pushed test data, `loki_query_range` finding a pushed log line by content, an empty-result query returning cleanly (not an error), and a malformed LogQL query returning a clean error — driven over the real Streamable HTTP transport against the sandbox's `loki` service. Wired into `deploy/opencode.json.example` (`mcp.loki`, `type: "remote"`, `enabled: true`).
+**Direct-to-Loki path verified end-to-end and automated.** `loki.test.ts` covers tool listing, `loki_labels`/`loki_label_values` finding pushed test data, `loki_query_range` finding a pushed log line by content, an empty-result query returning cleanly (not an error), and a malformed LogQL query returning a clean error — driven over the real Streamable HTTP transport against the sandbox's `loki` service. Wired into `deploy/opencode.json.example` (`mcp.loki`, `type: "remote"`, `enabled: true`).
+
+**`LOKI_VIA_GRAFANA` verified only against a fake stand-in HTTP server** (confirms the request lands on `/api/datasources/proxy/<id>/...` with the right Basic Auth header) — not against a real Grafana instance, and not covered by `loki.test.ts`. See `mcp-servers/TODO.md` for adding a real Grafana fixture to the sandbox.

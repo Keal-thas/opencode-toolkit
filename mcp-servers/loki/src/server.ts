@@ -19,6 +19,8 @@ const SAMPLE_LOKI_CONFIG = {
   LOKI_PASSWORD: "password (optional)",
   LOKI_ORG_ID: "tenant-id (optional, multi-tenant Loki / Grafana Cloud-style setups)",
   LOKI_DEFAULT_TZ_OFFSET: "+08:00 (optional, defaults to +08:00)",
+  LOKI_VIA_GRAFANA: "true (optional - set when Loki is only reachable through Grafana's own datasource proxy, not directly; LOKI_BASE_URL becomes Grafana's URL in that case)",
+  LOKI_GRAFANA_DATASOURCE_ID: "1 (optional, only used when LOKI_VIA_GRAFANA is true - defaults to 1)",
 };
 
 function printSampleConfig(label: string, path: string, sample: unknown): void {
@@ -98,6 +100,8 @@ function loadLokiConfig(): LokiConfig {
       LOKI_PASSWORD: raw.LOKI_PASSWORD,
       LOKI_ORG_ID: raw.LOKI_ORG_ID,
       LOKI_DEFAULT_TZ_OFFSET: raw.LOKI_DEFAULT_TZ_OFFSET,
+      LOKI_VIA_GRAFANA: raw.LOKI_VIA_GRAFANA === true,
+      LOKI_GRAFANA_DATASOURCE_ID: raw.LOKI_GRAFANA_DATASOURCE_ID !== undefined ? String(raw.LOKI_GRAFANA_DATASOURCE_ID) : "1",
     };
   } catch (err) {
     console.error(`Failed to load Loki config from ${resolvedPath}: ${(err as Error).message}`);
@@ -162,7 +166,10 @@ type LokiResult = { success: true; data: unknown } | { success: false; error: st
 // executeQuery() returns in mcp-servers/oracle/src/server.ts, for the same reason:
 // tool results should never surface as a raw MCP protocol error.
 async function lokiFetch(path: string, params?: Record<string, unknown>): Promise<LokiResult> {
-  const url = new URL(path, lokiConfig.LOKI_BASE_URL);
+  const effectivePath = lokiConfig.LOKI_VIA_GRAFANA
+    ? `/api/datasources/proxy/${lokiConfig.LOKI_GRAFANA_DATASOURCE_ID}${path}`
+    : path;
+  const url = new URL(effectivePath, lokiConfig.LOKI_BASE_URL);
   for (const [key, value] of Object.entries(params ?? {})) {
     if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
   }
