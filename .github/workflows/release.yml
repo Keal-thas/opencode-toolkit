@@ -26,7 +26,10 @@ jobs:
 
       - name: Publish to npm
         run: |
-          npm install -g npm@latest # trusted publishing needs npm >= 11.5.1
+          # Trusted publishing needs npm >= 11.5.1. Node 24 already bundles
+          # a new enough npm (confirmed 2026-09-24: v24.21.0 ships 11.19.0),
+          # so no separate `npm install -g npm@latest` upgrade step is needed.
+          npm --version
           VERSION="${GITHUB_REF_NAME#v}"
           # Every npm package in this repo shares this one version number -
           # none of their committed package.json version fields are the
