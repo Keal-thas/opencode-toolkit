@@ -12,13 +12,13 @@ A minimal MCP server exposing three read-only tools — `loki_query_range`, `lok
 
 ## Configuration
 
-Config is file-based, not env-var-based — same two-file split as `mcp-servers/oracle/` (see its README's Configuration section for the fullest writeup of the pattern):
+Config is file-based, not env-var-based — same two-file split as `mcp-servers/oracle/` (see its README's Configuration section for the fullest writeup of the pattern), except unlike `mcp-servers/oracle/`, the Loki config file has a default location too:
 
 - **`$HOME/.config/kealthas-dev/opencode-mcp-loki/server.json`** — the port to listen on, at this one fixed path always. Optional: if missing, defaults to `8091`; if present, must be valid JSON or the server refuses to start. Shape (see `server.example.json`):
   ```json
   { "LOKI_MCP_PORT": 8091 }
   ```
-- **A Loki config file at whatever path the `LOKI_CONFIG_FILE` env var points at** — filename and location are unrestricted. Required — the server prints a sample and exits if `LOKI_CONFIG_FILE` is unset, the file doesn't exist, or `LOKI_BASE_URL` is missing from it. Shape (see `config.example.json`):
+- **A Loki config file, normally at `$HOME/.config/kealthas-dev/opencode-mcp-loki/config.json`** — that fixed path is the default (covers the common single-Loki-instance setup with nothing to set), but `LOKI_CONFIG_FILE` overrides it with any other path when set, for multiple environments — e.g. `configs/dev.json`, `configs/prod.json`, `configs/uat.json` alongside it, switched between with `LOKI_CONFIG_FILE=.../configs/prod.json`. The server prints a sample and exits if neither the default file nor an env-var-pointed file exists, or if `LOKI_BASE_URL` is missing from whichever one is read. Shape (see `config.example.json`):
   ```json
   {
     "LOKI_BASE_URL": "http://192.168.1.100:3100",
