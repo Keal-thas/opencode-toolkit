@@ -2,12 +2,12 @@
   "name": "@kealthas-dev/opencode-mcp-loki",
   "version": "1.0.0",
   "type": "module",
-  "description": "MCP server exposing read-only Loki query/label tools - see README.md for design",
-  "main": "server.js",
+  "description": "MCP server exposing read-only Loki query/label tools - see README.md for design and the LOKI_CONFIG_FILE-driven config",
+  "main": "dist/server.js",
   "bin": {
-    "opencode-mcp-loki": "server.js"
+    "opencode-mcp-loki": "dist/server.js"
   },
-  "files": ["server.js"],
+  "files": ["dist"],
   "publishConfig": {
     "access": "public"
   },
@@ -17,13 +17,16 @@
     "directory": "mcp-servers/loki"
   },
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
   }
 }

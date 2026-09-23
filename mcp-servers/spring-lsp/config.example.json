@@ -1,0 +1,4 @@
+{
+  "SPRING_LSP_WORKSPACE_ROOT": "/path/to/your/spring-boot/project",
+  "JAVA_EXECUTABLE": "/path/to/jdk21/bin/java"
+}

@@ -11,7 +11,15 @@
 // sandbox's image (docker/Dockerfile, `FROM node:22-bookworm`) has no JDK
 // or jdtls installed, and adding a jdtls download to the image wasn't done
 // here (see mcp-servers/TODO.md). Run this directly on a machine with jdtls
-// installed: `cd mcp-servers/java-lsp && npm install && node --test java-lsp.test.mjs`.
+// installed: `cd mcp-servers/java-lsp && npm install && npm run build && node --test java-lsp.test.mjs`.
+//
+// server.ts reads its workspace/data-dir config from a JSON file pointed at
+// by JAVA_LSP_CONFIG_FILE and its port from a fixed-path server.json under
+// $HOME/.config/kealthas-dev/opencode-mcp-java-lsp/ (see README.md's
+// Configuration section, and mcp-servers/oracle/oracle.test.mjs for the
+// same fake-$HOME pattern this test reuses) - this test spawns the compiled
+// dist/server.js with its own fake $HOME so it never shares config with a
+// real server that might be running in the same environment.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
@@ -23,6 +31,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const DIST_SERVER_PATH = join(here, "dist", "server.js");
 const READY_TIMEOUT_MS = 20_000;
 
 try {
@@ -62,20 +71,26 @@ writeFileSync(
 );
 const relativeFile = "src/main/java/com/example/Hello.java";
 
-function startServer(extraEnv) {
+function startServer(port) {
+  const home = mkdtempSync(join(tmpdir(), "java-lsp-mcp-test-home-"));
+  const configDir = join(home, ".config", "kealthas-dev", "opencode-mcp-java-lsp");
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(join(configDir, "server.json"), JSON.stringify({ JAVA_LSP_MCP_PORT: port }));
+
+  const configPath = join(home, "java-lsp-config.json");
+  writeFileSync(
+    configPath,
+    JSON.stringify({ JAVA_LSP_WORKSPACE_ROOT: workspaceRoot, JDTLS_DATA_DIR: dataDir }),
+  );
+
   return new Promise((resolve, reject) => {
-    const child = spawn("node", [join(here, "server.js")], {
-      env: {
-        ...process.env,
-        JAVA_LSP_WORKSPACE_ROOT: workspaceRoot,
-        JDTLS_DATA_DIR: dataDir,
-        ...extraEnv,
-      },
+    const child = spawn("node", [DIST_SERVER_PATH], {
+      env: { ...process.env, HOME: home, JAVA_LSP_CONFIG_FILE: configPath },
     });
 
     const timeout = setTimeout(() => {
       child.kill();
-      reject(new Error("server.js did not report listening within the timeout"));
+      reject(new Error("server did not report listening within the timeout"));
     }, READY_TIMEOUT_MS);
 
     let stderr = "";
@@ -88,7 +103,7 @@ function startServer(extraEnv) {
     });
     child.on("exit", (code) => {
       clearTimeout(timeout);
-      reject(new Error(`server.js exited early (code ${code}) before listening - stderr:\n${stderr}`));
+      reject(new Error(`server exited early (code ${code}) before listening - stderr:\n${stderr}`));
     });
   });
 }
@@ -104,7 +119,7 @@ let client;
 
 before(async () => {
   const serverPort = 8298;
-  serverProcess = await startServer({ JAVA_LSP_MCP_PORT: String(serverPort) });
+  serverProcess = await startServer(serverPort);
   const transport = new StreamableHTTPClientTransport(new URL(`http://localhost:${serverPort}/mcp`));
   client = new Client({ name: "java-lsp-mcp-test", version: "1.0.0" }, { capabilities: {} });
   await client.connect(transport);

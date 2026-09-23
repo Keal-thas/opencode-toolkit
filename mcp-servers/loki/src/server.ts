@@ -1,24 +1,99 @@
 #!/usr/bin/env node
 import http from "node:http";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import type { LokiConfig, ServerConfig } from "./types/config.js";
 
-const LOKI_BASE_URL = process.env.LOKI_BASE_URL;
-const LOKI_USERNAME = process.env.LOKI_USERNAME;
-const LOKI_PASSWORD = process.env.LOKI_PASSWORD;
-const LOKI_ORG_ID = process.env.LOKI_ORG_ID;
-const LOKI_MCP_PORT = Number(process.env.LOKI_MCP_PORT ?? "8091");
-// Only matters for the "naive" datetime case in resolveTimeParam() below -
-// Loki itself is never told about this, it only ever sees a fully-
-// qualified offset or an epoch. Defaults to Beijing time since that's
-// this deployment's actual timezone; override for a different one.
-const LOKI_DEFAULT_TZ_OFFSET = process.env.LOKI_DEFAULT_TZ_OFFSET ?? "+08:00";
+const DEFAULT_PORT = 8091; // the next free port after mcp-servers/oracle's 8090
+const CONFIG_DIR = join(homedir(), ".config", "kealthas-dev", "opencode-mcp-loki");
+const SERVER_CONFIG_PATH = join(CONFIG_DIR, "server.json");
 
-if (!LOKI_BASE_URL) {
-  console.error("Missing Loki connection details. Set LOKI_BASE_URL.");
-  process.exit(1);
+const SAMPLE_SERVER_CONFIG = { LOKI_MCP_PORT: DEFAULT_PORT };
+const SAMPLE_LOKI_CONFIG = {
+  LOKI_BASE_URL: "http://192.168.1.100:3100 (no trailing path)",
+  LOKI_USERNAME: "username (optional, HTTP basic auth)",
+  LOKI_PASSWORD: "password (optional)",
+  LOKI_ORG_ID: "tenant-id (optional, multi-tenant Loki / Grafana Cloud-style setups)",
+  LOKI_DEFAULT_TZ_OFFSET: "+08:00 (optional, defaults to +08:00)",
+};
+
+function printSampleConfig(label: string, path: string, sample: unknown): void {
+  console.error(`\nExpected ${label} at: ${path}\n`);
+  console.error(JSON.stringify(sample, null, 2));
+  console.error("");
 }
+
+// server.json is infrastructure config (which port to bind) that doesn't
+// vary per environment, so it lives at one fixed path rather than being
+// pointed at like the Loki config below. Missing entirely just means "use
+// the default port" - only a present-but-broken file is treated as a real
+// error, since its existence signals intent to override the default.
+function loadServerConfig(): ServerConfig {
+  if (!existsSync(SERVER_CONFIG_PATH)) {
+    return { LOKI_MCP_PORT: DEFAULT_PORT };
+  }
+
+  try {
+    const raw = JSON.parse(readFileSync(SERVER_CONFIG_PATH, "utf8"));
+    const port = Number(raw.LOKI_MCP_PORT ?? DEFAULT_PORT);
+    if (!Number.isInteger(port) || port <= 0) {
+      throw new Error(`LOKI_MCP_PORT must be a positive integer, got: ${JSON.stringify(raw.LOKI_MCP_PORT)}`);
+    }
+    return { LOKI_MCP_PORT: port };
+  } catch (err) {
+    console.error(`Failed to load server config: ${(err as Error).message}`);
+    printSampleConfig("server config", SERVER_CONFIG_PATH, SAMPLE_SERVER_CONFIG);
+    process.exit(1);
+  }
+}
+
+// Loki connection details are per-environment and read from whatever path
+// LOKI_CONFIG_FILE points at - unrestricted filename/location, so the same
+// install can be pointed at a different Loki instance just by changing this
+// one env var. Only LOKI_BASE_URL is required - Loki is commonly reachable
+// unauthenticated on an internal LAN, unlike mcp-servers/oracle.
+function loadLokiConfig(): LokiConfig {
+  const configPath = process.env.LOKI_CONFIG_FILE;
+  if (!configPath) {
+    console.error("Missing LOKI_CONFIG_FILE environment variable - point it at a Loki config file, e.g.:");
+    console.error("  LOKI_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-loki/configs/prod.json opencode-mcp-loki");
+    printSampleConfig("Loki config file (path set via LOKI_CONFIG_FILE)", "<LOKI_CONFIG_FILE>", SAMPLE_LOKI_CONFIG);
+    process.exit(1);
+  }
+
+  const resolvedPath = resolve(configPath);
+  if (!existsSync(resolvedPath)) {
+    console.error(`Loki config file not found: ${resolvedPath}`);
+    printSampleConfig("Loki config file", resolvedPath, SAMPLE_LOKI_CONFIG);
+    process.exit(1);
+  }
+
+  try {
+    const raw = JSON.parse(readFileSync(resolvedPath, "utf8"));
+    if (!raw.LOKI_BASE_URL) {
+      throw new Error("missing required key LOKI_BASE_URL");
+    }
+    return {
+      LOKI_BASE_URL: raw.LOKI_BASE_URL,
+      LOKI_USERNAME: raw.LOKI_USERNAME,
+      LOKI_PASSWORD: raw.LOKI_PASSWORD,
+      LOKI_ORG_ID: raw.LOKI_ORG_ID,
+      LOKI_DEFAULT_TZ_OFFSET: raw.LOKI_DEFAULT_TZ_OFFSET,
+    };
+  } catch (err) {
+    console.error(`Failed to load Loki config from ${resolvedPath}: ${(err as Error).message}`);
+    printSampleConfig("Loki config file", resolvedPath, SAMPLE_LOKI_CONFIG);
+    process.exit(1);
+  }
+}
+
+const serverConfig = loadServerConfig();
+const lokiConfig = loadLokiConfig();
+const LOKI_DEFAULT_TZ_OFFSET = lokiConfig.LOKI_DEFAULT_TZ_OFFSET ?? "+08:00";
 
 // Computing a correct start/end by hand (an exact RFC3339 offset, or -
 // worse - a 19-digit nanosecond epoch) is real friction for whatever's
@@ -41,9 +116,9 @@ if (!LOKI_BASE_URL) {
 const RELATIVE_TIME_RE = /^now(?:-((?:\d+[smhd])+))?$/;
 const DURATION_PART_RE = /(\d+)([smhd])/g;
 const NAIVE_DATETIME_RE = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2}(?:\.\d+)?)$/;
-const UNIT_MS = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+const UNIT_MS: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
 
-function resolveTimeParam(value) {
+function resolveTimeParam(value: string | undefined): string | undefined {
   if (value === undefined || value === null) return value;
 
   const relative = RELATIVE_TIME_RE.exec(value);
@@ -61,25 +136,27 @@ function resolveTimeParam(value) {
   return value;
 }
 
+type LokiResult = { success: true; data: unknown } | { success: false; error: string };
+
 // Loki's query API (what every tool below hits) has no write side at all -
 // unlike Oracle there's no executeQuery()-style connection lifecycle or
 // auditQuery() gate to design around here. Every call is a plain,
 // stateless GET; this helper just centralizes URL-building, the optional
 // auth headers, and turning a non-2xx/network failure into a clean
 // {success: false} instead of a thrown error - mirroring the shape
-// executeQuery() returns in mcp-servers/oracle/server.js, for the same reason:
+// executeQuery() returns in mcp-servers/oracle/src/server.ts, for the same reason:
 // tool results should never surface as a raw MCP protocol error.
-async function lokiFetch(path, params) {
-  const url = new URL(path, LOKI_BASE_URL);
+async function lokiFetch(path: string, params?: Record<string, unknown>): Promise<LokiResult> {
+  const url = new URL(path, lokiConfig.LOKI_BASE_URL);
   for (const [key, value] of Object.entries(params ?? {})) {
     if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
   }
 
-  const headers = {};
-  if (LOKI_USERNAME || LOKI_PASSWORD) {
-    headers.Authorization = `Basic ${Buffer.from(`${LOKI_USERNAME ?? ""}:${LOKI_PASSWORD ?? ""}`).toString("base64")}`;
+  const headers: Record<string, string> = {};
+  if (lokiConfig.LOKI_USERNAME || lokiConfig.LOKI_PASSWORD) {
+    headers.Authorization = `Basic ${Buffer.from(`${lokiConfig.LOKI_USERNAME ?? ""}:${lokiConfig.LOKI_PASSWORD ?? ""}`).toString("base64")}`;
   }
-  if (LOKI_ORG_ID) headers["X-Scope-OrgID"] = LOKI_ORG_ID;
+  if (lokiConfig.LOKI_ORG_ID) headers["X-Scope-OrgID"] = lokiConfig.LOKI_ORG_ID;
 
   try {
     const response = await fetch(url, { headers });
@@ -96,11 +173,20 @@ async function lokiFetch(path, params) {
     const body = text ? JSON.parse(text) : null;
     return { success: true, data: body?.data };
   } catch (err) {
-    return { success: false, error: err.message };
+    return { success: false, error: (err as Error).message };
   }
 }
 
-async function queryRange({ query, start, end, limit, direction, step }) {
+interface QueryRangeArgs {
+  query: string;
+  start?: string;
+  end?: string;
+  limit?: number;
+  direction?: string;
+  step?: string;
+}
+
+async function queryRange({ query, start, end, limit, direction, step }: QueryRangeArgs): Promise<LokiResult> {
   return lokiFetch("/loki/api/v1/query_range", {
     query,
     start: resolveTimeParam(start),
@@ -111,11 +197,11 @@ async function queryRange({ query, start, end, limit, direction, step }) {
   });
 }
 
-async function listLabels({ start, end }) {
+async function listLabels({ start, end }: { start?: string; end?: string }): Promise<LokiResult> {
   return lokiFetch("/loki/api/v1/labels", { start: resolveTimeParam(start), end: resolveTimeParam(end) });
 }
 
-async function listLabelValues({ label, start, end }) {
+async function listLabelValues({ label, start, end }: { label: string; start?: string; end?: string }): Promise<LokiResult> {
   return lokiFetch(`/loki/api/v1/label/${encodeURIComponent(label)}/values`, {
     start: resolveTimeParam(start),
     end: resolveTimeParam(end),
@@ -129,7 +215,7 @@ const TIME_PARAM_DESCRIPTION =
   `or an already-qualified absolute value (RFC3339 with an explicit offset, e.g. "2026-09-15T10:00:00+08:00", ` +
   `or a unix epoch in seconds or nanoseconds).`;
 
-function createMcpServer() {
+function createMcpServer(): Server {
   const server = new Server({ name: "loki-mcp", version: "1.0.0" }, { capabilities: { tools: {} } });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -181,18 +267,18 @@ function createMcpServer() {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
-    let result;
+    let result: LokiResult;
     switch (name) {
       case "loki_query_range":
         if (!args?.query) return { content: [{ type: "text", text: "Missing required argument: query" }], isError: true };
-        result = await queryRange(args);
+        result = await queryRange(args as unknown as QueryRangeArgs);
         break;
       case "loki_labels":
-        result = await listLabels(args ?? {});
+        result = await listLabels((args ?? {}) as { start?: string; end?: string });
         break;
       case "loki_label_values":
         if (!args?.label) return { content: [{ type: "text", text: "Missing required argument: label" }], isError: true };
-        result = await listLabelValues(args);
+        result = await listLabelValues(args as unknown as { label: string; start?: string; end?: string });
         break;
       default:
         return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
@@ -205,12 +291,12 @@ function createMcpServer() {
 }
 
 // Stateless mode (sessionIdGenerator: undefined) with a fresh Server +
-// transport pair per request - same shell as mcp-servers/oracle/server.js, for the
+// transport pair per request - same shell as mcp-servers/oracle/src/server.ts, for the
 // same reason (the SDK's own reference stateless Streamable HTTP server;
 // no session state worth sharing between calls, and sharing one pair would
 // just mean concurrent requests fighting over the same transport).
 const httpServer = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host ?? "localhost"}`);
+  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
   if (url.pathname !== "/mcp") {
     res.writeHead(404).end();
     return;
@@ -247,6 +333,6 @@ httpServer.on("error", (err) => {
   process.exit(1);
 });
 
-httpServer.listen(LOKI_MCP_PORT, () => {
-  console.error(`Loki MCP server listening on http://localhost:${LOKI_MCP_PORT}/mcp`);
+httpServer.listen(serverConfig.LOKI_MCP_PORT, () => {
+  console.error(`Loki MCP server listening on http://localhost:${serverConfig.LOKI_MCP_PORT}/mcp`);
 });

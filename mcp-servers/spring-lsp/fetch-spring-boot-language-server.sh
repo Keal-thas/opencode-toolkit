@@ -74,4 +74,4 @@ mkdir -p vendor
 OUT="vendor/spring-boot-language-server-${LS_VERSION}.tar.gz"
 tar -czf "$OUT" -C "$LS_DIR" "$JAR_BASENAME" lib
 echo "Wrote $OUT ($(du -h "$OUT" | cut -f1))" >&2
-echo "server.js discovers the exec jar name and version from this tarball automatically (see resolveLanguageServerDir() in server.js) - nothing else to update." >&2
+echo "server.ts discovers the exec jar name and version from this tarball automatically (see resolveLanguageServerDir() in src/server.ts) - nothing else to update." >&2

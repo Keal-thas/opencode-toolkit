@@ -2,12 +2,12 @@
   "name": "@kealthas-dev/opencode-mcp-java-lsp",
   "version": "1.0.0",
   "type": "module",
-  "description": "MCP server exposing jdtls (Java LSP) code-intelligence tools - see README.md for design",
-  "main": "server.js",
+  "description": "MCP server exposing jdtls (Java LSP) code-intelligence tools - see README.md for design and the JAVA_LSP_CONFIG_FILE-driven config",
+  "main": "dist/server.js",
   "bin": {
-    "opencode-mcp-java-lsp": "server.js"
+    "opencode-mcp-java-lsp": "dist/server.js"
   },
-  "files": ["server.js", "lsp-client.js", "vendor/*.tar.gz"],
+  "files": ["dist", "vendor/*.tar.gz"],
   "publishConfig": {
     "access": "public"
   },
@@ -17,13 +17,16 @@
     "directory": "mcp-servers/java-lsp"
   },
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
   }
 }

@@ -191,10 +191,21 @@ This puts an `opencode-mcp-loki` binary on `PATH`.
 
 Wired as `type: "remote"` in `opencode.json`, same reasoning as step 6 — opencode connects to an already-running HTTP endpoint, started independently rather than spawned by opencode.
 
-Start the server with `LOKI_BASE_URL` pointing at the real internal Loki instance (see `mcp-servers/loki/README.md`'s Configuration section — `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` too, only if that Loki instance actually requires them; unlike Oracle's credentials, all of these are optional), and `LOKI_MCP_PORT` if the default port (`8091`) isn't free:
+Same file-based config model as step 6 (see `mcp-servers/loki/README.md`'s Configuration section) — a Loki config file (real `LOKI_BASE_URL`, plus `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` too only if that Loki instance actually requires them — unlike Oracle's credentials, all of these are optional) plus an optional `server.json` for the port. Create the config file — real values only, never guessed by an executing agent, ask the human running this:
 
 ```bash
-LOKI_BASE_URL=... opencode-mcp-loki
+mkdir -p ~/.config/kealthas-dev/opencode-mcp-loki/configs
+cat > ~/.config/kealthas-dev/opencode-mcp-loki/configs/prod.json <<'EOF'
+{
+  "LOKI_BASE_URL": "..."
+}
+EOF
+```
+
+Then start the server pointed at it:
+
+```bash
+LOKI_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-loki/configs/prod.json opencode-mcp-loki
 ```
 
 Leave that running (in its own terminal, or under whatever supervisor was chosen in step 6). `deploy/opencode.json.example` already carries this same block, enabled, with a placeholder port — if step 2 merged into an existing `opencode.json` instead of copying the example fresh, add it to `opencode.json`'s top level (merge, don't replace):
@@ -209,7 +220,7 @@ Leave that running (in its own terminal, or under whatever supervisor was chosen
 }
 ```
 
-One thing needs a real value that this repo or an executing agent should never guess — ask the human running this: the real `LOKI_BASE_URL` for whatever internal Loki instance this is meant to reach.
+If the port had to be overridden because `8091` was taken, write `~/.config/kealthas-dev/opencode-mcp-loki/server.json` (`{"LOKI_MCP_PORT": <port>}`) and update the `url` above to match.
 
 `loki_query_range` is a full passthrough (any LogQL, no restriction — see `mcp-servers/loki/README.md`) by deliberate design; unrelated to this deployment step.
 
@@ -234,10 +245,22 @@ If either is missing, report that back rather than guessing at how to install on
 
 Wired as `type: "remote"` in `opencode.json`, same reasoning as step 6.
 
-Start the server with `JAVA_LSP_WORKSPACE_ROOT` (the Java project to analyze) and `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch directory dedicated to this project, not the project root itself; see `mcp-servers/java-lsp/README.md`'s Configuration section), and `JAVA_LSP_MCP_PORT` if the default port (`8092`) isn't free:
+Same file-based config model as step 6 (see `mcp-servers/java-lsp/README.md`'s Configuration section) — a config file with `JAVA_LSP_WORKSPACE_ROOT` (the Java project to analyze) and `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch directory dedicated to this project, not the project root itself) plus an optional `server.json` for the port. Create the config file — real values only, never guessed by an executing agent, ask the human running this:
 
 ```bash
-JAVA_LSP_WORKSPACE_ROOT=... JDTLS_DATA_DIR=... opencode-mcp-java-lsp
+mkdir -p ~/.config/kealthas-dev/opencode-mcp-java-lsp/configs
+cat > ~/.config/kealthas-dev/opencode-mcp-java-lsp/configs/my-project.json <<'EOF'
+{
+  "JAVA_LSP_WORKSPACE_ROOT": "...",
+  "JDTLS_DATA_DIR": "..."
+}
+EOF
+```
+
+Then start the server pointed at it:
+
+```bash
+JAVA_LSP_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-java-lsp/configs/my-project.json opencode-mcp-java-lsp
 ```
 
 Leave that running (in its own terminal, or under whatever supervisor was chosen in step 6). `deploy/opencode.json.example` already carries this same block, enabled, with a placeholder port — if step 2 merged into an existing `opencode.json` instead of copying the example fresh, add it to `opencode.json`'s top level (merge, don't replace):
@@ -252,7 +275,7 @@ Leave that running (in its own terminal, or under whatever supervisor was chosen
 }
 ```
 
-Two things need real values that this repo or an executing agent should never guess — ask the human running this: the real `JAVA_LSP_WORKSPACE_ROOT` (which Java project to analyze), and the port, only if `JAVA_LSP_MCP_PORT` had to be overridden because `8092` was taken.
+If the port had to be overridden because `8092` was taken, write `~/.config/kealthas-dev/opencode-mcp-java-lsp/server.json` (`{"JAVA_LSP_MCP_PORT": <port>}`) and update the `url` above to match.
 
 ## 9. Add the spring-lsp MCP server
 
@@ -268,10 +291,21 @@ This puts an `opencode-mcp-spring-lsp` binary on `PATH`.
 
 Wired as `type: "remote"` in `opencode.json`, same reasoning as step 6.
 
-Start the server with `SPRING_LSP_WORKSPACE_ROOT` (the Spring Boot project to analyze; see `mcp-servers/spring-lsp/README.md`'s Configuration section), and `SPRING_LSP_MCP_PORT` if the default port (`8093`) isn't free:
+Same file-based config model as step 6 (see `mcp-servers/spring-lsp/README.md`'s Configuration section) — a config file with `SPRING_LSP_WORKSPACE_ROOT` (the Spring Boot project to analyze) plus an optional `server.json` for the port. Create the config file — real values only, never guessed by an executing agent, ask the human running this:
 
 ```bash
-SPRING_LSP_WORKSPACE_ROOT=... opencode-mcp-spring-lsp
+mkdir -p ~/.config/kealthas-dev/opencode-mcp-spring-lsp/configs
+cat > ~/.config/kealthas-dev/opencode-mcp-spring-lsp/configs/my-project.json <<'EOF'
+{
+  "SPRING_LSP_WORKSPACE_ROOT": "..."
+}
+EOF
+```
+
+Then start the server pointed at it:
+
+```bash
+SPRING_LSP_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-spring-lsp/configs/my-project.json opencode-mcp-spring-lsp
 ```
 
 Leave that running. `deploy/opencode.json.example` already carries this same block, enabled, with a placeholder port — if step 2 merged into an existing `opencode.json` instead of copying the example fresh, add it to `opencode.json`'s top level (merge, don't replace):
@@ -286,7 +320,7 @@ Leave that running. `deploy/opencode.json.example` already carries this same blo
 }
 ```
 
-One thing needs a real value that this repo or an executing agent should never guess — ask the human running this: the real `SPRING_LSP_WORKSPACE_ROOT` (which Spring Boot project to analyze).
+If the port had to be overridden because `8093` was taken, write `~/.config/kealthas-dev/opencode-mcp-spring-lsp/server.json` (`{"SPRING_LSP_MCP_PORT": <port>}`) and update the `url` above to match.
 
 `spring-lsp`'s classpath-aware richness (real bean/config-property results, not empty arrays) needs pairing with a `java-lsp` jdtls instance via a "classpath listener" mechanism that isn't implemented yet — see `mcp-servers/TODO.md`; unrelated to this deployment step.
 

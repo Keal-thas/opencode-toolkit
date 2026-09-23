@@ -36,8 +36,19 @@ cat > /home/dev/.config/kealthas-dev/opencode-mcp-oracle/docker.json <<EOF
   "ORACLE_PASSWORD": "$ORACLE_PASSWORD"
 }
 EOF
-chown -R dev:dev /home/dev/.config/kealthas-dev
 export ORACLE_CONFIG_FILE=/home/dev/.config/kealthas-dev/opencode-mcp-oracle/docker.json
+
+# Same pattern for mcp-servers/loki/ - LOKI_CONFIG_FILE instead of
+# LOKI_BASE_URL directly, generated from docker-compose.yml's LOKI_BASE_URL.
+mkdir -p /home/dev/.config/kealthas-dev/opencode-mcp-loki
+cat > /home/dev/.config/kealthas-dev/opencode-mcp-loki/docker.json <<EOF
+{
+  "LOKI_BASE_URL": "$LOKI_BASE_URL"
+}
+EOF
+export LOKI_CONFIG_FILE=/home/dev/.config/kealthas-dev/opencode-mcp-loki/docker.json
+
+chown -R dev:dev /home/dev/.config/kealthas-dev
 
 # Load provider API keys from the read-only ~/.keys mount into this
 # container's env only - never written back to the host, never logged.

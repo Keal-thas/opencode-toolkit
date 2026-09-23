@@ -1,0 +1,7 @@
+{
+  "LOKI_BASE_URL": "http://192.168.1.100:3100",
+  "LOKI_USERNAME": "username",
+  "LOKI_PASSWORD": "password",
+  "LOKI_ORG_ID": "tenant-id",
+  "LOKI_DEFAULT_TZ_OFFSET": "+08:00"
+}

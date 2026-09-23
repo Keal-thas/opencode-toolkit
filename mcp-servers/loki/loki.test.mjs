@@ -4,14 +4,21 @@
 // Not something this test can mock: it exercises the real Loki HTTP query
 // API round-trip. Lives here (not under tests/) so Node's module
 // resolution finds this package's own node_modules - run via
-// `node --test mcp-servers/loki/loki.test.mjs` after `npm install` in this
-// directory (see tests/run-in-container.sh).
+// `npm run build && node --test mcp-servers/loki/loki.test.mjs` after
+// `npm install` in this directory (see tests/run-in-container.sh).
 //
-// server.js is a persistent HTTP server (opencode connects to it as
+// server.ts is a persistent HTTP server (opencode connects to it as
 // type: "remote", not something it spawns - see README.md's Design
-// section), so this test spawns it itself with `node:child_process.spawn`
-// the same way a real process supervisor would, waits for its "listening"
-// line on stderr, then drives it over the real Streamable HTTP transport.
+// section) that reads its Loki connection details from a JSON file pointed
+// at by LOKI_CONFIG_FILE and its port from a fixed-path server.json under
+// $HOME/.config/kealthas-dev/opencode-mcp-loki/ (see README.md's
+// Configuration section, and mcp-servers/oracle/oracle.test.mjs for the
+// same fake-$HOME pattern this test reuses). This test spawns the built
+// dist/server.js itself with `node:child_process.spawn` the same way a
+// real process supervisor would, giving it its own fake $HOME so it never
+// shares config with a real server that might be running in the same
+// container, then drives it over the real Streamable HTTP transport once
+// it reports its "listening" line on stderr.
 //
 // This server's tools are read-only, so there's no MCP tool that can seed
 // test data the way mcp-servers/oracle/oracle.test.mjs's CREATE TABLE/INSERT does
@@ -23,26 +30,47 @@ import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const DIST_SERVER_PATH = join(here, "dist", "server.js");
 const READY_TIMEOUT_MS = 15_000;
 
 if (!process.env.LOKI_BASE_URL) {
   throw new Error(
     "LOKI_BASE_URL not set - this test needs a live Loki instance (the docker/ sandbox's " +
-      "loki service, see docker-notes.md), not a bare `node --test` on the host",
+      "loki service, see docker-notes.md) to build a config file from, not a bare `node --test` on the host",
   );
 }
 
-function startServer(extraEnv) {
+function startServer(port) {
+  const home = mkdtempSync(join(tmpdir(), "loki-mcp-test-"));
+  const configDir = join(home, ".config", "kealthas-dev", "opencode-mcp-loki");
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(join(configDir, "server.json"), JSON.stringify({ LOKI_MCP_PORT: port }));
+
+  const configPath = join(home, "loki-config.json");
+  writeFileSync(
+    configPath,
+    JSON.stringify({
+      LOKI_BASE_URL: process.env.LOKI_BASE_URL,
+      LOKI_USERNAME: process.env.LOKI_USERNAME,
+      LOKI_PASSWORD: process.env.LOKI_PASSWORD,
+      LOKI_ORG_ID: process.env.LOKI_ORG_ID,
+    }),
+  );
+
   return new Promise((resolve, reject) => {
-    const child = spawn("node", [join(here, "server.js")], { env: { ...process.env, ...extraEnv } });
+    const child = spawn("node", [DIST_SERVER_PATH], {
+      env: { ...process.env, HOME: home, LOKI_CONFIG_FILE: configPath },
+    });
 
     const timeout = setTimeout(() => {
       child.kill();
-      reject(new Error("server.js did not report listening within the timeout"));
+      reject(new Error("server did not report listening within the timeout"));
     }, READY_TIMEOUT_MS);
 
     let stderr = "";
@@ -55,7 +83,7 @@ function startServer(extraEnv) {
     });
     child.on("exit", (code) => {
       clearTimeout(timeout);
-      reject(new Error(`server.js exited early (code ${code}) before listening - stderr:\n${stderr}`));
+      reject(new Error(`server exited early (code ${code}) before listening - stderr:\n${stderr}`));
     });
   });
 }
@@ -102,7 +130,7 @@ before(async () => {
   await pushTestLogLine();
 
   serverPort = 8235;
-  serverProcess = await startServer({ LOKI_MCP_PORT: String(serverPort) });
+  serverProcess = await startServer(serverPort);
   const transport = new StreamableHTTPClientTransport(new URL(`http://localhost:${serverPort}/mcp`));
   client = new Client({ name: "loki-mcp-test", version: "1.0.0" }, { capabilities: {} });
   await client.connect(transport);

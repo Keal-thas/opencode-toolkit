@@ -15,10 +15,16 @@
 // 2.5.0-SNAPSHOT) during development - see mcp-servers/java-lsp/README.md and
 // mcp-servers/spring-lsp/README.md's Status sections for what was actually run.
 
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
 import { readFile } from "node:fs/promises";
 
 const CONTENT_LENGTH_RE = /Content-Length: (\d+)/i;
+
+interface ClientCapabilities {
+  textDocument: Record<string, unknown>;
+  workspace: Record<string, unknown>;
+  window: Record<string, unknown>;
+}
 
 // A full-ish client capabilities object, not a minimal one. Discovered the
 // hard way: spring-boot-language-server throws an internal NullPointerException
@@ -28,7 +34,7 @@ const CONTENT_LENGTH_RE = /Content-Length: (\d+)/i;
 // off what the client claims to support. jdtls didn't need this, but sending
 // it doesn't hurt jdtls either, so one shared capabilities object works for
 // both rather than branching per server.
-function defaultClientCapabilities() {
+function defaultClientCapabilities(): ClientCapabilities {
   return {
     textDocument: {
       hover: { contentFormat: ["plaintext", "markdown"] },
@@ -55,27 +61,58 @@ function defaultClientCapabilities() {
 
 export class LspClientError extends Error {}
 
+export interface LspClientOptions {
+  command: string;
+  args?: string[];
+  spawnOptions?: SpawnOptions;
+  rootPath: string;
+  log?: (kind: string, message: string) => void;
+}
+
+interface PendingRequest {
+  resolve: (value: unknown) => void;
+  reject: (reason: Error) => void;
+}
+
+interface RequestOptions {
+  timeoutMs?: number;
+}
+
+interface JsonRpcMessage {
+  jsonrpc?: string;
+  id?: number;
+  method?: string;
+  params?: any;
+  result?: unknown;
+  error?: { code: number; message: string };
+}
+
+interface InitializeResult {
+  capabilities?: unknown;
+  [key: string]: unknown;
+}
+
 // One LspClient instance = one spawned server process = one workspace root.
 // Not pooled, not respawned automatically on crash - the MCP server module
 // that owns an instance is responsible for deciding what "the server died"
-// means for in-flight and future tool calls (see server.js's getClient()).
+// means for in-flight and future tool calls (see server.ts's getClient()).
 export class LspClient {
-  #command;
-  #args;
-  #spawnOptions;
-  #rootPath;
-  #child;
+  #command: string;
+  #args: string[];
+  #spawnOptions: SpawnOptions;
+  #rootPath: string;
+  #child?: ChildProcess;
   #buf = Buffer.alloc(0);
   #nextId = 1;
-  #pending = new Map();
-  #diagnostics = new Map(); // uri -> Diagnostic[] from the last publishDiagnostics
-  #openDocs = new Map(); // uri -> version
-  #initializeResult;
+  #pending = new Map<number, PendingRequest>();
+  #diagnostics = new Map<string, unknown[]>(); // uri -> Diagnostic[] from the last publishDiagnostics
+  #openDocs = new Map<string, number>(); // uri -> version
+  #initializeResult?: InitializeResult;
   #dead = false;
-  #deadReason;
-  #log;
+  #deadReason?: string;
+  #log: (kind: string, message: string) => void;
 
-  constructor({ command, args = [], spawnOptions = {}, rootPath, log = () => {} }) {
+  constructor({ command, args = [], spawnOptions = {}, rootPath, log = () => {} }: LspClientOptions) {
     this.#command = command;
     this.#args = args;
     this.#spawnOptions = spawnOptions;
@@ -83,38 +120,38 @@ export class LspClient {
     this.#log = log;
   }
 
-  get isAlive() {
-    return this.#child && !this.#dead;
+  get isAlive(): boolean {
+    return Boolean(this.#child) && !this.#dead;
   }
 
-  async start() {
+  async start(): Promise<InitializeResult> {
     this.#child = spawn(this.#command, this.#args, {
       ...this.#spawnOptions,
       stdio: ["pipe", "pipe", "pipe"],
     });
 
-    this.#child.stdout.on("data", (chunk) => this.#onData(chunk));
-    this.#child.stderr.on("data", (chunk) => this.#log("stderr", chunk.toString("utf8")));
+    this.#child.stdout!.on("data", (chunk: Buffer) => this.#onData(chunk));
+    this.#child.stderr!.on("data", (chunk: Buffer) => this.#log("stderr", chunk.toString("utf8")));
     this.#child.on("error", (err) => this.#markDead(`spawn error: ${err.message}`));
     this.#child.on("exit", (code, signal) => this.#markDead(`process exited (code=${code}, signal=${signal})`));
 
     const rootUri = `file://${this.#rootPath}`;
-    this.#initializeResult = await this.request("initialize", {
+    this.#initializeResult = (await this.request("initialize", {
       processId: process.pid,
       rootUri,
       workspaceFolders: [{ uri: rootUri, name: "workspace" }],
       capabilities: defaultClientCapabilities(),
       initializationOptions: {},
-    });
+    })) as InitializeResult;
     this.notify("initialized", {});
     return this.#initializeResult;
   }
 
-  get capabilities() {
+  get capabilities(): unknown {
     return this.#initializeResult?.capabilities;
   }
 
-  #markDead(reason) {
+  #markDead(reason: string): void {
     if (this.#dead) return;
     this.#dead = true;
     this.#deadReason = reason;
@@ -125,14 +162,14 @@ export class LspClient {
     this.#pending.clear();
   }
 
-  #send(obj) {
+  #send(obj: JsonRpcMessage): void {
     if (this.#dead) throw new LspClientError(`LSP server unavailable: ${this.#deadReason}`);
     const json = JSON.stringify(obj);
     const header = `Content-Length: ${Buffer.byteLength(json, "utf8")}\r\n\r\n`;
-    this.#child.stdin.write(header + json);
+    this.#child!.stdin!.write(header + json);
   }
 
-  request(method, params, { timeoutMs = 30_000 } = {}) {
+  request(method: string, params: unknown, { timeoutMs = 30_000 }: RequestOptions = {}): Promise<unknown> {
     const id = this.#nextId++;
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -156,16 +193,16 @@ export class LspClient {
       } catch (err) {
         this.#pending.delete(id);
         clearTimeout(timeout);
-        reject(err);
+        reject(err as Error);
       }
     });
   }
 
-  notify(method, params) {
+  notify(method: string, params: unknown): void {
     this.#send({ jsonrpc: "2.0", method, params });
   }
 
-  #onData(chunk) {
+  #onData(chunk: Buffer): void {
     this.#buf = Buffer.concat([this.#buf, chunk]);
     while (true) {
       const headerEnd = this.#buf.indexOf("\r\n\r\n");
@@ -186,8 +223,8 @@ export class LspClient {
     }
   }
 
-  #handleMessage(body) {
-    let msg;
+  #handleMessage(body: string): void {
+    let msg: JsonRpcMessage;
     try {
       msg = JSON.parse(body);
     } catch {
@@ -215,13 +252,13 @@ export class LspClient {
     }
   }
 
-  async openDocument(uri, languageId, text) {
+  async openDocument(uri: string, languageId: string, text: string): Promise<void> {
     const version = (this.#openDocs.get(uri) ?? 0) + 1;
     this.#openDocs.set(uri, version);
     this.notify("textDocument/didOpen", { textDocument: { uri, languageId, version, text } });
   }
 
-  async openFile(absolutePath, languageId) {
+  async openFile(absolutePath: string, languageId: string): Promise<string> {
     const uri = `file://${absolutePath}`;
     const text = await readFile(absolutePath, "utf8");
     await this.openDocument(uri, languageId, text);
@@ -235,11 +272,11 @@ export class LspClient {
   // full-document didChange instead when the uri is already tracked, and
   // only didOpen the first time. Always returns the uri the query methods
   // below should use.
-  async syncFile(absolutePath, languageId) {
+  async syncFile(absolutePath: string, languageId: string): Promise<string> {
     const uri = `file://${absolutePath}`;
     const text = await readFile(absolutePath, "utf8");
     if (this.#openDocs.has(uri)) {
-      const version = this.#openDocs.get(uri) + 1;
+      const version = this.#openDocs.get(uri)! + 1;
       this.#openDocs.set(uri, version);
       this.notify("textDocument/didChange", {
         textDocument: { uri, version },
@@ -251,17 +288,17 @@ export class LspClient {
     return uri;
   }
 
-  closeDocument(uri) {
+  closeDocument(uri: string): void {
     this.#openDocs.delete(uri);
     this.#diagnostics.delete(uri);
     this.notify("textDocument/didClose", { textDocument: { uri } });
   }
 
-  getDiagnostics(uri) {
+  getDiagnostics(uri: string): unknown[] {
     return this.#diagnostics.get(uri) ?? [];
   }
 
-  async shutdown() {
+  async shutdown(): Promise<void> {
     if (this.#dead) return;
     try {
       await this.request("shutdown", null, { timeoutMs: 5_000 });

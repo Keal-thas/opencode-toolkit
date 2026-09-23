@@ -1,0 +1,6 @@
+{
+  "JAVA_LSP_WORKSPACE_ROOT": "/path/to/your/java/project",
+  "JDTLS_DATA_DIR": "/path/to/a/scratch/dir/jdtls-data",
+  "JDTLS_COMMAND": "/path/to/some/other/jdtls",
+  "JAVA_EXECUTABLE": "/path/to/jdk8/bin/java"
+}

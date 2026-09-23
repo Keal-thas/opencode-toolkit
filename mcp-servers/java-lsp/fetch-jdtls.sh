@@ -58,4 +58,4 @@ mkdir -p vendor
 rm -f vendor/jdt-language-server-*.tar.gz
 cp "$WORK_DIR/$OUT_NAME" "vendor/$OUT_NAME"
 echo "Wrote vendor/$OUT_NAME ($(du -h "vendor/$OUT_NAME" | cut -f1)), sha256 verified." >&2
-echo "server.js discovers the version from this tarball's filename automatically (see resolveJdtlsCommand() in server.js) - nothing else to update." >&2
+echo "server.ts discovers the version from this tarball's filename automatically (see resolveJdtlsCommand() in src/server.ts) - nothing else to update." >&2
