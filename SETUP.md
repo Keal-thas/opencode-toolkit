@@ -387,3 +387,15 @@ If you installed either plugin (steps 4/5) and `opencode run` errors out instead
 ## Report back
 
 State plainly: did `opencode.json` already exist (merged or created fresh)? Did step 11's verification confirm the custom prompt is actually being sent? If not, what did the actual output look like instead? Which `plugin` entries did you end up installing (step 4, step 5, both, neither), and did opencode's own `npm install` against this machine's registry succeed cleanly for them? Did steps 6-9's `npm install` actually succeed against the internal registry, or was there a real blocker there — and for steps 8/9 specifically, were `python3`/a JDK 21+ `java` actually present on this machine, or did those need installing first? If you installed step 10, did `npm install -g` actually put `mcp-server-memory` on `PATH` the same way it did for `opencode` itself — and separately, did the model actually call the memory tools during step 11's verification, or does `deploy/system-prompt.txt`'s `# Memory` section need stronger wording for this specific model?
+
+## Updating steps 6-9's MCP servers later
+
+All four share this repo's one version number and get bumped together on every release, even a package whose own code didn't change (see this repo's CLAUDE.md `mcp-servers/` row for why) — so update all four together rather than tracking which one actually changed. Name them explicitly instead of a blanket `npm update -g`, which would also touch every other global npm package on this machine unrelated to this project.
+
+**Stop whichever of these servers are currently running first.** On Windows especially, `npm install -g` needs to remove/replace the old package's files, and a still-running `opencode-mcp-*` process holds those files locked — updating first and restarting after (the wrong order) fails with an `EPERM`/`rmdir` error, not a clean update. Kill each running `opencode-mcp-*` process, then:
+
+```bash
+npm install -g @kealthas-dev/opencode-mcp-oracle @kealthas-dev/opencode-mcp-loki @kealthas-dev/opencode-mcp-java-lsp @kealthas-dev/opencode-mcp-spring-lsp
+```
+
+Then re-run each server's same start command from steps 6-9 to pick the update back up. If an `EPERM` happens anyway (a lock survives the killed process, or antivirus is holding the directory open), the leftover is at `%APPDATA%\npm\node_modules\@kealthas-dev\opencode-mcp-<name>` on Windows — delete that directory by hand, then re-run the `npm install -g` command above.
