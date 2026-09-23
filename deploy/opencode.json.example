@@ -59,6 +59,11 @@
       "url": "http://localhost:8093/mcp",
       "enabled": true
     },
+    "idea": {
+      "type": "remote",
+      "url": "REPLACE_WITH_URL_FROM_IDEA_SETTINGS_TOOLS_MCP_SERVER_COPY_HTTP_STREAM_CONFIG",
+      "enabled": false
+    },
     "memory": {
       "type": "local",
       "command": ["mcp-server-memory"],
