@@ -4,15 +4,17 @@
 // Not something this test can mock: it exercises the real Loki HTTP query
 // API round-trip. Lives here (not under tests/) so Node's module
 // resolution finds this package's own node_modules - run via
-// `npm run build && node --test mcp-servers/loki/loki.test.mjs` after
-// `npm install` in this directory (see tests/run-in-container.sh).
+// `npm run build && npx tsx --test mcp-servers/loki/loki.test.ts` after
+// `npm install` in this directory (see tests/run-in-container.sh). Run via
+// tsx rather than compiled like server.ts itself - a test file isn't
+// published, so there's no reason to route it through `dist/`.
 //
 // server.ts is a persistent HTTP server (opencode connects to it as
 // type: "remote", not something it spawns - see README.md's Design
 // section) that reads its Loki connection details from a JSON file pointed
 // at by LOKI_CONFIG_FILE and its port from a fixed-path server.json under
 // $HOME/.config/kealthas-dev/opencode-mcp-loki/ (see README.md's
-// Configuration section, and mcp-servers/oracle/oracle.test.mjs for the
+// Configuration section, and mcp-servers/oracle/oracle.test.ts for the
 // same fake-$HOME pattern this test reuses). This test spawns the built
 // dist/server.js itself with `node:child_process.spawn` the same way a
 // real process supervisor would, giving it its own fake $HOME so it never
@@ -21,7 +23,7 @@
 // it reports its "listening" line on stderr.
 //
 // This server's tools are read-only, so there's no MCP tool that can seed
-// test data the way mcp-servers/oracle/oracle.test.mjs's CREATE TABLE/INSERT does
+// test data the way mcp-servers/oracle/oracle.test.ts's CREATE TABLE/INSERT does
 // through oracle_query - instead this test pushes its own log lines
 // straight to Loki's own push API (POST /loki/api/v1/push), independent
 // of the MCP server entirely, then reads them back through the tools.
@@ -29,7 +31,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -46,7 +48,7 @@ if (!process.env.LOKI_BASE_URL) {
   );
 }
 
-function startServer(port) {
+function startServer(port: number): Promise<ChildProcess> {
   const home = mkdtempSync(join(tmpdir(), "loki-mcp-test-"));
   const configDir = join(home, ".config", "kealthas-dev", "opencode-mcp-loki");
   mkdirSync(configDir, { recursive: true });
@@ -74,7 +76,7 @@ function startServer(port) {
     }, READY_TIMEOUT_MS);
 
     let stderr = "";
-    child.stderr.on("data", (chunk) => {
+    child.stderr!.on("data", (chunk) => {
       stderr += chunk;
       if (stderr.includes("listening on")) {
         clearTimeout(timeout);
@@ -88,7 +90,7 @@ function startServer(port) {
   });
 }
 
-async function stopServer(child) {
+async function stopServer(child: ChildProcess): Promise<void> {
   child.removeAllListeners("exit");
   child.kill();
   await new Promise((resolve) => child.once("exit", resolve));
@@ -96,14 +98,14 @@ async function stopServer(child) {
 
 // A fresh label value per run, not a fixed one - this Loki instance is a
 // shared fixture (see docker-notes.md), so a fixed value could collide
-// with a concurrent test run the same way mcp-servers/oracle/oracle.test.mjs's
+// with a concurrent test run the same way mcp-servers/oracle/oracle.test.ts's
 // dynamic table name avoids colliding with a concurrent Oracle test.
 const testAppLabel = `loki_mcp_test_${Date.now()}`;
 const testLogLine = `hello from loki mcp test ${Date.now()}`;
 const windowStartNs = String((Date.now() - 5 * 60_000) * 1_000_000);
 const windowEndNs = String((Date.now() + 5 * 60_000) * 1_000_000);
 
-async function pushTestLogLine() {
+async function pushTestLogLine(): Promise<void> {
   const nowNs = String(Date.now() * 1_000_000);
   const response = await fetch(new URL("/loki/api/v1/push", process.env.LOKI_BASE_URL), {
     method: "POST",
@@ -122,9 +124,9 @@ async function pushTestLogLine() {
   }
 }
 
-let serverProcess;
-let serverPort;
-let client;
+let serverProcess: ChildProcess;
+let serverPort: number;
+let client: Client;
 
 before(async () => {
   await pushTestLogLine();
@@ -141,9 +143,10 @@ after(async () => {
   if (serverProcess) await stopServer(serverProcess);
 });
 
-async function callTool(name, args) {
+async function callTool(name: string, args: Record<string, unknown>): Promise<any> {
   const result = await client.callTool({ name, arguments: args });
-  return JSON.parse(result.content[0].text);
+  const content = result.content as Array<{ type: string; text: string }>;
+  return JSON.parse(content[0].text);
 }
 
 test("lists exactly the three loki tools", async () => {
@@ -176,7 +179,7 @@ test("loki_query_range finds the pushed log line by content", async () => {
     end: windowEndNs,
   });
   assert.equal(result.success, true);
-  const lines = result.data.result.flatMap((stream) => stream.values.map(([, line]) => line));
+  const lines = result.data.result.flatMap((stream: any) => stream.values.map(([, line]: [string, string]) => line));
   assert.ok(lines.includes(testLogLine), `expected pushed log line in result, got ${JSON.stringify(lines)}`);
 });
 

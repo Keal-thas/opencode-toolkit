@@ -45,7 +45,7 @@ echo "== oracle MCP server integration test (real Oracle instance) =="
 
 echo
 echo "== loki MCP server integration test (real Loki instance) =="
-(cd mcp-servers/loki && npm install --no-audit --no-fund && npm run build && node --test loki.test.mjs)
+(cd mcp-servers/loki && npm install --no-audit --no-fund && npm run build && npm test)
 
 echo
 echo "== memory MCP server integration test (official @modelcontextprotocol/server-memory package) =="
