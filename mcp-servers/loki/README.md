@@ -12,13 +12,13 @@ A minimal MCP server exposing three read-only tools — `loki_query_range`, `lok
 
 ## Configuration
 
-Config is file-based, not env-var-based — same two-file split as `mcp-servers/oracle/` (see its README's Configuration section for the fullest writeup of the pattern). Unlike `mcp-servers/oracle/`'s older scheme, the *location* a config file is read from is never user-supplied here — only a short environment name is, which selects a fixed file. This is deliberate: an arbitrary-path env var invites a caller's shell not expanding `~`, a quoted value suppressing that expansion, or a typo'd relative path resolving against whatever `cwd` happens to be — all silently pointing at the wrong file. A bare name has none of that surface.
+Config is file-based, not env-var-based — same two-file split as `mcp-servers/oracle/` (see its README's Configuration section for the fullest writeup of the pattern). The config file's *location* is never user-supplied, only a short name is; see that same section for why.
 
-- **`$HOME/.config/kealthas-dev/opencode-mcp-loki/server.json`** — the port to listen on, at this one fixed path always. Optional: if missing, defaults to `8091`; if present, must be valid JSON or the server refuses to start. Shape (see `server.example.json`):
+- **`$HOME/.config/kealthas-dev/opencode-mcp-loki/server.json`** — the port to listen on. `LOKI_MCP_PORT` env var overrides it, for running more than one instance. Otherwise optional: if missing, defaults to `8091`; if present, must be valid JSON or the server refuses to start. Shape (see `server.example.json`):
   ```json
   { "LOKI_MCP_PORT": 8091 }
   ```
-- **A Loki config file.** With no `LOKI_CONFIG_ENV` set, it's read from `$HOME/.config/kealthas-dev/opencode-mcp-loki/config.json` — covers the common single-Loki-instance setup with nothing to configure. For multiple environments, set `LOKI_CONFIG_ENV` to a plain name (letters/digits/`-`/`_` only) and it reads `$HOME/.config/kealthas-dev/opencode-mcp-loki/configs/<name>.json` instead — e.g. `LOKI_CONFIG_ENV=prod` reads `configs/prod.json`. The server prints a sample and exits if the resolved file doesn't exist, if `LOKI_CONFIG_ENV` isn't a plain name, or if `LOKI_BASE_URL` is missing from whichever file is read. Shape (see `config.example.json`):
+- **A Loki config file, re-read on every tool call (no restart needed after editing it).** With no `LOKI_CONFIG_ENV` set, it's read from `$HOME/.config/kealthas-dev/opencode-mcp-loki/config.json`. For multiple environments, set `LOKI_CONFIG_ENV` to a name and it reads `config-<name>.json` instead — e.g. `LOKI_CONFIG_ENV=prod` reads `config-prod.json`. The server prints a sample and exits if the resolved file doesn't exist or `LOKI_BASE_URL` is missing from it. Shape (see `config.example.json`):
   ```json
   {
     "LOKI_BASE_URL": "http://192.168.1.100:3100",
@@ -48,12 +48,12 @@ Published as `@kealthas-dev/opencode-mcp-loki` — on a real deployment, install
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-loki
-mkdir -p ~/.config/kealthas-dev/opencode-mcp-loki/configs
-# real config at ~/.config/kealthas-dev/opencode-mcp-loki/configs/prod.json (see config.example.json for the shape)
+mkdir -p ~/.config/kealthas-dev/opencode-mcp-loki
+# real config at ~/.config/kealthas-dev/opencode-mcp-loki/config-prod.json (see config.example.json for the shape)
 LOKI_CONFIG_ENV=prod opencode-mcp-loki
 ```
 
-For local dev/testing against this repo's own checkout (this directory, not the published package), same idea — drop a real config file at the default location, or a named one under `configs/` (see `config.example.json` for the shape — the sandbox's docker-entrypoint.sh generates the default one automatically, see Testing below):
+For local dev/testing against this repo's own checkout (this directory, not the published package), same idea — drop a real config file at the default location, or a named `config-<name>.json` (see `config.example.json` for the shape — the sandbox's docker-entrypoint.sh generates the default one automatically, see Testing below):
 
 ```bash
 npm install

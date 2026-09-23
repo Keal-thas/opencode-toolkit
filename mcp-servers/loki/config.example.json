@@ -3,5 +3,7 @@
   "LOKI_USERNAME": "username",
   "LOKI_PASSWORD": "password",
   "LOKI_ORG_ID": "tenant-id",
-  "LOKI_DEFAULT_TZ_OFFSET": "+08:00"
+  "LOKI_DEFAULT_TZ_OFFSET": "+08:00",
+  "LOKI_VIA_GRAFANA": false,
+  "LOKI_GRAFANA_DATASOURCE_ID": "1"
 }

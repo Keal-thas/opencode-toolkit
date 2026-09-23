@@ -29,12 +29,18 @@ function printSampleConfig(label: string, path: string, sample: unknown): void {
   console.error("");
 }
 
-// server.json is infrastructure config (which port to bind) that doesn't
-// vary per environment, so it lives at one fixed path rather than being
-// pointed at like the Loki config below. Missing entirely just means "use
-// the default port" - only a present-but-broken file is treated as a real
-// error, since its existence signals intent to override the default.
+// LOKI_MCP_PORT env var overrides server.json, for running several
+// instances (different projects/ports) without separate port files.
 function loadServerConfig(): ServerConfig {
+  if (process.env.LOKI_MCP_PORT !== undefined) {
+    const port = Number(process.env.LOKI_MCP_PORT);
+    if (!Number.isInteger(port) || port <= 0) {
+      console.error(`LOKI_MCP_PORT must be a positive integer, got: ${JSON.stringify(process.env.LOKI_MCP_PORT)}`);
+      process.exit(1);
+    }
+    return { LOKI_MCP_PORT: port };
+  }
+
   if (!existsSync(SERVER_CONFIG_PATH)) {
     return { LOKI_MCP_PORT: DEFAULT_PORT };
   }
@@ -53,38 +59,12 @@ function loadServerConfig(): ServerConfig {
   }
 }
 
-// Loki connection details are per-environment, but the *location* they're
-// read from is never user-supplied - only a short env name is (e.g. "prod"),
-// which selects a fixed file under CONFIG_DIR/configs/. This avoids the
-// class of bug an arbitrary-path env var invites: a caller's shell not
-// expanding "~", a quoted value suppressing that expansion, a typo'd
-// relative path resolving against whatever cwd happens to be - all of
-// which point path.resolve() somewhere unintended, silently. A bare name
-// has none of that surface. No env var set falls back to config.json
-// directly in CONFIG_DIR (not configs/) for the common single-environment
-// case. Only LOKI_BASE_URL is required in the file itself - Loki is
-// commonly reachable unauthenticated on an internal LAN, unlike
-// mcp-servers/oracle.
-const DEFAULT_LOKI_CONFIG_PATH = join(CONFIG_DIR, "config.json");
-const LOKI_CONFIGS_DIR = join(CONFIG_DIR, "configs");
-const CONFIG_ENV_NAME_RE = /^[a-zA-Z0-9_-]+$/;
-
+// config.json by default, config-<name>.json when LOKI_CONFIG_ENV is set.
 function loadLokiConfig(): LokiConfig {
   const envName = process.env.LOKI_CONFIG_ENV;
-  if (envName !== undefined && !CONFIG_ENV_NAME_RE.test(envName)) {
-    console.error(`LOKI_CONFIG_ENV must be a plain name (letters, digits, "-", "_"), got: ${JSON.stringify(envName)}`);
-    process.exit(1);
-  }
-  const resolvedPath = envName ? join(LOKI_CONFIGS_DIR, `${envName}.json`) : DEFAULT_LOKI_CONFIG_PATH;
+  const resolvedPath = join(CONFIG_DIR, envName ? `config-${envName}.json` : "config.json");
   if (!existsSync(resolvedPath)) {
-    if (envName) {
-      console.error(`Loki config file not found: ${resolvedPath}`);
-      console.error(`(LOKI_CONFIG_ENV=${envName} looks for "${envName}.json" under ${LOKI_CONFIGS_DIR})`);
-    } else {
-      console.error(`No LOKI_CONFIG_ENV set and no default config file at: ${resolvedPath}`);
-      console.error(`Either create that file, or set LOKI_CONFIG_ENV to the name of a file under ${LOKI_CONFIGS_DIR}/, e.g.:`);
-      console.error("  LOKI_CONFIG_ENV=prod opencode-mcp-loki");
-    }
+    console.error(`Loki config file not found: ${resolvedPath}`);
     printSampleConfig("Loki config file", resolvedPath, SAMPLE_LOKI_CONFIG);
     process.exit(1);
   }
@@ -111,8 +91,6 @@ function loadLokiConfig(): LokiConfig {
 }
 
 const serverConfig = loadServerConfig();
-const lokiConfig = loadLokiConfig();
-const LOKI_DEFAULT_TZ_OFFSET = lokiConfig.LOKI_DEFAULT_TZ_OFFSET ?? "+08:00";
 
 // Computing a correct start/end by hand (an exact RFC3339 offset, or -
 // worse - a 19-digit nanosecond epoch) is real friction for whatever's
@@ -137,7 +115,7 @@ const DURATION_PART_RE = /(\d+)([smhd])/g;
 const NAIVE_DATETIME_RE = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2}(?:\.\d+)?)$/;
 const UNIT_MS: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
 
-function resolveTimeParam(value: string | undefined): string | undefined {
+function resolveTimeParam(value: string | undefined, tzOffset: string): string | undefined {
   if (value === undefined || value === null) return value;
 
   const relative = RELATIVE_TIME_RE.exec(value);
@@ -150,7 +128,7 @@ function resolveTimeParam(value: string | undefined): string | undefined {
   }
 
   const naive = NAIVE_DATETIME_RE.exec(value);
-  if (naive) return `${naive[1]}T${naive[2]}${LOKI_DEFAULT_TZ_OFFSET}`;
+  if (naive) return `${naive[1]}T${naive[2]}${tzOffset}`;
 
   return value;
 }
@@ -166,6 +144,7 @@ type LokiResult = { success: true; data: unknown } | { success: false; error: st
 // executeQuery() returns in mcp-servers/oracle/src/server.ts, for the same reason:
 // tool results should never surface as a raw MCP protocol error.
 async function lokiFetch(path: string, params?: Record<string, unknown>): Promise<LokiResult> {
+  const lokiConfig = loadLokiConfig();
   const effectivePath = lokiConfig.LOKI_VIA_GRAFANA
     ? `/api/datasources/proxy/${lokiConfig.LOKI_GRAFANA_DATASOURCE_ID}${path}`
     : path;
@@ -209,10 +188,11 @@ interface QueryRangeArgs {
 }
 
 async function queryRange({ query, start, end, limit, direction, step }: QueryRangeArgs): Promise<LokiResult> {
+  const tzOffset = loadLokiConfig().LOKI_DEFAULT_TZ_OFFSET ?? "+08:00";
   return lokiFetch("/loki/api/v1/query_range", {
     query,
-    start: resolveTimeParam(start),
-    end: resolveTimeParam(end),
+    start: resolveTimeParam(start, tzOffset),
+    end: resolveTimeParam(end, tzOffset),
     limit,
     direction,
     step,
@@ -220,24 +200,26 @@ async function queryRange({ query, start, end, limit, direction, step }: QueryRa
 }
 
 async function listLabels({ start, end }: { start?: string; end?: string }): Promise<LokiResult> {
-  return lokiFetch("/loki/api/v1/labels", { start: resolveTimeParam(start), end: resolveTimeParam(end) });
+  const tzOffset = loadLokiConfig().LOKI_DEFAULT_TZ_OFFSET ?? "+08:00";
+  return lokiFetch("/loki/api/v1/labels", { start: resolveTimeParam(start, tzOffset), end: resolveTimeParam(end, tzOffset) });
 }
 
 async function listLabelValues({ label, start, end }: { label: string; start?: string; end?: string }): Promise<LokiResult> {
+  const tzOffset = loadLokiConfig().LOKI_DEFAULT_TZ_OFFSET ?? "+08:00";
   return lokiFetch(`/loki/api/v1/label/${encodeURIComponent(label)}/values`, {
-    start: resolveTimeParam(start),
-    end: resolveTimeParam(end),
+    start: resolveTimeParam(start, tzOffset),
+    end: resolveTimeParam(end, tzOffset),
   });
 }
 
-const TIME_PARAM_DESCRIPTION =
-  `Accepts, in order of preference: a relative time ("now", "now-1h", "now-30m", "now-1d", ` +
-  `"now-1h30m" - Grafana's own relative-time syntax for Loki/Prometheus); a local datetime with ` +
-  `no timezone, e.g. "2026-09-15T10:00:00" or "2026-09-15 10:00:00" (assumed to be ${LOKI_DEFAULT_TZ_OFFSET}); ` +
-  `or an already-qualified absolute value (RFC3339 with an explicit offset, e.g. "2026-09-15T10:00:00+08:00", ` +
-  `or a unix epoch in seconds or nanoseconds).`;
-
 function createMcpServer(): Server {
+  const tzOffset = loadLokiConfig().LOKI_DEFAULT_TZ_OFFSET ?? "+08:00";
+  const TIME_PARAM_DESCRIPTION =
+    `Accepts, in order of preference: a relative time ("now", "now-1h", "now-30m", "now-1d", ` +
+    `"now-1h30m" - Grafana's own relative-time syntax for Loki/Prometheus); a local datetime with ` +
+    `no timezone, e.g. "2026-09-15T10:00:00" or "2026-09-15 10:00:00" (assumed to be ${tzOffset}); ` +
+    `or an already-qualified absolute value (RFC3339 with an explicit offset, e.g. "2026-09-15T10:00:00+08:00", ` +
+    `or a unix epoch in seconds or nanoseconds).`;
   const server = new Server({ name: "loki-mcp", version: "1.0.0" }, { capabilities: { tools: {} } });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({

@@ -28,12 +28,18 @@ function printSampleConfig(label: string, path_: string, sample: unknown): void 
   console.error("");
 }
 
-// server.json is infrastructure config (which port to bind) that doesn't
-// vary per environment, so it lives at one fixed path rather than being
-// pointed at like the spring-lsp config below. Missing entirely just means
-// "use the default port" - only a present-but-broken file is treated as a
-// real error, since its existence signals intent to override the default.
+// SPRING_LSP_MCP_PORT env var overrides server.json, for running several
+// instances (different projects/ports) without separate port files.
 function loadServerConfig(): ServerConfig {
+  if (process.env.SPRING_LSP_MCP_PORT !== undefined) {
+    const port = Number(process.env.SPRING_LSP_MCP_PORT);
+    if (!Number.isInteger(port) || port <= 0) {
+      console.error(`SPRING_LSP_MCP_PORT must be a positive integer, got: ${JSON.stringify(process.env.SPRING_LSP_MCP_PORT)}`);
+      process.exit(1);
+    }
+    return { SPRING_LSP_MCP_PORT: port };
+  }
+
   if (!existsSync(SERVER_CONFIG_PATH)) {
     return { SPRING_LSP_MCP_PORT: DEFAULT_PORT };
   }
@@ -52,36 +58,12 @@ function loadServerConfig(): ServerConfig {
   }
 }
 
-// The Spring Boot project to analyze is per-environment/per-project, but
-// the *location* it's read from is never user-supplied - only a short env
-// name is (e.g. "my-project"), which selects a fixed file under
-// CONFIG_DIR/configs/. This avoids the class of bug an arbitrary-path env
-// var invites: a caller's shell not expanding "~", a quoted value
-// suppressing that expansion, a typo'd relative path resolving against
-// whatever cwd happens to be - all of which point path.resolve() somewhere
-// unintended, silently. A bare name has none of that surface. No env var
-// set falls back to config.json directly in CONFIG_DIR (not configs/) for
-// the common single-project case.
-const DEFAULT_SPRING_LSP_CONFIG_PATH = path.join(CONFIG_DIR, "config.json");
-const SPRING_LSP_CONFIGS_DIR = path.join(CONFIG_DIR, "configs");
-const CONFIG_ENV_NAME_RE = /^[a-zA-Z0-9_-]+$/;
-
+// config.json by default, config-<name>.json when SPRING_LSP_CONFIG_ENV is set.
 function loadSpringLspConfig(): SpringLspConfig {
   const envName = process.env.SPRING_LSP_CONFIG_ENV;
-  if (envName !== undefined && !CONFIG_ENV_NAME_RE.test(envName)) {
-    console.error(`SPRING_LSP_CONFIG_ENV must be a plain name (letters, digits, "-", "_"), got: ${JSON.stringify(envName)}`);
-    process.exit(1);
-  }
-  const resolvedPath = envName ? path.join(SPRING_LSP_CONFIGS_DIR, `${envName}.json`) : DEFAULT_SPRING_LSP_CONFIG_PATH;
+  const resolvedPath = path.join(CONFIG_DIR, envName ? `config-${envName}.json` : "config.json");
   if (!existsSync(resolvedPath)) {
-    if (envName) {
-      console.error(`spring-lsp config file not found: ${resolvedPath}`);
-      console.error(`(SPRING_LSP_CONFIG_ENV=${envName} looks for "${envName}.json" under ${SPRING_LSP_CONFIGS_DIR})`);
-    } else {
-      console.error(`No SPRING_LSP_CONFIG_ENV set and no default config file at: ${resolvedPath}`);
-      console.error(`Either create that file, or set SPRING_LSP_CONFIG_ENV to the name of a file under ${SPRING_LSP_CONFIGS_DIR}/, e.g.:`);
-      console.error("  SPRING_LSP_CONFIG_ENV=my-project opencode-mcp-spring-lsp");
-    }
+    console.error(`spring-lsp config file not found: ${resolvedPath}`);
     printSampleConfig("spring-lsp config file", resolvedPath, SAMPLE_SPRING_LSP_CONFIG);
     process.exit(1);
   }

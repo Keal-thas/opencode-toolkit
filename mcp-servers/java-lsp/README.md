@@ -26,11 +26,11 @@ This package is verified against the vendored `jdtls` 1.61.0 above (see Vendorin
 
 Config is file-based, not env-var-based — same two-file split as `mcp-servers/oracle/` (see its README's Configuration section for the fullest writeup of the pattern):
 
-- **`$HOME/.config/kealthas-dev/opencode-mcp-java-lsp/server.json`** — the port to listen on, at this one fixed path always. Optional: if missing, defaults to `8092`; if present, must be valid JSON or the server refuses to start. Shape (see `server.example.json`):
+- **`$HOME/.config/kealthas-dev/opencode-mcp-java-lsp/server.json`** — the port to listen on. `JAVA_LSP_MCP_PORT` env var overrides it, for running more than one instance (one per project, say). Otherwise optional: if missing, defaults to `8092`; if present, must be valid JSON or the server refuses to start. Shape (see `server.example.json`):
   ```json
   { "JAVA_LSP_MCP_PORT": 8092 }
   ```
-- **A config file.** The *location* it's read from is never user-supplied — only a short environment/project name is, via `JAVA_LSP_CONFIG_ENV` (plain letters/digits/`-`/`_` only; anything else is rejected outright). With no `JAVA_LSP_CONFIG_ENV` set, it's read from `$HOME/.config/kealthas-dev/opencode-mcp-java-lsp/config.json`; with `JAVA_LSP_CONFIG_ENV=my-project`, from `$HOME/.config/kealthas-dev/opencode-mcp-java-lsp/configs/my-project.json` instead — see `mcp-servers/oracle/README.md`'s Configuration section for why an arbitrary-path env var was dropped in favor of this. Required (one file or the other must exist) — the server prints a sample and exits if the resolved file doesn't exist or `JAVA_LSP_WORKSPACE_ROOT`/`JDTLS_DATA_DIR` is missing from it. Shape (see `config.example.json`):
+- **A config file, read once at startup** (unlike `mcp-servers/oracle`/`mcp-servers/loki`, not re-read per call - jdtls holds a stateful session against one workspace, so switching config means restarting the process). The *location* it's read from is never user-supplied — only a short environment/project name is, via `JAVA_LSP_CONFIG_ENV`; see `mcp-servers/oracle/README.md`'s Configuration section for why. With no `JAVA_LSP_CONFIG_ENV` set, it's read from `config.json`; with `JAVA_LSP_CONFIG_ENV=my-project`, from `config-my-project.json` instead. Required (one file or the other must exist) — the server prints a sample and exits if the resolved file doesn't exist or `JAVA_LSP_WORKSPACE_ROOT`/`JDTLS_DATA_DIR` is missing from it. Shape (see `config.example.json`):
   ```json
   {
     "JAVA_LSP_WORKSPACE_ROOT": "/path/to/your/java/project",
@@ -47,12 +47,12 @@ Published as `@kealthas-dev/opencode-mcp-java-lsp` — on a real deployment, ins
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-java-lsp
-mkdir -p ~/.config/kealthas-dev/opencode-mcp-java-lsp/configs
-# real config at ~/.config/kealthas-dev/opencode-mcp-java-lsp/configs/my-project.json (see config.example.json for the shape)
+mkdir -p ~/.config/kealthas-dev/opencode-mcp-java-lsp
+# real config at ~/.config/kealthas-dev/opencode-mcp-java-lsp/config-my-project.json (see config.example.json for the shape)
 JAVA_LSP_CONFIG_ENV=my-project opencode-mcp-java-lsp
 ```
 
-For local dev/testing against this repo's own checkout (this directory, not the published package), same idea — drop a real config file at the default location, or a named one under `configs/` (see `config.example.json` for the shape):
+For local dev/testing against this repo's own checkout (this directory, not the published package), same idea — drop a real config file at the default location, or a named `config-<name>.json` (see `config.example.json` for the shape):
 
 ```bash
 npm install
