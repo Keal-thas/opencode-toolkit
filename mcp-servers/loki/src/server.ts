@@ -54,20 +54,25 @@ function loadServerConfig(): ServerConfig {
 // Loki connection details are per-environment and read from whatever path
 // LOKI_CONFIG_FILE points at - unrestricted filename/location, so the same
 // install can be pointed at a different Loki instance just by changing this
-// one env var. Only LOKI_BASE_URL is required - Loki is commonly reachable
-// unauthenticated on an internal LAN, unlike mcp-servers/oracle.
-function loadLokiConfig(): LokiConfig {
-  const configPath = process.env.LOKI_CONFIG_FILE;
-  if (!configPath) {
-    console.error("Missing LOKI_CONFIG_FILE environment variable - point it at a Loki config file, e.g.:");
-    console.error("  LOKI_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-loki/configs/prod.json opencode-mcp-loki");
-    printSampleConfig("Loki config file (path set via LOKI_CONFIG_FILE)", "<LOKI_CONFIG_FILE>", SAMPLE_LOKI_CONFIG);
-    process.exit(1);
-  }
+// one env var. LOKI_CONFIG_FILE itself is optional: if unset, this falls
+// back to config.json next to server.json in CONFIG_DIR, covering the
+// common single-environment case without requiring the env var on every
+// start - multi-environment setups still override it per deployment. Only
+// LOKI_BASE_URL is required - Loki is commonly reachable unauthenticated on
+// an internal LAN, unlike mcp-servers/oracle.
+const DEFAULT_LOKI_CONFIG_PATH = join(CONFIG_DIR, "config.json");
 
-  const resolvedPath = resolve(configPath);
+function loadLokiConfig(): LokiConfig {
+  const envPath = process.env.LOKI_CONFIG_FILE;
+  const resolvedPath = resolve(envPath ?? DEFAULT_LOKI_CONFIG_PATH);
   if (!existsSync(resolvedPath)) {
-    console.error(`Loki config file not found: ${resolvedPath}`);
+    if (envPath) {
+      console.error(`Loki config file not found: ${resolvedPath}`);
+    } else {
+      console.error(`No LOKI_CONFIG_FILE set and no default config file at: ${resolvedPath}`);
+      console.error("Either create that file, or point LOKI_CONFIG_FILE at one, e.g.:");
+      console.error("  LOKI_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-loki/configs/prod.json opencode-mcp-loki");
+    }
     printSampleConfig("Loki config file", resolvedPath, SAMPLE_LOKI_CONFIG);
     process.exit(1);
   }
