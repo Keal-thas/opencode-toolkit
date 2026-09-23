@@ -12,13 +12,13 @@ A minimal MCP server exposing three read-only tools — `loki_query_range`, `lok
 
 ## Configuration
 
-Config is file-based, not env-var-based — same two-file split as `mcp-servers/oracle/` (see its README's Configuration section for the fullest writeup of the pattern), except unlike `mcp-servers/oracle/`, the Loki config file has a default location too:
+Config is file-based, not env-var-based — same two-file split as `mcp-servers/oracle/` (see its README's Configuration section for the fullest writeup of the pattern). Unlike `mcp-servers/oracle/`'s older scheme, the *location* a config file is read from is never user-supplied here — only a short environment name is, which selects a fixed file. This is deliberate: an arbitrary-path env var invites a caller's shell not expanding `~`, a quoted value suppressing that expansion, or a typo'd relative path resolving against whatever `cwd` happens to be — all silently pointing at the wrong file. A bare name has none of that surface.
 
 - **`$HOME/.config/kealthas-dev/opencode-mcp-loki/server.json`** — the port to listen on, at this one fixed path always. Optional: if missing, defaults to `8091`; if present, must be valid JSON or the server refuses to start. Shape (see `server.example.json`):
   ```json
   { "LOKI_MCP_PORT": 8091 }
   ```
-- **A Loki config file, normally at `$HOME/.config/kealthas-dev/opencode-mcp-loki/config.json`** — that fixed path is the default (covers the common single-Loki-instance setup with nothing to set), but `LOKI_CONFIG_FILE` overrides it with any other path when set, for multiple environments — e.g. `configs/dev.json`, `configs/prod.json`, `configs/uat.json` alongside it, switched between with `LOKI_CONFIG_FILE=.../configs/prod.json`. The server prints a sample and exits if neither the default file nor an env-var-pointed file exists, or if `LOKI_BASE_URL` is missing from whichever one is read. Shape (see `config.example.json`):
+- **A Loki config file.** With no `LOKI_CONFIG_ENV` set, it's read from `$HOME/.config/kealthas-dev/opencode-mcp-loki/config.json` — covers the common single-Loki-instance setup with nothing to configure. For multiple environments, set `LOKI_CONFIG_ENV` to a plain name (letters/digits/`-`/`_` only) and it reads `$HOME/.config/kealthas-dev/opencode-mcp-loki/configs/<name>.json` instead — e.g. `LOKI_CONFIG_ENV=prod` reads `configs/prod.json`. The server prints a sample and exits if the resolved file doesn't exist, if `LOKI_CONFIG_ENV` isn't a plain name, or if `LOKI_BASE_URL` is missing from whichever file is read. Shape (see `config.example.json`):
   ```json
   {
     "LOKI_BASE_URL": "http://192.168.1.100:3100",
@@ -36,15 +36,17 @@ Published as `@kealthas-dev/opencode-mcp-loki` — on a real deployment, install
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-loki
-LOKI_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-loki/configs/prod.json opencode-mcp-loki
+mkdir -p ~/.config/kealthas-dev/opencode-mcp-loki/configs
+# real config at ~/.config/kealthas-dev/opencode-mcp-loki/configs/prod.json (see config.example.json for the shape)
+LOKI_CONFIG_ENV=prod opencode-mcp-loki
 ```
 
-For local dev/testing against this repo's own checkout (this directory, not the published package), point `LOKI_CONFIG_FILE` at a real config file (see `config.example.json` for the shape — the sandbox's docker-entrypoint.sh generates one automatically, see Testing below):
+For local dev/testing against this repo's own checkout (this directory, not the published package), same idea — drop a real config file at the default location, or a named one under `configs/` (see `config.example.json` for the shape — the sandbox's docker-entrypoint.sh generates the default one automatically, see Testing below):
 
 ```bash
 npm install
 npm run build
-LOKI_CONFIG_FILE=/path/to/a/real/config.json npm start
+npm start   # reads ~/.config/kealthas-dev/opencode-mcp-loki/config.json
 ```
 
 `npm run dev` runs `src/server.ts` directly via `tsx watch` instead, for a compile-on-save loop.
@@ -60,7 +62,7 @@ docker compose -f docker/docker-compose.loki.yml up -d
 docker/dev.sh run --rm opencode-dev bash
 ```
 
-`LOKI_CONFIG_FILE` is already set inside that shell — `docker-entrypoint.sh` generates a config file from the sandbox's `LOKI_BASE_URL` compose env var and points `LOKI_CONFIG_FILE` at it. `cd mcp-servers/loki && npm install && npm run build && npm start`, then hit `http://localhost:8091/mcp` from an MCP client or `curl`.
+The default config file is already in place inside that shell — `docker-entrypoint.sh` generates `~/.config/kealthas-dev/opencode-mcp-loki/config.json` from the sandbox's `LOKI_BASE_URL` compose env var. `cd mcp-servers/loki && npm install && npm run build && npm start`, then hit `http://localhost:8091/mcp` from an MCP client or `curl`.
 
 `loki.test.ts` (see `tests/README.md`) doesn't need this manual dance — it builds its own config files into a fake `$HOME` per spawned server (same pattern as `mcp-servers/oracle/oracle.test.ts`) and starts/stops its own `dist/server.js` process on its own port as part of the test run, seeding its own test log lines by pushing directly to Loki's push API (not through this MCP server, which is read-only by design).
 

@@ -30,7 +30,7 @@ Config is file-based, not env-var-based — same two-file split as `mcp-servers/
   ```json
   { "JAVA_LSP_MCP_PORT": 8092 }
   ```
-- **A config file at whatever path the `JAVA_LSP_CONFIG_FILE` env var points at** — filename and location are unrestricted, so one install can be pointed at a different project just by changing this one env var. Required — the server prints a sample and exits if `JAVA_LSP_CONFIG_FILE` is unset, the file doesn't exist, or `JAVA_LSP_WORKSPACE_ROOT`/`JDTLS_DATA_DIR` is missing from it. Shape (see `config.example.json`):
+- **A config file.** The *location* it's read from is never user-supplied — only a short environment/project name is, via `JAVA_LSP_CONFIG_ENV` (plain letters/digits/`-`/`_` only; anything else is rejected outright). With no `JAVA_LSP_CONFIG_ENV` set, it's read from `$HOME/.config/kealthas-dev/opencode-mcp-java-lsp/config.json`; with `JAVA_LSP_CONFIG_ENV=my-project`, from `$HOME/.config/kealthas-dev/opencode-mcp-java-lsp/configs/my-project.json` instead — see `mcp-servers/oracle/README.md`'s Configuration section for why an arbitrary-path env var was dropped in favor of this. Required (one file or the other must exist) — the server prints a sample and exits if the resolved file doesn't exist or `JAVA_LSP_WORKSPACE_ROOT`/`JDTLS_DATA_DIR` is missing from it. Shape (see `config.example.json`):
   ```json
   {
     "JAVA_LSP_WORKSPACE_ROOT": "/path/to/your/java/project",
@@ -47,15 +47,17 @@ Published as `@kealthas-dev/opencode-mcp-java-lsp` — on a real deployment, ins
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-java-lsp
-JAVA_LSP_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-java-lsp/configs/my-project.json opencode-mcp-java-lsp
+mkdir -p ~/.config/kealthas-dev/opencode-mcp-java-lsp/configs
+# real config at ~/.config/kealthas-dev/opencode-mcp-java-lsp/configs/my-project.json (see config.example.json for the shape)
+JAVA_LSP_CONFIG_ENV=my-project opencode-mcp-java-lsp
 ```
 
-For local dev/testing against this repo's own checkout (this directory, not the published package), point `JAVA_LSP_CONFIG_FILE` at a real config file (see `config.example.json` for the shape):
+For local dev/testing against this repo's own checkout (this directory, not the published package), same idea — drop a real config file at the default location, or a named one under `configs/` (see `config.example.json` for the shape):
 
 ```bash
 npm install
 npm run build
-JAVA_LSP_CONFIG_FILE=/path/to/a/real/config.json npm start
+npm start   # reads ~/.config/kealthas-dev/opencode-mcp-java-lsp/config.json
 ```
 
 `npm run dev` runs `src/server.ts` directly via `tsx watch` instead, for a compile-on-save loop.

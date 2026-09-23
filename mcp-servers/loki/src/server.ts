@@ -2,7 +2,7 @@
 import http from "node:http";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -51,27 +51,37 @@ function loadServerConfig(): ServerConfig {
   }
 }
 
-// Loki connection details are per-environment and read from whatever path
-// LOKI_CONFIG_FILE points at - unrestricted filename/location, so the same
-// install can be pointed at a different Loki instance just by changing this
-// one env var. LOKI_CONFIG_FILE itself is optional: if unset, this falls
-// back to config.json next to server.json in CONFIG_DIR, covering the
-// common single-environment case without requiring the env var on every
-// start - multi-environment setups still override it per deployment. Only
-// LOKI_BASE_URL is required - Loki is commonly reachable unauthenticated on
-// an internal LAN, unlike mcp-servers/oracle.
+// Loki connection details are per-environment, but the *location* they're
+// read from is never user-supplied - only a short env name is (e.g. "prod"),
+// which selects a fixed file under CONFIG_DIR/configs/. This avoids the
+// class of bug an arbitrary-path env var invites: a caller's shell not
+// expanding "~", a quoted value suppressing that expansion, a typo'd
+// relative path resolving against whatever cwd happens to be - all of
+// which point path.resolve() somewhere unintended, silently. A bare name
+// has none of that surface. No env var set falls back to config.json
+// directly in CONFIG_DIR (not configs/) for the common single-environment
+// case. Only LOKI_BASE_URL is required in the file itself - Loki is
+// commonly reachable unauthenticated on an internal LAN, unlike
+// mcp-servers/oracle.
 const DEFAULT_LOKI_CONFIG_PATH = join(CONFIG_DIR, "config.json");
+const LOKI_CONFIGS_DIR = join(CONFIG_DIR, "configs");
+const CONFIG_ENV_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 
 function loadLokiConfig(): LokiConfig {
-  const envPath = process.env.LOKI_CONFIG_FILE;
-  const resolvedPath = resolve(envPath ?? DEFAULT_LOKI_CONFIG_PATH);
+  const envName = process.env.LOKI_CONFIG_ENV;
+  if (envName !== undefined && !CONFIG_ENV_NAME_RE.test(envName)) {
+    console.error(`LOKI_CONFIG_ENV must be a plain name (letters, digits, "-", "_"), got: ${JSON.stringify(envName)}`);
+    process.exit(1);
+  }
+  const resolvedPath = envName ? join(LOKI_CONFIGS_DIR, `${envName}.json`) : DEFAULT_LOKI_CONFIG_PATH;
   if (!existsSync(resolvedPath)) {
-    if (envPath) {
+    if (envName) {
       console.error(`Loki config file not found: ${resolvedPath}`);
+      console.error(`(LOKI_CONFIG_ENV=${envName} looks for "${envName}.json" under ${LOKI_CONFIGS_DIR})`);
     } else {
-      console.error(`No LOKI_CONFIG_FILE set and no default config file at: ${resolvedPath}`);
-      console.error("Either create that file, or point LOKI_CONFIG_FILE at one, e.g.:");
-      console.error("  LOKI_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-loki/configs/prod.json opencode-mcp-loki");
+      console.error(`No LOKI_CONFIG_ENV set and no default config file at: ${resolvedPath}`);
+      console.error(`Either create that file, or set LOKI_CONFIG_ENV to the name of a file under ${LOKI_CONFIGS_DIR}/, e.g.:`);
+      console.error("  LOKI_CONFIG_ENV=prod opencode-mcp-loki");
     }
     printSampleConfig("Loki config file", resolvedPath, SAMPLE_LOKI_CONFIG);
     process.exit(1);

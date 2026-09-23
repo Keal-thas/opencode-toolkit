@@ -2,7 +2,7 @@
   "name": "@kealthas-dev/opencode-mcp-loki",
   "version": "1.0.0",
   "type": "module",
-  "description": "MCP server exposing read-only Loki query/label tools - see README.md for design and the LOKI_CONFIG_FILE-driven config",
+  "description": "MCP server exposing read-only Loki query/label tools - see README.md for design and the config.json-driven config",
   "main": "dist/server.js",
   "bin": {
     "opencode-mcp-loki": "dist/server.js"

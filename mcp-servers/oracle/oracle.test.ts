@@ -12,10 +12,10 @@
 //
 // server.ts is a persistent HTTP server (opencode connects to it as
 // type: "remote", not something it spawns - see README.md's Design
-// section) that reads its database connection details from a JSON file
-// pointed at by ORACLE_CONFIG_FILE and its port from a fixed-path
-// server.json under $HOME/.config/kealthas-dev/opencode-mcp-oracle/ (see
-// README.md's Configuration section). This test spawns the built
+// section) that reads its database connection details from config.json (or
+// configs/<ORACLE_CONFIG_ENV>.json) and its port from a fixed-path
+// server.json, both under $HOME/.config/kealthas-dev/opencode-mcp-oracle/
+// (see README.md's Configuration section). This test spawns the built
 // dist/server.js itself with `node:child_process.spawn` the same way a real
 // process supervisor would, giving each spawned process its own fake $HOME
 // (createFakeHome() below) so concurrent test servers never share one
@@ -45,21 +45,23 @@ for (const key of ["ORACLE_CONNECT_STRING", "ORACLE_USER", "ORACLE_PASSWORD"]) {
 }
 
 // Each spawned server process gets its own fake $HOME containing its own
-// server.json (port) and its own database config file (an arbitrary path
-// under that fake $HOME, pointed at via ORACLE_CONFIG_FILE) - real isolation
-// between concurrent test servers without server.ts needing any test-only
+// server.json (port) and its own database config.json at the default
+// location under that fake $HOME - real isolation between concurrent test
+// servers without server.ts needing any test-only
 // escape hatch. Node's os.homedir() reads $HOME at call time, so this is
 // enough to give each spawned process its own config, the same as a real
 // multi-instance deployment would have separate machines/accounts.
-function createFakeHome(port: number, dbConfigOverrides?: Record<string, string>): { home: string; dbConfigPath: string } {
+// Written straight to the default config.json location (not pointed at via
+// an env var) - ORACLE_CONFIG_ENV only takes a bare name, never a path, so
+// there's nothing for this test to point at beyond that fixed default.
+function createFakeHome(port: number, dbConfigOverrides?: Record<string, string>): { home: string } {
   const home = mkdtempSync(join(tmpdir(), "oracle-mcp-test-"));
   const configDir = join(home, ".config", "kealthas-dev", "opencode-mcp-oracle");
   mkdirSync(configDir, { recursive: true });
   writeFileSync(join(configDir, "server.json"), JSON.stringify({ ORACLE_MCP_PORT: port }));
 
-  const dbConfigPath = join(home, "db-config.json");
   writeFileSync(
-    dbConfigPath,
+    join(configDir, "config.json"),
     JSON.stringify({
       ORACLE_CONNECT_STRING: process.env.ORACLE_CONNECT_STRING,
       ORACLE_USER: process.env.ORACLE_USER,
@@ -68,16 +70,16 @@ function createFakeHome(port: number, dbConfigOverrides?: Record<string, string>
     }),
   );
 
-  return { home, dbConfigPath };
+  return { home };
 }
 
 function startServer(port: number, dbConfigOverrides: Record<string, string> = {}): Promise<ChildProcess> {
-  const { home, dbConfigPath } = createFakeHome(port, dbConfigOverrides);
+  const { home } = createFakeHome(port, dbConfigOverrides);
+  const env = { ...process.env, HOME: home };
+  delete env.ORACLE_CONFIG_ENV;
 
   return new Promise((resolve, reject) => {
-    const child = spawn("node", [DIST_SERVER_PATH], {
-      env: { ...process.env, HOME: home, ORACLE_CONFIG_FILE: dbConfigPath },
-    });
+    const child = spawn("node", [DIST_SERVER_PATH], { env });
 
     const timeout = setTimeout(() => {
       child.kill();

@@ -2,7 +2,7 @@
   "name": "@kealthas-dev/opencode-mcp-java-lsp",
   "version": "1.0.0",
   "type": "module",
-  "description": "MCP server exposing jdtls (Java LSP) code-intelligence tools - see README.md for design and the JAVA_LSP_CONFIG_FILE-driven config",
+  "description": "MCP server exposing jdtls (Java LSP) code-intelligence tools - see README.md for design and the config.json-driven config",
   "main": "dist/server.js",
   "bin": {
     "opencode-mcp-java-lsp": "dist/server.js"

@@ -2,7 +2,7 @@
 import http from "node:http";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import oracledb from "oracledb";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -50,22 +50,36 @@ function loadServerConfig(): ServerConfig {
   }
 }
 
-// Database config is per-environment (prod/staging/dev/...) and read from
-// whatever path ORACLE_CONFIG_FILE points at - the filename and location are
-// unrestricted, so the same install can be pointed at any environment's
-// connection details just by changing this one env var.
+// Database config is per-environment (prod/staging/dev/...), but the
+// *location* it's read from is never user-supplied - only a short env name
+// is (e.g. "prod"), which selects a fixed file under CONFIG_DIR/configs/.
+// This avoids the class of bug an arbitrary-path env var invites: a
+// caller's shell not expanding "~", a quoted value suppressing that
+// expansion, a typo'd relative path resolving against whatever cwd happens
+// to be - all of which point path.resolve() somewhere unintended, silently.
+// A bare name has none of that surface. No env var set falls back to
+// config.json directly in CONFIG_DIR (not configs/) for the common
+// single-database case.
+const DEFAULT_ORACLE_CONFIG_PATH = join(CONFIG_DIR, "config.json");
+const ORACLE_CONFIGS_DIR = join(CONFIG_DIR, "configs");
+const CONFIG_ENV_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+
 function loadDatabaseConfig(): DatabaseConfig {
-  const configPath = process.env.ORACLE_CONFIG_FILE;
-  if (!configPath) {
-    console.error("Missing ORACLE_CONFIG_FILE environment variable - point it at a database config file, e.g.:");
-    console.error("  ORACLE_CONFIG_FILE=~/.config/kealthas-dev/opencode-mcp-oracle/configs/prod.json opencode-mcp-oracle");
-    printSampleConfig("database config file (path set via ORACLE_CONFIG_FILE)", "<ORACLE_CONFIG_FILE>", SAMPLE_DATABASE_CONFIG);
+  const envName = process.env.ORACLE_CONFIG_ENV;
+  if (envName !== undefined && !CONFIG_ENV_NAME_RE.test(envName)) {
+    console.error(`ORACLE_CONFIG_ENV must be a plain name (letters, digits, "-", "_"), got: ${JSON.stringify(envName)}`);
     process.exit(1);
   }
-
-  const resolvedPath = resolve(configPath);
+  const resolvedPath = envName ? join(ORACLE_CONFIGS_DIR, `${envName}.json`) : DEFAULT_ORACLE_CONFIG_PATH;
   if (!existsSync(resolvedPath)) {
-    console.error(`Database config file not found: ${resolvedPath}`);
+    if (envName) {
+      console.error(`Database config file not found: ${resolvedPath}`);
+      console.error(`(ORACLE_CONFIG_ENV=${envName} looks for "${envName}.json" under ${ORACLE_CONFIGS_DIR})`);
+    } else {
+      console.error(`No ORACLE_CONFIG_ENV set and no default config file at: ${resolvedPath}`);
+      console.error(`Either create that file, or set ORACLE_CONFIG_ENV to the name of a file under ${ORACLE_CONFIGS_DIR}/, e.g.:`);
+      console.error("  ORACLE_CONFIG_ENV=prod opencode-mcp-oracle");
+    }
     printSampleConfig("database config file", resolvedPath, SAMPLE_DATABASE_CONFIG);
     process.exit(1);
   }
