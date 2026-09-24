@@ -5,9 +5,9 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
 import { LspClient, LspClientError } from "./lsp-client.js";
 import type { ServerConfig, SpringLspConfig } from "./types/config.js";
 
@@ -170,122 +170,92 @@ async function toolResult(fn: () => Promise<unknown>): Promise<ToolResult> {
   }
 }
 
-interface ToolArgs {
-  file: string;
-  line: number;
-  character: number;
-  query?: string;
-  waitMs?: number;
-}
-
-function createMcpServer(): Server {
-  const server = new Server({ name: "spring-lsp-mcp", version: "1.0.0" }, { capabilities: { tools: {} } });
+function createMcpServer(): McpServer {
+  const server = new McpServer({ name: "spring-lsp-mcp", version: "1.0.0" });
   const log = (kind: string, message: string) => console.error(`[spring-boot-ls:${kind}]`, message.toString().slice(0, 500));
+  const respond = (result: ToolResult) => ({ content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] });
 
-  const filePathProp = { type: "string", description: `Path to a .java/.properties/.yml file, absolute or relative to ${WORKSPACE_ROOT}.` };
+  const filePathShape = z.string().describe(`Path to a .java/.properties/.yml file, absolute or relative to ${WORKSPACE_ROOT}.`);
+  const positionShape = { file: filePathShape, line: z.number().describe(LINE_CHAR_DESCRIPTION), character: z.number().describe(LINE_CHAR_DESCRIPTION) };
+  const position = (args: { line: number; character: number }) => ({ line: args.line, character: args.character });
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
-      {
-        name: "spring_hover",
-        description:
-          "Get Spring-aware info for the symbol/property at a position - e.g. a Spring Boot config property's real type, default, and description straight from the project's actual spring-configuration-metadata.json, not just plain Java type info. Works on .java, .properties, and .yml files.",
-        inputSchema: {
-          type: "object",
-          properties: { file: filePathProp, line: { type: "number", description: LINE_CHAR_DESCRIPTION }, character: { type: "number", description: LINE_CHAR_DESCRIPTION } },
-          required: ["file", "line", "character"],
-        },
-      },
-      {
-        name: "spring_completion",
-        description:
-          "Get completion suggestions at a position - the standout use case is a .properties/.yml file, where this suggests real Spring Boot configuration property names (from the project's actual resolved dependencies) instead of guessing at property names from memory.",
-        inputSchema: {
-          type: "object",
-          properties: { file: filePathProp, line: { type: "number", description: LINE_CHAR_DESCRIPTION }, character: { type: "number", description: LINE_CHAR_DESCRIPTION } },
-          required: ["file", "line", "character"],
-        },
-      },
-      {
-        name: "spring_document_symbols",
-        description: "List symbols in one file, structurally (same shape as mcp-servers/java-lsp's java_document_symbols, via this server's own JDT-based parsing).",
-        inputSchema: { type: "object", properties: { file: filePathProp }, required: ["file"] },
-      },
-      {
-        name: "spring_workspace_symbols",
-        description: "Fuzzy-search declared symbols by name across the workspace this server has indexed.",
-        inputSchema: { type: "object", properties: { query: { type: "string", description: "Symbol name or fragment to search for." } }, required: ["query"] },
-      },
-      {
-        name: "spring_diagnostics",
-        description: "Get this server's current diagnostics for one file (opens/syncs it first, then returns whatever's been published for it - includes Spring-specific checks, e.g. an unresolvable @Autowired bean, not just Java compile errors).",
-        inputSchema: {
-          type: "object",
-          properties: { file: filePathProp, waitMs: { type: "number", description: "How long to wait for diagnostics after opening the file, in ms. Defaults to 3000." } },
-          required: ["file"],
-        },
-      },
-      {
-        name: "spring_boot_structure",
-        description:
-          "Get this project's Spring Boot application structure (beans, request mappings, etc.) via the server's own 'sts/spring-boot/structure' custom LSP command - the actual bean-graph info generic Java tooling has no access to. Returns an empty result (not an error) if this workspace has no live/indexed Spring Boot application context yet.",
-        inputSchema: { type: "object", properties: {} },
-      },
-    ],
-  }));
+  server.registerTool(
+    "spring_hover",
+    {
+      description:
+        "Get Spring-aware info for the symbol/property at a position - e.g. a Spring Boot config property's real type, default, and description straight from the project's actual spring-configuration-metadata.json, not just plain Java type info. Works on .java, .properties, and .yml files.",
+      inputSchema: positionShape,
+    },
+    async (args) => respond(await toolResult(() => withOpenFile(log, args.file, (client, uri) => client.request("textDocument/hover", { textDocument: { uri }, position: position(args) })))),
+  );
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: rawArgs } = request.params;
-    const args = rawArgs as unknown as ToolArgs;
-    const position = () => ({ line: args.line, character: args.character });
+  server.registerTool(
+    "spring_completion",
+    {
+      description:
+        "Get completion suggestions at a position - the standout use case is a .properties/.yml file, where this suggests real Spring Boot configuration property names (from the project's actual resolved dependencies) instead of guessing at property names from memory.",
+      inputSchema: positionShape,
+    },
+    async (args) => respond(await toolResult(() => withOpenFile(log, args.file, (client, uri) => client.request("textDocument/completion", { textDocument: { uri }, position: position(args) })))),
+  );
 
-    let result: ToolResult;
-    switch (name) {
-      case "spring_hover":
-        result = await toolResult(() =>
-          withOpenFile(log, args.file, (client, uri) => client.request("textDocument/hover", { textDocument: { uri }, position: position() })),
-        );
-        break;
-      case "spring_completion":
-        result = await toolResult(() =>
-          withOpenFile(log, args.file, (client, uri) => client.request("textDocument/completion", { textDocument: { uri }, position: position() })),
-        );
-        break;
-      case "spring_document_symbols":
-        result = await toolResult(() =>
-          withOpenFile(log, args.file, (client, uri) => client.request("textDocument/documentSymbol", { textDocument: { uri } })),
-        );
-        break;
-      case "spring_workspace_symbols":
-        result = await toolResult(async () => {
+  server.registerTool(
+    "spring_document_symbols",
+    {
+      description: "List symbols in one file, structurally (same shape as mcp-servers/java-lsp's java_document_symbols, via this server's own JDT-based parsing).",
+      inputSchema: { file: filePathShape },
+    },
+    async (args) => respond(await toolResult(() => withOpenFile(log, args.file, (client, uri) => client.request("textDocument/documentSymbol", { textDocument: { uri } })))),
+  );
+
+  server.registerTool(
+    "spring_workspace_symbols",
+    { description: "Fuzzy-search declared symbols by name across the workspace this server has indexed.", inputSchema: { query: z.string().describe("Symbol name or fragment to search for.") } },
+    async (args) =>
+      respond(
+        await toolResult(async () => {
           const client = await getClient(log);
           return client.request("workspace/symbol", { query: args.query });
-        });
-        break;
-      case "spring_diagnostics":
-        result = await toolResult(() =>
+        }),
+      ),
+  );
+
+  server.registerTool(
+    "spring_diagnostics",
+    {
+      description:
+        "Get this server's current diagnostics for one file (opens/syncs it first, then returns whatever's been published for it - includes Spring-specific checks, e.g. an unresolvable @Autowired bean, not just Java compile errors).",
+      inputSchema: { file: filePathShape, waitMs: z.number().optional().describe("How long to wait for diagnostics after opening the file, in ms. Defaults to 3000.") },
+    },
+    async (args) =>
+      respond(
+        await toolResult(() =>
           withOpenFile(log, args.file, async (client, uri) => {
             await new Promise((r) => setTimeout(r, args.waitMs ?? 3000));
             return client.getDiagnostics(uri);
           }),
-        );
-        break;
-      case "spring_boot_structure":
-        result = await toolResult(async () => {
+        ),
+      ),
+  );
+
+  server.registerTool(
+    "spring_boot_structure",
+    {
+      description:
+        "Get this project's Spring Boot application structure (beans, request mappings, etc.) via the server's own 'sts/spring-boot/structure' custom LSP command - the actual bean-graph info generic Java tooling has no access to. Returns an empty result (not an error) if this workspace has no live/indexed Spring Boot application context yet.",
+    },
+    async () =>
+      respond(
+        await toolResult(async () => {
           const client = await getClient(log);
           const rootUri = `file://${path.resolve(WORKSPACE_ROOT)}`;
           return client.request("workspace/executeCommand", {
             command: "sts/spring-boot/structure",
             arguments: [{ identifier: rootUri }],
           });
-        });
-        break;
-      default:
-        return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
-    }
-
-    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-  });
+        }),
+      ),
+  );
 
   return server;
 }

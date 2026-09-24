@@ -3,9 +3,9 @@ import http from "node:http";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
 import type { LokiConfig, ServerConfig } from "./types/config.js";
 
 const DEFAULT_PORT = 8091; // the next free port after mcp-servers/oracle's 8090
@@ -215,7 +215,7 @@ async function listLabelValues({ label, start, end }: { label: string; start?: s
   });
 }
 
-function createMcpServer(): Server {
+function createMcpServer(): McpServer {
   const tzOffset = loadLokiConfig().LOKI_DEFAULT_TZ_OFFSET ?? "+08:00";
   const TIME_PARAM_DESCRIPTION =
     `Accepts, in order of preference: a relative time ("now", "now-1h", "now-30m", "now-1d", ` +
@@ -223,76 +223,50 @@ function createMcpServer(): Server {
     `no timezone, e.g. "2026-09-15T10:00:00" or "2026-09-15 10:00:00" (assumed to be ${tzOffset}); ` +
     `or an already-qualified absolute value (RFC3339 with an explicit offset, e.g. "2026-09-15T10:00:00+08:00", ` +
     `or a unix epoch in seconds or nanoseconds).`;
-  const server = new Server({ name: "loki-mcp", version: "1.0.0" }, { capabilities: { tools: {} } });
+  const server = new McpServer({ name: "loki-mcp", version: "1.0.0" });
+  const respond = (result: LokiResult) => ({ content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] });
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
-      {
-        name: "loki_query_range",
-        description:
-          "Run a LogQL query against the configured Loki instance over a time range and return matching log lines. Full passthrough - any valid LogQL expression, no restriction.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            query: { type: "string", description: "LogQL query, e.g. '{app=\"api\"} |= \"error\"'" },
-            start: { type: "string", description: TIME_PARAM_DESCRIPTION + " Optional - Loki defaults to a recent window." },
-            end: { type: "string", description: TIME_PARAM_DESCRIPTION + " Optional." },
-            limit: { type: "number", description: "Max number of log lines to return. Optional - Loki defaults to 100." },
-            direction: { type: "string", enum: ["forward", "backward"], description: "Optional - Loki defaults to backward (newest first)." },
-            step: { type: "string", description: "Query resolution step for metric queries, e.g. '30s'. Optional." },
-          },
-          required: ["query"],
-        },
+  server.registerTool(
+    "loki_query_range",
+    {
+      description:
+        "Run a LogQL query against the configured Loki instance over a time range and return matching log lines. Full passthrough - any valid LogQL expression, no restriction.",
+      inputSchema: {
+        query: z.string().describe("LogQL query, e.g. '{app=\"api\"} |= \"error\"'"),
+        start: z.string().optional().describe(TIME_PARAM_DESCRIPTION + " Optional - Loki defaults to a recent window."),
+        end: z.string().optional().describe(TIME_PARAM_DESCRIPTION + " Optional."),
+        limit: z.number().optional().describe("Max number of log lines to return. Optional - Loki defaults to 100."),
+        direction: z.enum(["forward", "backward"]).optional().describe("Optional - Loki defaults to backward (newest first)."),
+        step: z.string().optional().describe("Query resolution step for metric queries, e.g. '30s'. Optional."),
       },
-      {
-        name: "loki_labels",
-        description: "List the label names known to Loki, optionally restricted to a time range. Use this to discover what's queryable before writing a LogQL selector.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            start: { type: "string", description: TIME_PARAM_DESCRIPTION + " Optional." },
-            end: { type: "string", description: TIME_PARAM_DESCRIPTION + " Optional." },
-          },
-        },
+    },
+    async (args) => respond(await queryRange(args)),
+  );
+
+  server.registerTool(
+    "loki_labels",
+    {
+      description: "List the label names known to Loki, optionally restricted to a time range. Use this to discover what's queryable before writing a LogQL selector.",
+      inputSchema: {
+        start: z.string().optional().describe(TIME_PARAM_DESCRIPTION + " Optional."),
+        end: z.string().optional().describe(TIME_PARAM_DESCRIPTION + " Optional."),
       },
-      {
-        name: "loki_label_values",
-        description: "List the values seen for one label name, optionally restricted to a time range. Use this after loki_labels to find a concrete value to filter on.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            label: { type: "string", description: "The label name to list values for, e.g. 'app' or 'namespace'." },
-            start: { type: "string", description: TIME_PARAM_DESCRIPTION + " Optional." },
-            end: { type: "string", description: TIME_PARAM_DESCRIPTION + " Optional." },
-          },
-          required: ["label"],
-        },
+    },
+    async (args) => respond(await listLabels(args)),
+  );
+
+  server.registerTool(
+    "loki_label_values",
+    {
+      description: "List the values seen for one label name, optionally restricted to a time range. Use this after loki_labels to find a concrete value to filter on.",
+      inputSchema: {
+        label: z.string().describe("The label name to list values for, e.g. 'app' or 'namespace'."),
+        start: z.string().optional().describe(TIME_PARAM_DESCRIPTION + " Optional."),
+        end: z.string().optional().describe(TIME_PARAM_DESCRIPTION + " Optional."),
       },
-    ],
-  }));
-
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
-
-    let result: LokiResult;
-    switch (name) {
-      case "loki_query_range":
-        if (!args?.query) return { content: [{ type: "text", text: "Missing required argument: query" }], isError: true };
-        result = await queryRange(args as unknown as QueryRangeArgs);
-        break;
-      case "loki_labels":
-        result = await listLabels((args ?? {}) as { start?: string; end?: string });
-        break;
-      case "loki_label_values":
-        if (!args?.label) return { content: [{ type: "text", text: "Missing required argument: label" }], isError: true };
-        result = await listLabelValues(args as unknown as { label: string; start?: string; end?: string });
-        break;
-      default:
-        return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
-    }
-
-    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-  });
+    },
+    async (args) => respond(await listLabelValues(args)),
+  );
 
   return server;
 }
