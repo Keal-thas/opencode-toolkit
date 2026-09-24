@@ -17,4 +17,4 @@ The spring-lsp and java-lsp vendor tarballs are ordinary tracked files, not giti
 
 ## Staleness enforcement
 
-Nothing currently checks whether any row above has drifted from its upstream source — refreshing all of them is manual and on-demand only, driven by their fetch scripts.
+`.husky/pre-push` re-runs all four fetch scripts above on every `git push` and blocks the push if any of them produce a change not yet committed — see the hook's own header comment for the fail-open behavior when a check can't run (no network/Docker/Homebrew). Bypass with `git push --no-verify` when needed.

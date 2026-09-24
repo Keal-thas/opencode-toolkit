@@ -39,6 +39,7 @@ Single-person project used across multiple machines — these preferences are gi
 
 - **Once a branch's PR merges, start the next piece of work from a fresh branch off updated `master`**, not by continuing to commit on the merged one.
 - **When a branch falls behind `master`, rebase onto it and force-push — don't merge `master` in.** Landing a finished PR is the opposite: always a real merge commit, never squash/rebase. The no-rewrite caution only applies to `master`/other shared branches.
+- **Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)**: `<type>(<scope>): <description>` (scope optional, e.g. `fix(loki): handle Grafana redirect-to-login`), enforced by `.husky/commit-msg`. `.husky/pre-push` also re-runs every `fetch-*.sh` script (see [docs/generated-files.md](docs/generated-files.md)) on each push and blocks it if a generated/vendored file drifted from upstream, auto-committing the refresh under `sync-bot <sync-bot@localhost>` — `git push --no-verify` bypasses either hook when needed.
 
 ### Memory
 

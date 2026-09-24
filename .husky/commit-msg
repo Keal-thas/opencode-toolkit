@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+# Enforces Conventional Commits (https://www.conventionalcommits.org/) on the
+# subject line: "<type>(<scope>): <description>", scope optional, "!" before
+# the colon allowed for breaking changes. Merge/revert commits are exempt
+# since git/GitHub author those messages themselves.
+
+msg_file="$1"
+first_line=$(head -n1 "$msg_file")
+
+case "$first_line" in
+  "Merge "*|"Revert \""*) exit 0 ;;
+esac
+
+if ! printf '%s\n' "$first_line" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: .{10,}$'; then
+  echo "commit-msg: expected '<type>(<scope>): <description>' (scope optional, description at least 10 chars), e.g.:" >&2
+  echo "  fix(loki): handle Grafana redirect-to-login" >&2
+  echo "  chore: bump husky to v9.2" >&2
+  echo "type must be one of: feat fix docs style refactor perf test build ci chore revert" >&2
+  echo "got:" >&2
+  echo "  $first_line" >&2
+  exit 1
+fi

@@ -10,5 +10,11 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
   }
 }
