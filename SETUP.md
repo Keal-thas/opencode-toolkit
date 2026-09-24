@@ -148,7 +148,7 @@ Per-server specifics:
 | | oracle (step 6) | loki (step 7) | java-lsp (step 8) | spring-lsp (step 9) |
 |---|---|---|---|---|
 | Package | `@kealthas-dev/opencode-mcp-oracle` | `@kealthas-dev/opencode-mcp-loki` | `@kealthas-dev/opencode-mcp-java-lsp` | `@kealthas-dev/opencode-mcp-spring-lsp` |
-| Prerequisites | none | none | `python3` + JDK 21+ `java` on `PATH`, separate from whatever JDK the analyzed project targets — see step 8 if either is missing | JDK 21+ `java` on `PATH` (no `python3` needed) |
+| Prerequisites | none | none | `python3` + JDK 21+ `java` on `PATH`, separate from whatever JDK the analyzed project targets — neither confirmed present on the actual target machine yet | JDK 21+ `java` on `PATH` (no `python3` needed) |
 | Config env var | `ORACLE_CONFIG_ENV` | `LOKI_CONFIG_ENV` | `JAVA_LSP_CONFIG_ENV` | `SPRING_LSP_CONFIG_ENV` |
 | Config file keys | `ORACLE_CONNECT_STRING`, `ORACLE_USER`, `ORACLE_PASSWORD` (required); `ORACLE_DEFAULT_SCHEMA` (optional — sets the session's default schema; `oracle_query`'s own `schema` argument overrides it per call) | `LOKI_BASE_URL` (required); `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` (optional, only if that instance requires them); `LOKI_VIA_GRAFANA`/`LOKI_GRAFANA_DATASOURCE_ID` (optional — set when Loki is only reachable through Grafana's own datasource proxy, not directly; see step 7 below) | `JAVA_LSP_WORKSPACE_ROOT` (project to analyze), `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch dir, not the project root) — both required | `SPRING_LSP_WORKSPACE_ROOT` (project to analyze, required) |
 | Default port / override key | `8090` / `ORACLE_MCP_PORT` | `8091` / `LOKI_MCP_PORT` | `8092` / `JAVA_LSP_MCP_PORT` | `8093` / `SPRING_LSP_MCP_PORT` |
@@ -248,8 +248,6 @@ java -version
 ```
 
 **If `java -version` is missing or below 21**, the internal npm registry (this doc's intro) doesn't help — a JDK isn't an npm package. Get a JDK 21+ Windows build (Temurin/Corretto/Microsoft Build of OpenJDK all work — jdtls doesn't care which vendor) onto this machine the same way anything else without an internal-registry path gets here: download the zip on a machine with public internet, transfer it over (USB/internal file share/however this machine's other software already arrives), unzip anywhere. No system install/PATH change needed — point `JAVA_EXECUTABLE` in the config file below at `<unzip-dir>/bin/java.exe` instead.
-
-(A vendored JDK at the repo root was tried and reverted — it broke the root package's npm publish by tripping registry.npmjs.org's undocumented payload limit; see `docs/lessons-learned.md`.)
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-java-lsp
