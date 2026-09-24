@@ -8,9 +8,14 @@ Single-person project used across multiple machines — these preferences are gi
 
 ### Acting on requests
 
-- **Decide and act on small, reversible calls within scope instead of asking permission one level down.** E.g. told to merge/push/tag a branch, also committing a pending change first doesn't need its own ask — just do it and report. Reserve `AskUserQuestion` for forks that are genuinely ambiguous or costly to get wrong.
+- **Decide and act on small, reversible calls within scope instead of asking permission one level down.** E.g. told to merge/push/tag a branch, also committing a pending change first doesn't need its own ask — just do it and report. Reserve `AskUserQuestion` for forks that are genuinely ambiguous or costly to get wrong. Bias hard toward this: git history makes almost everything in this repo cheap to undo, so aim for unattended, no-permission-needed operation as the default, not the exception.
 - **Deliver anything needing confirmation or unhurried reading as a file, not a chat wall of text.** One or two sentences in chat, the rest in the gitignored `.local/` dir at the repo root. Clean up a `.local/` file once its content has been acted on.
 - **Verify claims against the real system when the tooling exists, rather than reasoning from inspection alone.** Has caught real bugs before. See [lessons-learned.md](docs/lessons-learned.md).
+
+### Code design
+
+- **Prefer the simplest correct design over the smallest diff, including discarding existing work — especially when a platform/library already provides a mechanism natively, don't hand-roll it.** E.g. a hand-written plugin intercepting `chat.system.transform` (reconstructing opencode's `<env>` block by hand) was fully discarded once `agent.prompt` + `{file:...}` in plain `opencode.json` was confirmed to do the same thing natively. See [lessons-learned.md](docs/lessons-learned.md).
+- **No backward-compatibility constraint — breaking changes are fine.** Nothing external depends on this repo's internal implementation details (deploy payload + tooling for one person/one target machine, not a library with outside consumers), so don't add compat shims, feature flags, or legacy fallbacks just to avoid a breaking change.
 
 ### Docs & writing style
 
@@ -38,6 +43,10 @@ Single-person project used across multiple machines — these preferences are gi
 ### Memory
 
 - **Never persist project notes in an AI tool's own per-machine/per-account store** — invisible from another machine, account, or clone. Everything goes in this file or `memory/`, both git-tracked.
+
+## Design philosophy
+
+The architectural trade-offs behind why the repo is shaped the way it is — distinct from the day-to-day rules above and from the debugging incidents below. See [docs/design-philosophy.md](docs/design-philosophy.md).
 
 ## Hard-won lessons
 
