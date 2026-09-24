@@ -148,9 +148,9 @@ Per-server specifics:
 | | oracle (step 6) | loki (step 7) | java-lsp (step 8) | spring-lsp (step 9) |
 |---|---|---|---|---|
 | Package | `@kealthas-dev/opencode-mcp-oracle` | `@kealthas-dev/opencode-mcp-loki` | `@kealthas-dev/opencode-mcp-java-lsp` | `@kealthas-dev/opencode-mcp-spring-lsp` |
-| Prerequisites | none | none | `python3` + JDK 21+ `java` on `PATH`, separate from whatever JDK the analyzed project targets — neither confirmed present on the actual target machine yet | JDK 21+ `java` on `PATH` (no `python3` needed) |
+| Prerequisites | none | none | `python3` on `PATH` (not vendored — see step 8 if missing) + JDK 21+ `java`, separate from whatever JDK the analyzed project targets (a vendored JRE covers this if it's missing — see step 8) | JDK 21+ `java` on `PATH` (no `python3` needed; same vendored-JRE fallback as java-lsp) |
 | Config env var | `ORACLE_CONFIG_ENV` | `LOKI_CONFIG_ENV` | `JAVA_LSP_CONFIG_ENV` | `SPRING_LSP_CONFIG_ENV` |
-| Config file keys | `ORACLE_CONNECT_STRING`, `ORACLE_USER`, `ORACLE_PASSWORD` (required); `ORACLE_DEFAULT_SCHEMA` (optional — sets the session's default schema; `oracle_query`'s own `schema` argument overrides it per call) | `LOKI_BASE_URL` (required); `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` (optional, only if that instance requires them) | `JAVA_LSP_WORKSPACE_ROOT` (project to analyze), `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch dir, not the project root) — both required | `SPRING_LSP_WORKSPACE_ROOT` (project to analyze, required) |
+| Config file keys | `ORACLE_CONNECT_STRING`, `ORACLE_USER`, `ORACLE_PASSWORD` (required); `ORACLE_DEFAULT_SCHEMA` (optional — sets the session's default schema; `oracle_query`'s own `schema` argument overrides it per call) | `LOKI_BASE_URL` (required); `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` (optional, only if that instance requires them); `LOKI_VIA_GRAFANA`/`LOKI_GRAFANA_DATASOURCE_ID` (optional — set when Loki is only reachable through Grafana's own datasource proxy, not directly; see step 7 below) | `JAVA_LSP_WORKSPACE_ROOT` (project to analyze), `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch dir, not the project root) — both required | `SPRING_LSP_WORKSPACE_ROOT` (project to analyze, required) |
 | Default port / override key | `8090` / `ORACLE_MCP_PORT` | `8091` / `LOKI_MCP_PORT` | `8092` / `JAVA_LSP_MCP_PORT` | `8093` / `SPRING_LSP_MCP_PORT` |
 | Passthrough / notes | full passthrough, no read-only enforcement, by deliberate design — see `mcp-servers/oracle/README.md` | full passthrough, any LogQL, by deliberate design — see `mcp-servers/loki/README.md` | vendored `jdtls` (Eclipse JDT Language Server) ships inside the npm package — nothing extra to download | vendored `spring-boot-language-server` ships inside the npm package; classpath-aware richness needs pairing with a `java-lsp` jdtls instance via a "classpath listener" not implemented yet — see `mcp-servers/TODO.md` |
 
@@ -206,6 +206,22 @@ cat > ~/.config/kealthas-dev/opencode-mcp-loki/config.json <<'EOF'
 EOF
 ```
 
+**If Loki has no directly reachable port of its own and the only way in is Grafana's own datasource proxy** — check this first if the config above returns a redirect-to-login error instead of data — point `LOKI_BASE_URL` at Grafana's own URL instead of Loki's, and add `LOKI_VIA_GRAFANA`/`LOKI_GRAFANA_DATASOURCE_ID`/`LOKI_USERNAME`/`LOKI_PASSWORD` (a real Grafana user's Basic Auth, not a Loki credential):
+
+```bash
+cat > ~/.config/kealthas-dev/opencode-mcp-loki/config.json <<'EOF'
+{
+  "LOKI_BASE_URL": "http://<grafana-host>:3000",
+  "LOKI_VIA_GRAFANA": true,
+  "LOKI_GRAFANA_DATASOURCE_ID": "1",
+  "LOKI_USERNAME": "...",
+  "LOKI_PASSWORD": "..."
+}
+EOF
+```
+
+See `mcp-servers/loki/README.md`'s Configuration section for the full field list and how to find the datasource ID.
+
 ```bash
 opencode-mcp-loki
 ```
@@ -230,6 +246,14 @@ Check the prerequisites first:
 python3 --version
 java -version
 ```
+
+**If `java -version` is missing or below 21**, no separate download/transfer needed — a Windows x64 JRE 21 (Eclipse Temurin, `vendor/OpenJDK21U-jre_x64_windows_hotspot_*.zip`, ~47MB) is already vendored at the repo root, so it arrived with `$SRC_DIR` in step 0. A JRE, not a full JDK, is enough: jdtls/spring-boot-language-server both embed their own compiler and don't shell out to `javac` (verified by running both packages' real test suites against a JRE-only java — see `scripts/fetch-jdk.sh`'s comment for details). Unzip it anywhere:
+
+```bash
+unzip "$SRC_DIR/vendor/OpenJDK21U-jre_x64_windows_hotspot_"*.zip -d ~/jdk21-jre
+```
+
+No system install/PATH change needed — point `JAVA_EXECUTABLE` in the config file below at `~/jdk21-jre/jdk-21*-jre/bin/java.exe` instead (adjust the inner folder name to whatever the zip actually extracted).
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-java-lsp
@@ -369,7 +393,7 @@ State plainly, as a checklist:
 - Did `opencode.json` already exist (merged) or get created fresh (copied)?
 - Did step 11 confirm the custom prompt is actually being sent? If not, what did the output look like instead?
 - Which `plugin` entries got installed (step 4, step 5, both, neither), and did `npm install` against this machine's registry succeed cleanly for them?
-- Did steps 6-9's `npm install` succeed against the internal registry? For steps 8/9: were `python3`/JDK 21+ `java` already present, or did they need installing?
+- Did steps 6-9's `npm install` succeed against the internal registry? For steps 8/9: was `python3`/JDK 21+ `java` already on `PATH`, or did the vendored JRE (step 8's note) need unzipping and `JAVA_EXECUTABLE` need setting?
 - If step 10 was installed: did `npm install -g` put `mcp-server-memory` on `PATH`? Did the model actually call the memory tools during step 11, or does `deploy/system-prompt.txt`'s `# Memory` section need stronger wording for this model?
 
 ## Updating steps 6-9's MCP servers later

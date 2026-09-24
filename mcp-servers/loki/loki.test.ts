@@ -26,6 +26,8 @@ import { fileURLToPath } from "node:url";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
@@ -40,7 +42,7 @@ if (!process.env.LOKI_BASE_URL) {
   );
 }
 
-function startServer(port: number): Promise<ChildProcess> {
+function startServer(port: number, configOverrides?: Record<string, unknown>): Promise<ChildProcess> {
   const home = mkdtempSync(join(tmpdir(), "loki-mcp-test-"));
   const configDir = join(home, ".config", "kealthas-dev", "opencode-mcp-loki");
   mkdirSync(configDir, { recursive: true });
@@ -51,12 +53,14 @@ function startServer(port: number): Promise<ChildProcess> {
   // there's nothing for this test to point at beyond that fixed default.
   writeFileSync(
     join(configDir, "config.json"),
-    JSON.stringify({
-      LOKI_BASE_URL: process.env.LOKI_BASE_URL,
-      LOKI_USERNAME: process.env.LOKI_USERNAME,
-      LOKI_PASSWORD: process.env.LOKI_PASSWORD,
-      LOKI_ORG_ID: process.env.LOKI_ORG_ID,
-    }),
+    JSON.stringify(
+      configOverrides ?? {
+        LOKI_BASE_URL: process.env.LOKI_BASE_URL,
+        LOKI_USERNAME: process.env.LOKI_USERNAME,
+        LOKI_PASSWORD: process.env.LOKI_PASSWORD,
+        LOKI_ORG_ID: process.env.LOKI_ORG_ID,
+      },
+    ),
   );
 
   const env = { ...process.env, HOME: home };
@@ -191,4 +195,47 @@ test("malformed LogQL returns a clean error, not a crash", async () => {
   const result = await callTool("loki_query_range", { query: "{app=" });
   assert.equal(result.success, false);
   assert.ok(result.error, "expected a clean error message, not a crash");
+});
+
+test("via Grafana proxy: correct request path/auth, and a redirect-to-login surfaces a clean diagnostic", async () => {
+  // Stands in for a Grafana instance rejecting the request - real Grafana
+  // responds to a rejected /api/datasources/proxy/... call with a 302 to its
+  // own login page, never a 401, which is the failure mode LOKI_VIA_GRAFANA
+  // needs to survive without a raw JSON-parse crash.
+  let receivedPath: string | undefined;
+  let receivedAuth: string | undefined;
+  const fakeGrafana = http.createServer((req, res) => {
+    receivedPath = req.url;
+    receivedAuth = req.headers.authorization;
+    res.writeHead(302, { Location: "/login" }).end();
+  });
+  await new Promise<void>((resolve) => fakeGrafana.listen(0, resolve));
+  const fakeGrafanaPort = (fakeGrafana.address() as AddressInfo).port;
+
+  const viaGrafanaPort = 8236;
+  const viaGrafanaServerProcess = await startServer(viaGrafanaPort, {
+    LOKI_BASE_URL: `http://localhost:${fakeGrafanaPort}`,
+    LOKI_VIA_GRAFANA: true,
+    LOKI_GRAFANA_DATASOURCE_ID: "1",
+    LOKI_USERNAME: "opter",
+    LOKI_PASSWORD: "opter",
+  });
+  const transport = new StreamableHTTPClientTransport(new URL(`http://localhost:${viaGrafanaPort}/mcp`));
+  const viaGrafanaClient = new Client({ name: "loki-mcp-test-via-grafana", version: "1.0.0" }, { capabilities: {} });
+
+  try {
+    await viaGrafanaClient.connect(transport);
+    const result = await viaGrafanaClient.callTool({ name: "loki_labels", arguments: {} });
+    const content = result.content as Array<{ type: string; text: string }>;
+    const parsed = JSON.parse(content[0].text);
+
+    assert.equal(receivedPath, "/api/datasources/proxy/1/loki/api/v1/labels");
+    assert.equal(receivedAuth, `Basic ${Buffer.from("opter:opter").toString("base64")}`);
+    assert.equal(parsed.success, false);
+    assert.match(parsed.error, /redirected/i);
+  } finally {
+    await viaGrafanaClient.close();
+    await stopServer(viaGrafanaServerProcess);
+    await new Promise<void>((resolve) => fakeGrafana.close(() => resolve()));
+  }
 });
