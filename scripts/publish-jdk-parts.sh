@@ -82,23 +82,29 @@ EOF
   (cd "$work_dir" && npm publish --access public --tag "$tag")
   rm -rf "$work_dir"
 
-  # Wait for the registry to actually confirm this version before starting
-  # the next publish, rather than firing all three back-to-back - the
-  # 0.0.1 incident (see docs/lessons-learned.md) was three publishes to
-  # the same package name within ~15 seconds of each other, and the first
-  # one got stuck server-side in a way a bare "npm publish exited 0"
-  # never caught. This also surfaces a stuck part immediately, as a clear
-  # failed step, instead of discovering it minutes later.
-  echo "Waiting for ${PKG_NAME}@${version} to become visible before continuing..." >&2
-  for attempt in $(seq 1 20); do
+  # Space publishes out rather than firing all three back-to-back (the
+  # 0.0.1 incident, see docs/lessons-learned.md, was three publishes to
+  # the same package name within ~15 seconds of each other). Registry
+  # propagation delay here is real but wildly variable - anywhere from
+  # under a minute to ~18 minutes observed live in the same session, for
+  # otherwise-successful publishes - so this checks for a couple of
+  # minutes and logs the result either way, but does NOT fail the step on
+  # a still-invisible version: that turned out to be a false positive last
+  # time (0.0.11 published fine, just took 18 minutes to show up), and a
+  # genuinely stuck version (like 0.0.1 was) only reveals itself as a real
+  # 409 on a later retry - which does still fail loudly, just not here.
+  echo "Checking whether ${PKG_NAME}@${version} is visible yet (won't block on this - registry propagation varies widely)..." >&2
+  visible=false
+  for attempt in $(seq 1 8); do
     if npm view "${PKG_NAME}@${version}" version >/dev/null 2>&1; then
-      echo "  confirmed visible" >&2
+      visible=true
       break
-    fi
-    if [ "$attempt" -eq 20 ]; then
-      echo "${PKG_NAME}@${version} still not visible after 5 minutes - treating as stuck, aborting." >&2
-      exit 1
     fi
     sleep 15
   done
+  if [ "$visible" = true ]; then
+    echo "  confirmed visible after $((attempt * 15))s" >&2
+  else
+    echo "  not visible yet after 2 minutes - proceeding anyway (this alone doesn't mean it's stuck, see comment above)" >&2
+  fi
 done
