@@ -1,34 +1,25 @@
 // Requires a JDK 21+ `java` on PATH (or JAVA_EXECUTABLE pointed at one) -
-// spring-boot-language-server's own MANIFEST.MF declares `Java-Version: 21`.
-// Not something this test can mock, same reasoning as mcp-servers/java-lsp/java-lsp.test.ts:
-// this package's whole point is driving a real spring-boot-language-server
-// process.
+// spring-boot-language-server's MANIFEST.MF declares `Java-Version: 21`. Not
+// mockable, same reasoning as java-lsp.test.ts: the whole point is driving a
+// real spring-boot-language-server process.
 //
-// IMPORTANT, read before extending this test: the fixture project here is
-// a bare loose .java file + application.properties with NO real Maven/Gradle
-// project and no actual spring-boot-starter-* dependencies resolved. Against
-// a fixture like that, spring-boot-language-server's own richer tools
-// (spring_hover/spring_completion/spring_boot_structure returning actual
-// bean/property data) come back empty - confirmed during development, see
-// README.md's Status section. That's not a bug in this MCP server; it's
-// this server genuinely having nothing to index. What's asserted below is
-// deliberately just "the plumbing works and degrades cleanly" (real tool
-// calls succeed, return an empty result rather than erroring, and don't
-// crash the server) - not "the Spring-specific analysis is rich", which
-// would need a real resolved Spring Boot project as a fixture (not set up
-// here - see README.md's Status section for what that would take).
+// IMPORTANT, read before extending this test: the fixture is a bare loose
+// .java file + application.properties, no real Maven/Gradle project or
+// resolved spring-boot-starter-* dependencies. Against that fixture, the
+// server's richer tools (spring_hover/spring_completion/spring_boot_structure
+// returning real bean/property data) come back empty - confirmed during
+// development, see README's Status section. That's not a bug; the server
+// genuinely has nothing to index. What's asserted below is deliberately just
+// "the plumbing works and degrades cleanly," not "the analysis is rich" -
+// the latter needs a real resolved Spring Boot fixture (not set up here).
 //
 // Not yet wired into tests/run-in-container.sh / the docker/ sandbox - see
-// mcp-servers/java-lsp/java-lsp.test.ts's header for why (no JDK in that image).
+// java-lsp.test.ts's header for why (no JDK in that image).
 //
-// server.ts reads its workspace config from config.json (or
-// configs/<SPRING_LSP_CONFIG_ENV>.json) and its port from a fixed-path
-// server.json, both under $HOME/.config/kealthas-dev/opencode-mcp-spring-lsp/
-// (see README.md's
-// Configuration section, and mcp-servers/oracle/oracle.test.ts for the
-// same fake-$HOME pattern this test reuses) - this test spawns the compiled
-// dist/server.js with its own fake $HOME so it never shares config with a
-// real server that might be running in the same environment.
+// server.ts is config-file-driven (see README's Configuration section, and
+// oracle.test.ts for the same fake-$HOME pattern this test reuses) - spawns
+// the compiled dist/server.js with its own fake $HOME so it never shares
+// config with a real server running in the same environment.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";

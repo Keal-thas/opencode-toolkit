@@ -1,16 +1,12 @@
 // Unattended, concurrency-limited, resumable per-module analysis runner.
 //
-// Iterates every immediate subdirectory of MODULES_DIR, and for each one
-// sends one prompt to a single shared opencode server (via @opencode-ai/sdk)
-// with the `plan` agent (edit/write tools permission-denied), to produce a
-// module-analysis doc. The analysis prompt comes from prompt-template.md in
-// this same directory (single source of truth, no duplicated copy):
-// @@MODULES_ROOT@@ is substituted once here, and @@MODULE_PATH@@ per module
-// below.
-// The agent can't write the doc itself (that's the point), so this script
-// takes its final answer straight from the SDK's typed response and writes
-// it to the output file itself. Safe to interrupt and re-run: any module
-// that already has a non-empty output file is skipped.
+// For each immediate subdirectory of MODULES_DIR, sends one prompt to a shared
+// opencode server (via @opencode-ai/sdk) with the `plan` agent (edit/write
+// denied) to produce a module-analysis doc, from prompt-template.md's single
+// source-of-truth template (@@MODULES_ROOT@@ substituted once, @@MODULE_PATH@@
+// per module). The agent can't write the doc itself, so this script takes the
+// SDK's typed response and writes the file. Safe to interrupt and re-run: a
+// module with a non-empty output file is skipped.
 //
 // Usage:
 //   cd toolkits/module-analysis && npm install   # once, pulls in @opencode-ai/sdk
@@ -18,11 +14,9 @@
 //   OUT_DIR=/path/to/project/docs/module-analysis \
 //   npm start
 //
-// Tune CONCURRENCY down if the shared vLLM server starts queuing/slowing
-// down under load; there's no hard reason to keep it low otherwise since
-// total wall time isn't a constraint (each module run is independent). All
-// concurrent runs share the one opencode server this script starts, so
-// raising CONCURRENCY costs no extra server start-up overhead.
+// Tune CONCURRENCY down if the shared vLLM server starts queuing under load -
+// no reason to keep it low otherwise, since all concurrent runs share the one
+// opencode server this script starts.
 
 import { createOpencode, type OpencodeClient, type Part } from "@opencode-ai/sdk";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
@@ -42,23 +36,13 @@ const MODULES_DIR = requireEnv("MODULES_DIR", "the directory containing one subd
 const OUT_DIR = requireEnv("OUT_DIR", "where the analysis .md files should be written");
 const LOG_DIR = process.env.LOG_DIR || join(OUT_DIR, "..", "logs", "module-analysis");
 const CONCURRENCY = Number(process.env.CONCURRENCY || 2);
-// plan: a primary agent with edit/write tools permission-denied - confirmed
-// live via client.app.agents() (its permission list carries an explicit
-// {permission:"edit", pattern:"*", action:"deny"} entry), so this holds even
-// against a model that's been tricked by hostile content in the analyzed
-// code. explore fits the "read-only" framing better by name, and - unlike
-// the `opencode` CLI, which silently falls back to the full-access `build`
-// agent for `run --agent explore` since explore is a subagent-only role -
-// the SDK's session.prompt() can actually target it directly (confirmed
-// live: the response's info.mode/info.agent came back "explore", and the
-// model's own reasoning referenced its real "read-only file search
-// specialist" identity, not build's). But explore's read-only behavior
-// turned out to be enforced only by its own system prompt ("Do not create
-// any files, or run bash commands that modify the user's system state") -
-// its permission list has no edit-deny entry at all, just a blanket allow.
-// That's weaker than plan's hard permission-layer denial for a tool meant
-// to run unattended over arbitrary, possibly hostile, third-party code, so
-// plan stays the default despite explore now being directly reachable.
+// plan: has edit/write hard-denied at the permission layer (confirmed via
+// client.app.agents()'s explicit deny entry) - holds even against a model
+// tricked by hostile content in the analyzed code. explore reads better by
+// name and, unlike the CLI, the SDK can target it directly - but its
+// read-only behavior is only prompt-enforced (no permission-layer deny at
+// all), weaker than plan's for unattended runs over untrusted code. plan
+// stays the default despite explore now being reachable.
 const AGENT = process.env.AGENT || "plan";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -107,10 +91,9 @@ async function analyzeOne(client: OpencodeClient, moduleDir: string): Promise<vo
   let result;
   try {
     const session = await client.session.create({ body: { title: `module-analysis: ${moduleName}` } });
-    // model is deliberately omitted - falls back to whatever default model
-    // the target opencode.json already configures (the vLLM + Qwen setup),
-    // matching the old `opencode run` invocation, which never passed --model
-    // either.
+    // model omitted deliberately - falls back to whatever default the target
+    // opencode.json configures (vLLM + Qwen), matching the old `opencode run`
+    // invocation, which never passed --model either.
     result = await client.session.prompt({
       path: { id: session.data!.id },
       body: { agent: AGENT, parts: [{ type: "text", text: prompt }] },
@@ -121,11 +104,10 @@ async function analyzeOne(client: OpencodeClient, moduleDir: string): Promise<vo
     return;
   }
 
-  // A failed generation (e.g. the provider erroring out after retries)
-  // doesn't reject the promise above - it resolves with an empty parts list
-  // and the failure recorded on info.error instead. A malformed request
-  // (e.g. an unknown model) resolves with no `data` at all and a top-level
-  // `error`. Handle both the same way: no text means no output file.
+  // A failed generation resolves with an empty parts list and the failure on
+  // info.error, not a rejection. A malformed request (e.g. unknown model)
+  // resolves with no `data` and a top-level `error`. Handle both the same
+  // way: no text means no output file.
   const text = result.data ? lastTextPart(result.data.parts) : undefined;
   await writeFile(
     logFile,

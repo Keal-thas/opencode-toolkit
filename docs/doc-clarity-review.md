@@ -4,7 +4,7 @@ A manually-triggered checklist for auditing this repo's reader-facing docs again
 
 ## Scope
 
-The reader-facing doc set is the same one CLAUDE.md's Preferences bullet names: README.md, SETUP.md, CLAUDE.md itself, `docs/feature-points/*`, subpackage READMEs (`mcp-servers/*/README.md`, `plugins/*/README.md`, `toolkits/*/README.md`), and `memory/*`. Files whose whole purpose is historical or decision-oriented — `docs/lessons-learned.md`, `mcp-servers/TODO.md`, narrowly-scoped decision notes — are out of scope for this pass; dated history belongs there, not removed from there.
+The reader-facing doc set is the same one CLAUDE.md's Preferences bullet names: README.md, SETUP.md, CLAUDE.md itself, `docs/feature-points/*`, subpackage READMEs (`mcp-servers/*/README.md`, `plugins/*/README.md`, `toolkits/*/README.md`), and `memory/*` — plus the reference docs CLAUDE.md links out to (`docs/deployment-environment.md`, `docs/npm-publishing.md`), which carry the same "what's true now" contract despite living outside CLAUDE.md itself. Files whose whole purpose is historical or decision-oriented — `docs/lessons-learned.md`, `mcp-servers/TODO.md`, narrowly-scoped decision notes — are out of scope for this pass; dated history belongs there, not removed from there.
 
 ## What counts as drift
 

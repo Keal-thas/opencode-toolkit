@@ -1,19 +1,13 @@
 // A minimal, spec-compliant LSP client over stdio: Content-Length framing,
-// JSON-RPC request/response correlation, the initialize/initialized
-// handshake, and just enough document sync (didOpen/didClose) for one-shot
-// navigation queries. Deliberately not a generic "any language, any editor"
-// framework - built for exactly what mcp-servers/java-lsp and mcp-servers/spring-lsp need
-// (spawn one real LSP server, keep it alive, answer position-based queries
-// against it) and copied verbatim between the two packages rather than
-// pulled in as a shared npm dependency, matching this repo's mcp-servers/ packages
-// being independently installable (see plugins/'s per-package tarball
-// rationale in the root CLAUDE.md for the same reasoning applied there).
+// JSON-RPC correlation, the initialize/initialized handshake, and just enough
+// document sync (didOpen/didChange/didClose) for one-shot navigation queries.
+// Not a generic "any language" framework - built only for what java-lsp/spring-lsp
+// need, and copied verbatim between the two rather than shared, keeping each
+// package independently installable (see root CLAUDE.md's plugins/ note for
+// the same reasoning).
 //
-// Wire protocol and the exact client capabilities needed to avoid the
-// server crashing during initialize were verified against two real
-// servers (Eclipse JDT LS / jdtls, and VMware's spring-boot-language-server
-// 2.5.0-SNAPSHOT) during development - see mcp-servers/java-lsp/README.md and
-// mcp-servers/spring-lsp/README.md's Status sections for what was actually run.
+// Verified against two real servers (jdtls, spring-boot-language-server
+// 2.5.0-SNAPSHOT) - see each package's README Status section.
 
 import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -26,14 +20,11 @@ interface ClientCapabilities {
   window: Record<string, unknown>;
 }
 
-// A full-ish client capabilities object, not a minimal one. Discovered the
-// hard way: spring-boot-language-server throws an internal NullPointerException
-// during initialize (JdtLsProjectCache.initialize -> getExecuteCommandProvider()
-// returns null) when the client's capabilities.workspace.executeCommand isn't
-// declared - it seems to size its own ServerCapabilities.executeCommandProvider
-// off what the client claims to support. jdtls didn't need this, but sending
-// it doesn't hurt jdtls either, so one shared capabilities object works for
-// both rather than branching per server.
+// Full-ish, not minimal: spring-boot-language-server throws an internal NPE
+// during initialize (getExecuteCommandProvider() returns null) when
+// capabilities.workspace.executeCommand isn't declared - it sizes its own
+// ServerCapabilities off what the client claims to support. jdtls doesn't
+// need this but tolerates it, so one shared object works for both.
 function defaultClientCapabilities(): ClientCapabilities {
   return {
     textDocument: {
@@ -92,10 +83,9 @@ interface InitializeResult {
   [key: string]: unknown;
 }
 
-// One LspClient instance = one spawned server process = one workspace root.
-// Not pooled, not respawned automatically on crash - the MCP server module
-// that owns an instance is responsible for deciding what "the server died"
-// means for in-flight and future tool calls (see server.ts's getClient()).
+// One LspClient = one spawned process = one workspace root. Not pooled or
+// respawned on crash - the owning MCP module decides what "the server died"
+// means for in-flight/future calls (see server.ts's getClient()).
 export class LspClient {
   #command: string;
   #args: string[];
@@ -243,10 +233,8 @@ export class LspClient {
       this.#diagnostics.set(msg.params.uri, msg.params.diagnostics ?? []);
       return;
     }
-    // Requests *from* the server (client/registerCapability, workspace/configuration,
-    // etc.) need a response or the server will sit there waiting - reply with a
-    // generic success/empty so it doesn't stall. Nothing this client's tool
-    // surface needs actually depends on the content of these replies.
+    // Requests *from* the server (registerCapability, workspace/configuration, etc.)
+    // need a response or it'll stall - reply empty since nothing here depends on it.
     if (msg.id !== undefined && msg.method) {
       this.#send({ jsonrpc: "2.0", id: msg.id, result: null });
     }
@@ -265,13 +253,10 @@ export class LspClient {
     return uri;
   }
 
-  // Tool calls are one-shot ("what does this file look like right now"),
-  // and the file on disk may have changed since a previous call opened it
-  // (the agent's edit tool writes straight to disk) - re-issuing didOpen on
-  // an already-open document is invalid per the LSP spec, so this sends a
-  // full-document didChange instead when the uri is already tracked, and
-  // only didOpen the first time. Always returns the uri the query methods
-  // below should use.
+  // Tool calls are one-shot, and the file on disk may have changed since a
+  // previous call opened it (edits write straight to disk) - re-issuing didOpen
+  // on an already-open document is invalid per LSP, so this sends didChange
+  // instead once a uri is already tracked, didOpen only the first time.
   async syncFile(absolutePath: string, languageId: string): Promise<string> {
     const uri = `file://${absolutePath}`;
     const text = await readFile(absolutePath, "utf8");

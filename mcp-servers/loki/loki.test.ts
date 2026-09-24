@@ -1,33 +1,24 @@
 // Requires a live Loki instance reachable via LOKI_BASE_URL - the docker/
-// sandbox's `loki` compose service (see docker/docker-notes.md's "Loki
-// test instance" section), which `docker/dev.sh` always brings up first.
-// Not something this test can mock: it exercises the real Loki HTTP query
-// API round-trip. Lives here (not under tests/) so Node's module
-// resolution finds this package's own node_modules - run via
-// `npm run build && npx tsx --test mcp-servers/loki/loki.test.ts` after
-// `npm install` in this directory (see tests/run-in-container.sh). Run via
-// tsx rather than compiled like server.ts itself - a test file isn't
-// published, so there's no reason to route it through `dist/`.
+// sandbox's `loki` compose service (see docker-notes.md's "Loki test
+// instance" section), a shared fixture started separately (see
+// tests/README.md for the current bring-up precondition). Not mockable:
+// exercises the real Loki HTTP query API round-trip. Lives here (not under
+// tests/) so Node's module resolution finds this package's own node_modules -
+// run via `npm run build && npx tsx --test mcp-servers/loki/loki.test.ts`
+// after `npm install` here (see tests/run-in-container.sh); tsx rather than
+// compiled since a test file isn't published.
 //
-// server.ts is a persistent HTTP server (opencode connects to it as
-// type: "remote", not something it spawns - see README.md's Design
-// section) that reads its Loki connection details from config.json (or
-// configs/<LOKI_CONFIG_ENV>.json) and its port from a fixed-path
-// server.json, both under $HOME/.config/kealthas-dev/opencode-mcp-loki/
-// (see README.md's Configuration section, and
-// mcp-servers/oracle/oracle.test.ts for the
-// same fake-$HOME pattern this test reuses). This test spawns the built
-// dist/server.js itself with `node:child_process.spawn` the same way a
-// real process supervisor would, giving it its own fake $HOME so it never
-// shares config with a real server that might be running in the same
-// container, then drives it over the real Streamable HTTP transport once
-// it reports its "listening" line on stderr.
+// server.ts is a persistent HTTP server (opencode connects as type: "remote",
+// doesn't spawn it - see README's Design section), config-file-driven (see
+// its Configuration section, and oracle.test.ts for the same fake-$HOME
+// pattern this test reuses). Spawns the built dist/server.js itself, gives it
+// its own fake $HOME so it never shares config with a real server in the same
+// container, then drives it over real Streamable HTTP once it logs "listening".
 //
-// This server's tools are read-only, so there's no MCP tool that can seed
-// test data the way mcp-servers/oracle/oracle.test.ts's CREATE TABLE/INSERT does
-// through oracle_query - instead this test pushes its own log lines
-// straight to Loki's own push API (POST /loki/api/v1/push), independent
-// of the MCP server entirely, then reads them back through the tools.
+// This server's tools are read-only, so unlike oracle.test.ts's CREATE
+// TABLE/INSERT there's no MCP tool to seed test data - this test pushes log
+// lines straight to Loki's push API instead, independent of the MCP server,
+// then reads them back through the tools.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
@@ -100,10 +91,9 @@ async function stopServer(child: ChildProcess): Promise<void> {
   await new Promise((resolve) => child.once("exit", resolve));
 }
 
-// A fresh label value per run, not a fixed one - this Loki instance is a
-// shared fixture (see docker-notes.md), so a fixed value could collide
-// with a concurrent test run the same way mcp-servers/oracle/oracle.test.ts's
-// dynamic table name avoids colliding with a concurrent Oracle test.
+// A fresh label value per run, not fixed - this Loki instance is a shared
+// fixture, so a fixed value could collide with a concurrent test run (same
+// reason oracle.test.ts uses a dynamic table name).
 const testAppLabel = `loki_mcp_test_${Date.now()}`;
 const testLogLine = `hello from loki mcp test ${Date.now()}`;
 const windowStartNs = String((Date.now() - 5 * 60_000) * 1_000_000);

@@ -1,26 +1,16 @@
-// Requires a real `jdtls` on PATH (e.g. `brew install jdtls` on macOS, or
-// however the target machine provides it - see README.md's "JDK version"
-// section) and a JDK 21+ runtime for jdtls to launch with. Not something
-// this test can mock: LSP is a genuinely stateful protocol (project
-// indexing, incremental document sync), and the whole point of this
-// package is that it talks to a real jdtls process - see
-// mcp-servers/loki/loki.test.ts for the same reasoning applied to a different
-// real backend.
+// Requires a real `jdtls` on PATH and a JDK 21+ runtime to launch it with
+// (see README's "JDK version" section). Not mockable: LSP is a genuinely
+// stateful protocol, and the whole point is talking to a real jdtls process.
 //
-// Not yet wired into tests/run-in-container.sh / the docker/ sandbox - the
-// sandbox's image (docker/Dockerfile, `FROM node:22-bookworm`) has no JDK
-// or jdtls installed, and adding a jdtls download to the image wasn't done
-// here (see mcp-servers/TODO.md). Run this directly on a machine with jdtls
-// installed: `cd mcp-servers/java-lsp && npm install && npm run build && npm test`.
+// Not yet wired into tests/run-in-container.sh / the docker/ sandbox - no JDK
+// or jdtls in that image (see mcp-servers/TODO.md). Run directly on a machine
+// with jdtls installed: `cd mcp-servers/java-lsp && npm install && npm run
+// build && npm test`.
 //
-// server.ts reads its workspace/data-dir config from config.json (or
-// configs/<JAVA_LSP_CONFIG_ENV>.json) and its port from a fixed-path
-// server.json, both under $HOME/.config/kealthas-dev/opencode-mcp-java-lsp/
-// (see README.md's
-// Configuration section, and mcp-servers/oracle/oracle.test.ts for the
-// same fake-$HOME pattern this test reuses) - this test spawns the compiled
-// dist/server.js with its own fake $HOME so it never shares config with a
-// real server that might be running in the same environment.
+// server.ts is config-file-driven (see README's Configuration section, and
+// oracle.test.ts for the same fake-$HOME pattern this test reuses) - spawns
+// the compiled dist/server.js with its own fake $HOME so it never shares
+// config with a real server running in the same environment.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
