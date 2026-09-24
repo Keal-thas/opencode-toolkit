@@ -22,6 +22,10 @@ Single-person project used across multiple machines — these preferences are gi
 
 - **Centralize a config value instead of repeating the literal across files** — drift risk, not tidiness. Dated "verified against version X" facts are exempt.
 
+### Code structure
+
+- **Don't extract shared code across independently-published packages (`plugins/`, `mcp-servers/`), even for byte-identical duplication.** Each package stays self-contained and readable on its own — a shared internal package would add a coupling/versioning surface (import wiring, an extra publish step) to save a handful of small, boring, mechanical functions (config loading, HTTP wiring). This is the opposite instinct from "Config hygiene" above on purpose: that's about one literal value drifting across files, this is about a whole package's independence. Confirmed 2026-09-24: found ~150 duplicate lines across the four `mcp-servers/*` (identical `printSampleConfig`, near-identical `loadServerConfig`, byte-identical HTTP wiring) while migrating them to `McpServer` — left it duplicated on purpose rather than extracting a shared package.
+
 ### Testing
 
 - **All development and testing happens inside the `docker/` sandbox, never against the host's own node/opencode/npm install.** `./tests/run-all.sh` is the entry point; always go through `docker/dev.sh`, not `docker compose` directly, so concurrent worktrees don't collide.
