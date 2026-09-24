@@ -4,9 +4,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import oracledb from "oracledb";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
 import type { DatabaseConfig, ServerConfig } from "./types/config.js";
 
 const DEFAULT_PORT = 8090;
@@ -154,43 +154,27 @@ async function executeQuery(sql: string, schema?: string) {
   }
 }
 
-function createMcpServer(): Server {
-  const server = new Server({ name: "oracle-mcp", version: "1.0.0" }, { capabilities: { tools: {} } });
+function createMcpServer(): McpServer {
+  const server = new McpServer({ name: "oracle-mcp", version: "1.0.0" });
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
-      {
-        name: "oracle_query",
-        description:
-          "Execute an ad-hoc SQL statement against the configured Oracle database. Full passthrough - no read-only restriction, no keyword filtering.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            sql: { type: "string", description: "The SQL statement to execute" },
-            schema: {
-              type: "string",
-              description: "Optional - run against this schema (ALTER SESSION SET CURRENT_SCHEMA) instead of ORACLE_DEFAULT_SCHEMA/the connecting user's own schema.",
-            },
-          },
-          required: ["sql"],
-        },
+  server.registerTool(
+    "oracle_query",
+    {
+      description:
+        "Execute an ad-hoc SQL statement against the configured Oracle database. Full passthrough - no read-only restriction, no keyword filtering.",
+      inputSchema: {
+        sql: z.string().describe("The SQL statement to execute"),
+        schema: z
+          .string()
+          .optional()
+          .describe("Optional - run against this schema (ALTER SESSION SET CURRENT_SCHEMA) instead of ORACLE_DEFAULT_SCHEMA/the connecting user's own schema."),
       },
-    ],
-  }));
-
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
-
-    if (name !== "oracle_query") {
-      return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
-    }
-    if (!args?.sql) {
-      return { content: [{ type: "text", text: "Missing required argument: sql" }], isError: true };
-    }
-
-    const result = await executeQuery(args.sql as string, args.schema as string | undefined);
-    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-  });
+    },
+    async ({ sql, schema }) => {
+      const result = await executeQuery(sql, schema);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    },
+  );
 
   return server;
 }

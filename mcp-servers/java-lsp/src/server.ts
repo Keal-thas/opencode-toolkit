@@ -5,9 +5,9 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
 import { LspClient, LspClientError } from "./lsp-client.js";
 import type { JavaLspConfig, ServerConfig } from "./types/config.js";
 
@@ -178,173 +178,99 @@ async function toolResult(fn: () => Promise<unknown>): Promise<ToolResult> {
   }
 }
 
-interface PositionArgs {
-  file: string;
-  line: number;
-  character: number;
-}
-
-function createMcpServer(): Server {
-  const server = new Server({ name: "java-lsp-mcp", version: "1.0.0" }, { capabilities: { tools: {} } });
+function createMcpServer(): McpServer {
+  const server = new McpServer({ name: "java-lsp-mcp", version: "1.0.0" });
   const log = (kind: string, message: string) => console.error(`[jdtls:${kind}]`, message.toString().slice(0, 500));
+  const respond = (result: ToolResult) => ({ content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] });
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
-      {
-        name: "java_definition",
-        description:
-          "Jump to the definition of the Java symbol at a position, using jdtls's real type resolution (not text search) - handles overloads, inheritance, and cross-file references correctly.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            file: { type: "string", description: `Path to a .java file, absolute or relative to ${WORKSPACE_ROOT}.` },
-            line: { type: "number", description: LINE_CHAR_DESCRIPTION },
-            character: { type: "number", description: LINE_CHAR_DESCRIPTION },
-          },
-          required: ["file", "line", "character"],
-        },
-      },
-      {
-        name: "java_references",
-        description: "Find every real usage of the Java symbol at a position across the workspace (scope-aware, not a name-text grep).",
-        inputSchema: {
-          type: "object",
-          properties: {
-            file: { type: "string", description: `Path to a .java file, absolute or relative to ${WORKSPACE_ROOT}.` },
-            line: { type: "number", description: LINE_CHAR_DESCRIPTION },
-            character: { type: "number", description: LINE_CHAR_DESCRIPTION },
-            includeDeclaration: { type: "boolean", description: "Include the declaration itself in the results. Defaults to true." },
-          },
-          required: ["file", "line", "character"],
-        },
-      },
-      {
-        name: "java_hover",
-        description: "Get the resolved type signature and Javadoc for the Java symbol at a position.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            file: { type: "string", description: `Path to a .java file, absolute or relative to ${WORKSPACE_ROOT}.` },
-            line: { type: "number", description: LINE_CHAR_DESCRIPTION },
-            character: { type: "number", description: LINE_CHAR_DESCRIPTION },
-          },
-          required: ["file", "line", "character"],
-        },
-      },
-      {
-        name: "java_implementation",
-        description: "Jump from an interface or abstract method to its concrete implementation(s).",
-        inputSchema: {
-          type: "object",
-          properties: {
-            file: { type: "string", description: `Path to a .java file, absolute or relative to ${WORKSPACE_ROOT}.` },
-            line: { type: "number", description: LINE_CHAR_DESCRIPTION },
-            character: { type: "number", description: LINE_CHAR_DESCRIPTION },
-          },
-          required: ["file", "line", "character"],
-        },
-      },
-      {
-        name: "java_document_symbols",
-        description: "List every class/method/field jdtls actually parsed out of one Java file, with kind and precise location - structural, not a text search.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            file: { type: "string", description: `Path to a .java file, absolute or relative to ${WORKSPACE_ROOT}.` },
-          },
-          required: ["file"],
-        },
-      },
-      {
-        name: "java_workspace_symbols",
-        description: "Fuzzy-search real declared symbols (classes/methods/fields) by name across the whole workspace jdtls has indexed - matches against jdtls's own symbol index, not file contents, so it won't match a name that only appears in a comment or string literal.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            query: { type: "string", description: "Symbol name or fragment to search for." },
-          },
-          required: ["query"],
-        },
-      },
-      {
-        name: "java_diagnostics",
-        description: "Get jdtls's current compile errors/warnings for one Java file (opens/syncs the file first, then returns whatever diagnostics jdtls has published for it).",
-        inputSchema: {
-          type: "object",
-          properties: {
-            file: { type: "string", description: `Path to a .java file, absolute or relative to ${WORKSPACE_ROOT}.` },
-            waitMs: { type: "number", description: "How long to wait for jdtls to publish diagnostics after opening the file, in ms. Defaults to 3000." },
-          },
-          required: ["file"],
-        },
-      },
-    ],
-  }));
+  const filePathShape = z.string().describe(`Path to a .java file, absolute or relative to ${WORKSPACE_ROOT}.`);
+  const positionShape = { file: filePathShape, line: z.number().describe(LINE_CHAR_DESCRIPTION), character: z.number().describe(LINE_CHAR_DESCRIPTION) };
+  const position = (args: { line: number; character: number }) => ({ line: args.line, character: args.character });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: rawArgs } = request.params;
-    const args = rawArgs as unknown as PositionArgs & { includeDeclaration?: boolean; query?: string; waitMs?: number };
-    const position = () => ({ line: args.line, character: args.character });
+  server.registerTool(
+    "java_definition",
+    {
+      description:
+        "Jump to the definition of the Java symbol at a position, using jdtls's real type resolution (not text search) - handles overloads, inheritance, and cross-file references correctly.",
+      inputSchema: positionShape,
+    },
+    async (args) => respond(await toolResult(() => withOpenFile(log, args.file, (client, uri) => client.request("textDocument/definition", { textDocument: { uri }, position: position(args) })))),
+  );
 
-    let result: ToolResult;
-    switch (name) {
-      case "java_definition":
-        result = await toolResult(() =>
-          withOpenFile(log, args.file, (client, uri) =>
-            client.request("textDocument/definition", { textDocument: { uri }, position: position() }),
-          ),
-        );
-        break;
-      case "java_references":
-        result = await toolResult(() =>
+  server.registerTool(
+    "java_references",
+    {
+      description: "Find every real usage of the Java symbol at a position across the workspace (scope-aware, not a name-text grep).",
+      inputSchema: { ...positionShape, includeDeclaration: z.boolean().optional().describe("Include the declaration itself in the results. Defaults to true.") },
+    },
+    async (args) =>
+      respond(
+        await toolResult(() =>
           withOpenFile(log, args.file, (client, uri) =>
             client.request("textDocument/references", {
               textDocument: { uri },
-              position: position(),
+              position: position(args),
               context: { includeDeclaration: args.includeDeclaration ?? true },
             }),
           ),
-        );
-        break;
-      case "java_hover":
-        result = await toolResult(() =>
-          withOpenFile(log, args.file, (client, uri) =>
-            client.request("textDocument/hover", { textDocument: { uri }, position: position() }),
-          ),
-        );
-        break;
-      case "java_implementation":
-        result = await toolResult(() =>
-          withOpenFile(log, args.file, (client, uri) =>
-            client.request("textDocument/implementation", { textDocument: { uri }, position: position() }),
-          ),
-        );
-        break;
-      case "java_document_symbols":
-        result = await toolResult(() =>
-          withOpenFile(log, args.file, (client, uri) => client.request("textDocument/documentSymbol", { textDocument: { uri } })),
-        );
-        break;
-      case "java_workspace_symbols":
-        result = await toolResult(async () => {
+        ),
+      ),
+  );
+
+  server.registerTool(
+    "java_hover",
+    { description: "Get the resolved type signature and Javadoc for the Java symbol at a position.", inputSchema: positionShape },
+    async (args) => respond(await toolResult(() => withOpenFile(log, args.file, (client, uri) => client.request("textDocument/hover", { textDocument: { uri }, position: position(args) })))),
+  );
+
+  server.registerTool(
+    "java_implementation",
+    { description: "Jump from an interface or abstract method to its concrete implementation(s).", inputSchema: positionShape },
+    async (args) =>
+      respond(await toolResult(() => withOpenFile(log, args.file, (client, uri) => client.request("textDocument/implementation", { textDocument: { uri }, position: position(args) })))),
+  );
+
+  server.registerTool(
+    "java_document_symbols",
+    {
+      description: "List every class/method/field jdtls actually parsed out of one Java file, with kind and precise location - structural, not a text search.",
+      inputSchema: { file: filePathShape },
+    },
+    async (args) => respond(await toolResult(() => withOpenFile(log, args.file, (client, uri) => client.request("textDocument/documentSymbol", { textDocument: { uri } })))),
+  );
+
+  server.registerTool(
+    "java_workspace_symbols",
+    {
+      description:
+        "Fuzzy-search real declared symbols (classes/methods/fields) by name across the whole workspace jdtls has indexed - matches against jdtls's own symbol index, not file contents, so it won't match a name that only appears in a comment or string literal.",
+      inputSchema: { query: z.string().describe("Symbol name or fragment to search for.") },
+    },
+    async (args) =>
+      respond(
+        await toolResult(async () => {
           const client = await getClient(log);
           return client.request("workspace/symbol", { query: args.query });
-        });
-        break;
-      case "java_diagnostics":
-        result = await toolResult(() =>
+        }),
+      ),
+  );
+
+  server.registerTool(
+    "java_diagnostics",
+    {
+      description: "Get jdtls's current compile errors/warnings for one Java file (opens/syncs the file first, then returns whatever diagnostics jdtls has published for it).",
+      inputSchema: { file: filePathShape, waitMs: z.number().optional().describe("How long to wait for jdtls to publish diagnostics after opening the file, in ms. Defaults to 3000.") },
+    },
+    async (args) =>
+      respond(
+        await toolResult(() =>
           withOpenFile(log, args.file, async (client, uri) => {
             await new Promise((r) => setTimeout(r, args.waitMs ?? 3000));
             return client.getDiagnostics(uri);
           }),
-        );
-        break;
-      default:
-        return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
-    }
-
-    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-  });
+        ),
+      ),
+  );
 
   return server;
 }
