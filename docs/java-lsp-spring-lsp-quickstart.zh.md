@@ -2,7 +2,7 @@
 
 本地跑,不用 docker sandbox —— 沙箱镜像没装 JDK,这两个服务的测试本来就是在宿主机跑的（见 `mcp-servers/TODO.md`）。
 
-前提：JDK 21+（`java -version`）；java-lsp 额外需要 `python3`。目标机器没有 JDK21 的话不用另外下载 —— 仓库根目录 `vendor/OpenJDK21U-jdk_x64_windows_hotspot_*.zip.part-*` 已经 vendor 了一份 Windows x64 完整 JDK(体积超过 GitHub 单文件 100MB 限制,拆成了几个 part,用 `cat vendor/OpenJDK21U-jdk_x64_windows_hotspot_*.zip.part-* > jdk21.zip` 拼回去再解压),`JAVA_EXECUTABLE` 指过去就行,见 SETUP.md 第 8 步。
+前提:JDK 21+(`java -version`);java-lsp 额外需要 `python3`。目标机器没有 JDK21 的话,见 SETUP.md 第 8 步(手动下载一份 JDK zip 传上去,`JAVA_EXECUTABLE` 指过去——vendor 进仓库这条路试过了,会把根包 npm 发布搞挂,已经回退,见 `docs/lessons-learned.md`)。
 
 ## java-lsp
 
