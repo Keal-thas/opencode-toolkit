@@ -1,8 +1,27 @@
-# Intentionally empty (must exist, content doesn't matter). Without this
-# file, `npm pack`/`publish` falls back to treating .gitignore as its own
-# exclusion list - which would silently drop docs/opencode-docs-reference/
+# Must exist (even before the real entries below were added) so
+# `npm pack`/`publish` doesn't fall back to treating .gitignore as its own
+# exclusion list - that would silently drop docs/opencode-docs-reference/
 # and deploy/models-dev-snapshot.json, both gitignored-but-git-tracked on
 # purpose (see CLAUDE.md) and both things the offline target machine
-# actually needs. scripts/publish-npm.sh's git-archive step already
-# guarantees only git-tracked content reaches npm in the first place, so
-# there's nothing left for this file to actually exclude.
+# actually needs.
+#
+# vendor/ (the split JDK) is excluded from the root package's *normal*
+# publish (the one release.yml runs automatically at the tag's real
+# version, no --tag) - it's still published, just not there. Each part
+# goes out separately as its own small, non-latest version instead
+# (scripts/publish-jdk-parts.sh) - including it here too would blow the
+# normal publish straight back past registry.npmjs.org's real per-publish
+# payload ceiling (see docs/lessons-learned.md; this is exactly how
+# v1.0.16 failed the first time).
+#
+# mcp-servers/java-lsp's and mcp-servers/spring-lsp's own vendored
+# jdtls/spring-boot-language-server tarballs (~51MB/~81MB) are excluded
+# for a different, size-independent reason: installing either MCP server
+# always goes through its own separately-published
+# @kealthas-dev/opencode-mcp-java-lsp/-spring-lsp package (which
+# whitelists vendor/*.tar.gz in its own package.json "files" field), never
+# through the root package, so carrying a second copy of either tarball
+# here is pure waste regardless of the JDK question.
+vendor/
+mcp-servers/java-lsp/vendor/
+mcp-servers/spring-lsp/vendor/
