@@ -102,8 +102,8 @@ const LINE_CHAR_DESCRIPTION =
 // npm-install time - a `git pull` that bumps the tarball is picked up
 // automatically, no separate build step (mirrors spring-lsp's equivalent).
 // JDTLS_COMMAND overrides this entirely, e.g. to a system-installed jdtls.
-function resolveJdtlsCommand(): string {
-  if (javaLspConfig.JDTLS_COMMAND) return javaLspConfig.JDTLS_COMMAND;
+function resolveJdtlsCommand(): { command: string; prefixArgs: string[] } {
+  if (javaLspConfig.JDTLS_COMMAND) return { command: javaLspConfig.JDTLS_COMMAND, prefixArgs: [] };
   const vendorDir = path.join(here, "..", "vendor");
   const tarball = readdirSync(vendorDir).find((f) => f.endsWith(".tar.gz"));
   if (!tarball) {
@@ -117,8 +117,14 @@ function resolveJdtlsCommand(): string {
     execFileSync("mkdir", ["-p", extractedDir]);
     execFileSync("tar", ["-xzf", path.join(vendorDir, tarball), "-C", extractedDir]);
   }
-  // bin/jdtls is Eclipse's own python3 launcher script - needs python3 on PATH.
-  return launcher;
+  // bin/jdtls is Eclipse's own python3 launcher script - a POSIX shebang
+  // script with no .exe/.bat/.cmd. macOS/Linux's spawn() reads the shebang
+  // itself and runs it fine, but Windows has no shebang support at all -
+  // spawn() there fails with ENOENT trying to launch the script directly.
+  // Invoke python3 on it explicitly there instead (needs python3 on PATH,
+  // same prerequisite the README/SETUP.md already document).
+  if (process.platform === "win32") return { command: "python3", prefixArgs: [launcher] };
+  return { command: launcher, prefixArgs: [] };
 }
 
 // One jdtls process per server lifetime, not per request - unlike oracle/loki's
@@ -128,9 +134,10 @@ function resolveJdtlsCommand(): string {
 let clientPromise: Promise<LspClient> | undefined;
 function getClient(log: (kind: string, message: string) => void): Promise<LspClient> {
   if (!clientPromise) {
+    const { command, prefixArgs } = resolveJdtlsCommand();
     const client = new LspClient({
-      command: resolveJdtlsCommand(),
-      args: ["-data", javaLspConfig.JDTLS_DATA_DIR, ...(javaLspConfig.JAVA_EXECUTABLE ? ["--java-executable", javaLspConfig.JAVA_EXECUTABLE] : [])],
+      command,
+      args: [...prefixArgs, "-data", javaLspConfig.JDTLS_DATA_DIR, ...(javaLspConfig.JAVA_EXECUTABLE ? ["--java-executable", javaLspConfig.JAVA_EXECUTABLE] : [])],
       rootPath: WORKSPACE_ROOT,
       log,
     });
