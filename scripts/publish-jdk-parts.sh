@@ -61,6 +61,10 @@ for part in vendor/*.zip.part-*; do
   "version": "${version}",
   "description": "Not a usable package on its own - one raw chunk of vendor/${part_name%.part-*}, the split JDK archive from the main @kealthas-dev/opencode-toolkit repo. Never installed directly; reassembled by SETUP.md step 8. See docs/lessons-learned.md and mcp-servers/TODO.md for why this exists.",
   "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Keal-thas/opencode-toolkit.git"
+  },
   "files": ["${part_name}"],
   "publishConfig": { "access": "public" }
 }
