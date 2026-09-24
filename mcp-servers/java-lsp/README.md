@@ -43,6 +43,8 @@ Config is file-based, not env-var-based — same two-file split as `mcp-servers/
 
 ## Run
 
+See [docs/java-lsp-spring-lsp-quickstart.zh.md](../../docs/java-lsp-spring-lsp-quickstart.zh.md) for a bare-minimum copy-paste version of the local-dev path below.
+
 Published as `@kealthas-dev/opencode-mcp-java-lsp` — on a real deployment, install it globally and run the resulting binary:
 
 ```bash
