@@ -86,12 +86,11 @@ const springLspConfig = loadSpringLspConfig();
 const WORKSPACE_ROOT = springLspConfig.SPRING_LSP_WORKSPACE_ROOT;
 const JAVA_EXECUTABLE = springLspConfig.JAVA_EXECUTABLE ?? "java"; // spring-boot-language-server itself needs JDK 21+ - see README's "JDK version"
 
-// vendor/spring-boot-language-server-<version>.tar.gz is committed (see
-// fetch-spring-boot-language-server.sh's own comments for why: it's not
-// published to any package registry). Extracted lazily on first startup
-// into a sibling directory, not at npm-install time - this way a
-// `git pull` that bumps the vendored tarball is picked up automatically
-// without a separate build step.
+// vendor/spring-boot-language-server-<version>.tar.gz is committed (not
+// published to any registry - see fetch-spring-boot-language-server.sh),
+// extracted lazily on first startup rather than at npm-install time - a
+// `git pull` that bumps the tarball is picked up automatically, no separate
+// build step.
 function resolveLanguageServerDir(): { dir: string; jarName: string } {
   const vendorDir = path.join(here, "..", "vendor");
   const tarball = readdirSync(vendorDir).find((f) => f.endsWith(".tar.gz"));
@@ -114,10 +113,8 @@ function resolveLanguageServerDir(): { dir: string; jarName: string } {
 const LINE_CHAR_DESCRIPTION =
   "0-indexed, per the LSP spec (not the 1-indexed line numbers most editors display) - line 0 is the file's first line, character 0 is the first column.";
 
-// Same reasoning as mcp-servers/java-lsp/src/server.ts: one persistent language-server
-// process for the server's whole lifetime (module-level singleton), not
-// one per request - see that file's comments for why. Copied rather than
-// shared for the same reason lsp-client.ts is copied - see both READMEs.
+// Same reasoning as java-lsp/src/server.ts: one persistent process for the
+// server's whole lifetime, not one per request - see that file's comments.
 let clientPromise: Promise<LspClient> | undefined;
 function getClient(log: (kind: string, message: string) => void): Promise<LspClient> {
   if (!clientPromise) {

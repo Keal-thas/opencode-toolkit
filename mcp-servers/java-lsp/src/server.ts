@@ -98,12 +98,10 @@ const LINE_CHAR_DESCRIPTION =
   "0-indexed, per the LSP spec (not the 1-indexed line numbers most editors display) - line 0 is the file's first line, character 0 is the first column.";
 
 // vendor/jdt-language-server-<version>.tar.gz is committed (see README's
-// Vendoring section) - extracted lazily on first startup into a sibling
-// directory, not at npm-install time, mirroring mcp-servers/spring-lsp/src/server.ts's
-// resolveLanguageServerDir() (same reasoning: a `git pull` that bumps the
-// vendored tarball is picked up automatically, no separate build step).
-// JDTLS_COMMAND still overrides this entirely, e.g. to point at a
-// system-installed jdtls (`brew install jdtls`) instead.
+// Vendoring section), extracted lazily on first startup rather than at
+// npm-install time - a `git pull` that bumps the tarball is picked up
+// automatically, no separate build step (mirrors spring-lsp's equivalent).
+// JDTLS_COMMAND overrides this entirely, e.g. to a system-installed jdtls.
 function resolveJdtlsCommand(): string {
   if (javaLspConfig.JDTLS_COMMAND) return javaLspConfig.JDTLS_COMMAND;
   const vendorDir = path.join(here, "..", "vendor");
@@ -119,20 +117,14 @@ function resolveJdtlsCommand(): string {
     execFileSync("mkdir", ["-p", extractedDir]);
     execFileSync("tar", ["-xzf", path.join(vendorDir, tarball), "-C", extractedDir]);
   }
-  // bin/jdtls is Eclipse's own python3 launcher script (see README's
-  // Vendoring section) - it needs python3 on PATH, same as it would via
-  // `brew install jdtls`.
+  // bin/jdtls is Eclipse's own python3 launcher script - needs python3 on PATH.
   return launcher;
 }
 
-// One jdtls process per server lifetime, not per request or per tool call -
-// unlike mcp-servers/oracle's/mcp-servers/loki's per-request model, LSP is a genuinely
-// stateful session (project indexing alone easily takes seconds; redoing
-// initialize on every tool call would make this unusably slow, and jdtls
-// doesn't support concurrent instances against the same -data dir anyway).
-// Started lazily on first tool call, not at process startup, so the HTTP
-// server itself comes up immediately - jdtls's own indexing then continues
-// in the background after that first call returns.
+// One jdtls process per server lifetime, not per request - unlike oracle/loki's
+// per-request model, LSP is genuinely stateful (indexing takes seconds; jdtls
+// doesn't support concurrent instances against one -data dir anyway). Started
+// lazily on first tool call so the HTTP server itself comes up immediately.
 let clientPromise: Promise<LspClient> | undefined;
 function getClient(log: (kind: string, message: string) => void): Promise<LspClient> {
   if (!clientPromise) {
@@ -363,9 +355,8 @@ const httpServer = http.createServer(async (req, res) => {
     return;
   }
 
-  // Stateless at the MCP/HTTP layer only (fresh Server+transport per
-  // request, same as mcp-servers/oracle and mcp-servers/loki) - the jdtls process itself is
-  // the one genuinely stateful thing here, and it's a module-level
+  // Stateless at the MCP/HTTP layer only (fresh pair per request, like
+  // oracle/loki) - jdtls itself is the stateful thing, a module-level
   // singleton via getClient(), independent of this per-request pair.
   const mcpServer = createMcpServer();
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });

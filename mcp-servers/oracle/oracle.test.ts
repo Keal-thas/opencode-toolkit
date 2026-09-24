@@ -1,26 +1,19 @@
-// Requires a live Oracle instance reachable via the env vars checked below -
-// the docker/ sandbox's `oracle` compose service (see docker/docker-notes.md's
-// "Oracle test instance" section), started separately as a shared fixture.
-// Not something this test can mock: it exercises
-// the real oracledb round-trip, including the per-request-connection /
-// autoCommit design decisions server.ts makes. Lives here (not under
-// tests/) so Node's module resolution finds this package's own
-// node_modules - run via `npm run build && npx tsx --test mcp-servers/oracle/oracle.test.ts`
-// after `npm install` in this directory (see tests/run-in-container.sh). Run
-// via tsx rather than compiled like server.ts itself - a test file isn't
-// published, so there's no reason to route it through `dist/`.
+// Requires a live Oracle instance - the docker/ sandbox's `oracle` compose
+// service (see docker-notes.md's "Oracle test instance" section), started
+// separately as a shared fixture. Not mockable: exercises the real oracledb
+// round-trip, including server.ts's per-request-connection/autoCommit design.
+// Lives here (not under tests/) so Node's module resolution finds this
+// package's own node_modules - run via `npm run build && npx tsx --test
+// mcp-servers/oracle/oracle.test.ts` after `npm install` here (see
+// tests/run-in-container.sh); tsx rather than compiled since a test file
+// isn't published.
 //
-// server.ts is a persistent HTTP server (opencode connects to it as
-// type: "remote", not something it spawns - see README.md's Design
-// section) that reads its database connection details from config.json (or
-// configs/<ORACLE_CONFIG_ENV>.json) and its port from a fixed-path
-// server.json, both under $HOME/.config/kealthas-dev/opencode-mcp-oracle/
-// (see README.md's Configuration section). This test spawns the built
-// dist/server.js itself with `node:child_process.spawn` the same way a real
-// process supervisor would, giving each spawned process its own fake $HOME
-// (createFakeHome() below) so concurrent test servers never share one
-// machine-wide config directory, then drives it over the real Streamable
-// HTTP transport once it reports its "listening" line on stderr.
+// server.ts is a persistent HTTP server (opencode connects as type: "remote",
+// doesn't spawn it - see README's Design section), config-file-driven (see
+// its Configuration section). This test spawns the built dist/server.js
+// itself via child_process.spawn, each with its own fake $HOME
+// (createFakeHome() below) so concurrent test servers never share config,
+// then drives it over real Streamable HTTP once it logs "listening".
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
@@ -44,16 +37,11 @@ for (const key of ["ORACLE_CONNECT_STRING", "ORACLE_USER", "ORACLE_PASSWORD"]) {
   }
 }
 
-// Each spawned server process gets its own fake $HOME containing its own
-// server.json (port) and its own database config.json at the default
-// location under that fake $HOME - real isolation between concurrent test
-// servers without server.ts needing any test-only
-// escape hatch. Node's os.homedir() reads $HOME at call time, so this is
-// enough to give each spawned process its own config, the same as a real
-// multi-instance deployment would have separate machines/accounts.
-// Written straight to the default config.json location (not pointed at via
-// an env var) - ORACLE_CONFIG_ENV only takes a bare name, never a path, so
-// there's nothing for this test to point at beyond that fixed default.
+// Each spawned process gets its own fake $HOME with its own server.json
+// (port) and config.json - real isolation without server.ts needing a
+// test-only escape hatch, since os.homedir() reads $HOME at call time.
+// Written to the default config.json location - ORACLE_CONFIG_ENV only
+// takes a bare name, never a path, so there's nothing else to point at.
 function createFakeHome(port: number, dbConfigOverrides?: Record<string, string>): { home: string } {
   const home = mkdtempSync(join(tmpdir(), "oracle-mcp-test-"));
   const configDir = join(home, ".config", "kealthas-dev", "opencode-mcp-oracle");
@@ -169,13 +157,10 @@ test("a query against a nonexistent table returns a clean error, not a crash", a
 });
 
 test("a connection failure returns a clean error, not an MCP protocol crash", async () => {
-  // Regression test for the bug found while first verifying this server
-  // (see git history / mcp-servers/oracle/README.md): oracledb.getConnection()
-  // must be inside executeQuery()'s try block, or a connection failure
-  // surfaces as a raw McpError instead of a normal {success: false} tool
-  // result. Runs its own server on a separate port with a bad password in
-  // its own fake $HOME's config file, since the "good" server above already
-  // has its own real credentials baked into its own fake $HOME's config.
+  // Regression test: oracledb.getConnection() must be inside executeQuery()'s
+  // try block, or a connection failure surfaces as a raw McpError instead of
+  // {success: false}. Runs its own server on a separate port with a bad
+  // password, since the "good" server above already has real credentials.
   const badPort = serverPort + 1;
   const badServerProcess = await startServer(badPort, { ORACLE_PASSWORD: "definitely-wrong-password" });
   const badTransport = new StreamableHTTPClientTransport(new URL(`http://localhost:${badPort}/mcp`));

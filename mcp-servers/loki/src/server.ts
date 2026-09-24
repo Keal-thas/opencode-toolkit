@@ -60,6 +60,8 @@ function loadServerConfig(): ServerConfig {
 }
 
 // config.json by default, config-<name>.json when LOKI_CONFIG_ENV is set.
+// Only LOKI_BASE_URL is required - Loki is commonly reachable unauthenticated
+// on an internal LAN, unlike mcp-servers/oracle.
 function loadLokiConfig(): LokiConfig {
   const envName = process.env.LOKI_CONFIG_ENV;
   const resolvedPath = join(CONFIG_DIR, envName ? `config-${envName}.json` : "config.json");
@@ -92,23 +94,15 @@ function loadLokiConfig(): LokiConfig {
 
 const serverConfig = loadServerConfig();
 
-// Computing a correct start/end by hand (an exact RFC3339 offset, or -
-// worse - a 19-digit nanosecond epoch) is real friction for whatever's
-// calling this tool, model or human. This resolves three friendlier
-// forms into whatever Loki actually accepts, so most callers never have
-// to touch epoch math at all:
-//   - "now" / "now-<duration>" (duration is <n><unit> pairs, unit one of
-//     s/m/h/d, e.g. "now-1h", "now-30m", "now-1d") - the same relative-time
-//     convention Grafana itself uses for Loki/Prometheus time ranges, not
-//     an invented one.
-//   - a bare "YYYY-MM-DDTHH:MM:SS" or "YYYY-MM-DD HH:MM:SS" with no
-//     timezone - assumed to be in LOKI_DEFAULT_TZ_OFFSET and qualified
-//     before being sent.
-// Anything else (already a full RFC3339 offset, or a bare epoch number)
-// passes straight through unchanged - both were already correct inputs
-// before this existed, and stay correct. An unrecognized shape also
-// passes straight through rather than being rejected here - Loki's own
-// parser is the final judge and returns its own clean error, same
+// Hand-computing a correct start/end (an RFC3339 offset, or a 19-digit
+// nanosecond epoch) is real friction, so this resolves two friendlier forms
+// into what Loki accepts:
+//   - "now"/"now-<duration>" (s/m/h/d units, e.g. "now-1h") - Grafana's own
+//     relative-time convention, not an invented one.
+//   - a bare "YYYY-MM-DDTHH:MM:SS"/"YYYY-MM-DD HH:MM:SS" with no timezone -
+//     assumed to be LOKI_DEFAULT_TZ_OFFSET and qualified before sending.
+// Anything else (already RFC3339, a bare epoch, or unrecognized) passes
+// straight through - Loki's own parser is the final judge, same
 // full-passthrough philosophy as everywhere else in this server.
 const RELATIVE_TIME_RE = /^now(?:-((?:\d+[smhd])+))?$/;
 const DURATION_PART_RE = /(\d+)([smhd])/g;
@@ -135,14 +129,10 @@ function resolveTimeParam(value: string | undefined, tzOffset: string): string |
 
 type LokiResult = { success: true; data: unknown } | { success: false; error: string };
 
-// Loki's query API (what every tool below hits) has no write side at all -
-// unlike Oracle there's no executeQuery()-style connection lifecycle or
-// auditQuery() gate to design around here. Every call is a plain,
-// stateless GET; this helper just centralizes URL-building, the optional
-// auth headers, and turning a non-2xx/network failure into a clean
-// {success: false} instead of a thrown error - mirroring the shape
-// executeQuery() returns in mcp-servers/oracle/src/server.ts, for the same reason:
-// tool results should never surface as a raw MCP protocol error.
+// Loki's API is read-only, so unlike Oracle there's no connection lifecycle
+// or audit gate here - just a stateless GET. Centralizes URL-building, auth
+// headers, and turning a non-2xx/network failure into {success: false}
+// rather than a thrown error, so tool results never surface as a raw MCP error.
 async function lokiFetch(path: string, params?: Record<string, unknown>): Promise<LokiResult> {
   const lokiConfig = loadLokiConfig();
   const effectivePath = lokiConfig.LOKI_VIA_GRAFANA
@@ -161,10 +151,8 @@ async function lokiFetch(path: string, params?: Record<string, unknown>): Promis
 
   try {
     const response = await fetch(url, { headers });
-    // Read as text first, not response.json() directly - Loki's error
-    // responses aren't guaranteed to be the same JSON shape as its
-    // success responses (sometimes plain text), so parsing is only safe
-    // once response.ok is known.
+    // Text first, not response.json() - Loki's error responses aren't
+    // guaranteed the same JSON shape as success (sometimes plain text).
     const text = await response.text();
 
     if (!response.ok) {
@@ -294,11 +282,9 @@ function createMcpServer(): Server {
   return server;
 }
 
-// Stateless mode (sessionIdGenerator: undefined) with a fresh Server +
-// transport pair per request - same shell as mcp-servers/oracle/src/server.ts, for the
-// same reason (the SDK's own reference stateless Streamable HTTP server;
-// no session state worth sharing between calls, and sharing one pair would
-// just mean concurrent requests fighting over the same transport).
+// Stateless mode: fresh Server+transport pair per request, same shape and
+// reason as oracle/src/server.ts - no session state to share, and reusing
+// one pair would mean requests fighting over it.
 const httpServer = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
   if (url.pathname !== "/mcp") {

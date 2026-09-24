@@ -5,30 +5,23 @@ import { homedir } from "node:os";
 import { z } from "zod";
 import type { Plugin, ToolContext, ToolResult } from "@opencode-ai/plugin";
 
-// permission.ask exists in @opencode-ai/plugin's type definitions but is
-// never actually dispatched by opencode's runtime (verified against the
-// real dev-branch source, not just the docs/types) - so it cannot be used
-// to intercept allow/ask/deny decisions. tool.execute.before is the real,
-// working interception point: it fires unconditionally before the tool's
-// own permission check runs, and throwing inside it blocks the call
-// outright (same mechanism the official .env-protection example plugin
-// uses). That gives us the layering the user asked for:
-//   - config says "allow" -> review still runs first; only a clean
-//     "allow" verdict lets it fall through to the real auto-run.
-//   - config says "ask"   -> review runs before the human is ever
-//     prompted; a "block" verdict short-circuits before that prompt.
-//   - config says "deny"  -> review still runs (and gets logged) even
-//     though the config's own deny wins either way - we can only ever
-//     ADD a block here, never remove one the config would apply later.
+// permission.ask exists in the plugin types but is never dispatched by
+// opencode's runtime (verified against dev-branch source) - so tool.execute.before
+// is the real interception point instead: it fires before the tool's own
+// permission check, and throwing blocks the call outright (same mechanism the
+// official .env-protection example uses). This layers under the config:
+//   - allow -> review runs first; only a clean verdict lets it through.
+//   - ask   -> review runs before the human is prompted; block short-circuits it.
+//   - deny  -> review still runs and logs, but can only ADD a block, never
+//     remove the config's own deny.
 
 // Tool names that get an LLM safety review before they're allowed to run.
 // Extend this to gate more tools (e.g. "edit", "webfetch").
 const GATED_TOOLS = new Set(["bash"]);
 
-// If the review call itself fails (model server down, network error,
-// timeout) this decides what happens: true = let the command through
-// (an availability failure isn't a security verdict, and fail-closed
-// here would brick every bash call including the ones needed to debug
+// If the review call fails (server down, network error, timeout): true lets
+// the command through (an availability failure isn't a security verdict, and
+// fail-closed would brick every bash call including the ones needed to debug
 // why review is down). Flip to false for stricter fail-closed behavior.
 const FAIL_OPEN_ON_ERROR = true;
 
@@ -52,22 +45,17 @@ async function logReview(entry: Record<string, unknown>) {
 }
 
 // Custom tool the review-gate agent uses to record its verdict as a real
-// function call, verified enabled on this deployment's model (see
-// deploy/opencode.json.example's "review_verdict" permission: denied
-// globally, allowed only for the "review-gate" agent - a plugin-registered
-// tool is otherwise available to every agent by name, same as a built-in
-// one, per docs/opencode-docs-reference/custom-tools.mdx). Keyed by review
-// session ID so concurrent reviews (multiple gated tool calls in flight at
-// once, each with its own one-shot session) never clobber each other.
+// function call (confirmed enabled on this deployment's model - see
+// deploy/opencode.json.example's "review_verdict" permission, denied globally
+// and re-allowed only for "review-gate"). Keyed by session ID so concurrent
+// reviews never clobber each other.
 //
-// Built as a plain object (the documented alternative to @opencode-ai/plugin's
-// `tool()` helper - see docs/opencode-docs-reference/custom-tools.mdx's
-// "Arguments" section) rather than calling `tool()` itself, because every
-// other plugin in this repo only ever imports @opencode-ai/plugin's *types*
-// (erased at build time, zero runtime footprint) - `tool()` is a real
-// runtime value, and pulling it in would make this the one plugin that
-// actually needs @opencode-ai/plugin installed to run. `zod` alone (already
-// a real dependency below, needed for the args schema regardless) avoids that.
+// Built as a plain object rather than @opencode-ai/plugin's `tool()` helper
+// (the documented alternative - see custom-tools.mdx's "Arguments" section):
+// every other plugin here only imports @opencode-ai/plugin's types (erased at
+// build time), and `tool()` is a real runtime value that would make this the
+// one plugin actually needing the package installed. `zod` alone (already
+// needed for the schema) avoids that.
 const VERDICT_TOOL_NAME = "review_verdict";
 const pendingVerdicts = new Map<string, { allow: boolean; reason?: string }>();
 
@@ -97,19 +85,13 @@ or
 BLOCK: <one short sentence explaining why>`;
 
 export const LlmReviewGate: Plugin = async ({ client }) => {
-  // A session is opencode's only unit of model invocation (there's no
-  // stateless "just complete this text" endpoint) - but it's also a
-  // stateful conversation: every session.prompt() call appends to that
-  // session's own message history, which then gets replayed as context on
-  // every later call to the same session. A single long-lived review
-  // session (the previous design) would grow that history by one
-  // command+verdict turn per gated tool call for as long as the plugin
-  // instance lives, quietly inflating token cost per review and eventually
-  // contradicting REVIEW_SYSTEM_PROMPT's own "judge this one command in
-  // isolation, with no other context" framing. So instead: one throwaway
-  // session per review, deleted right after - session.create/delete are
-  // cheap metadata calls, not model calls, so this doesn't add a second
-  // LLM round trip, only a bit of bookkeeping.
+  // A session is opencode's only unit of model invocation, and it's stateful:
+  // every prompt() call appends to that session's history, replayed as context
+  // on the next call. A single long-lived review session (the earlier design)
+  // would grow that history every gated call, inflating cost and contradicting
+  // REVIEW_SYSTEM_PROMPT's "judge this command in isolation" framing. So:
+  // one throwaway session per review, deleted right after - create/delete are
+  // cheap metadata calls, not model calls, so no second LLM round trip.
   const reviewSessionIDs = new Set<string>();
 
   async function review(command: string) {
@@ -123,20 +105,13 @@ export const LlmReviewGate: Plugin = async ({ client }) => {
       const res = await client.session.prompt({
         path: { id: sessionID },
         body: {
-          // Verified against opencode dev-branch source
-          // (packages/opencode/src/session/llm/request.ts): the request's
-          // `system` field does NOT replace an agent's configured `prompt` -
-          // it's appended after it. Without an explicit `agent` here this
-          // session would inherit whichever primary agent (build/plan/general)
-          // is default, and in this deployment that means the full
-          // system-prompt.txt persona ("you are opencode, a CLI coding
-          // agent...") would run *ahead of* REVIEW_SYSTEM_PROMPT, competing
-          // with the review instructions. "review-gate" (see
-          // deploy/opencode.json.example) has no `prompt` override - so it
-          // falls back to opencode's generic per-model default instead - and
-          // denies every tool permission except `review_verdict`, so the
-          // model's only real option is to call that tool rather than reach
-          // for bash/edit/etc.
+          // Verified against opencode dev-branch source (session/llm/request.ts):
+          // `system` is appended after an agent's configured `prompt`, not a
+          // replacement. Without an explicit `agent` here, this session would
+          // inherit the default primary agent and run system-prompt.txt's full
+          // persona ahead of REVIEW_SYSTEM_PROMPT, competing for attention.
+          // "review-gate" has no `prompt` override and denies every tool except
+          // `review_verdict`, so calling that tool is the model's only option.
           agent: "review-gate",
           system: REVIEW_SYSTEM_PROMPT,
           parts: [{ type: "text", text: `Command:\n${command}` }],
