@@ -148,7 +148,7 @@ Per-server specifics:
 | | oracle (step 6) | loki (step 7) | java-lsp (step 8) | spring-lsp (step 9) |
 |---|---|---|---|---|
 | Package | `@kealthas-dev/opencode-mcp-oracle` | `@kealthas-dev/opencode-mcp-loki` | `@kealthas-dev/opencode-mcp-java-lsp` | `@kealthas-dev/opencode-mcp-spring-lsp` |
-| Prerequisites | none | none | `python3` on `PATH` (not vendored — see step 8 if missing) + JDK 21+ `java`, separate from whatever JDK the analyzed project targets (a vendored JDK covers this if it's missing — see step 8) | JDK 21+ `java` on `PATH` (no `python3` needed; same vendored-JDK fallback as java-lsp) |
+| Prerequisites | none | none | `python3` + JDK 21+ `java` on `PATH`, separate from whatever JDK the analyzed project targets — neither confirmed present on the actual target machine yet | JDK 21+ `java` on `PATH` (no `python3` needed) |
 | Config env var | `ORACLE_CONFIG_ENV` | `LOKI_CONFIG_ENV` | `JAVA_LSP_CONFIG_ENV` | `SPRING_LSP_CONFIG_ENV` |
 | Config file keys | `ORACLE_CONNECT_STRING`, `ORACLE_USER`, `ORACLE_PASSWORD` (required); `ORACLE_DEFAULT_SCHEMA` (optional — sets the session's default schema; `oracle_query`'s own `schema` argument overrides it per call) | `LOKI_BASE_URL` (required); `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` (optional, only if that instance requires them); `LOKI_VIA_GRAFANA`/`LOKI_GRAFANA_DATASOURCE_ID` (optional — set when Loki is only reachable through Grafana's own datasource proxy, not directly; see step 7 below) | `JAVA_LSP_WORKSPACE_ROOT` (project to analyze), `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch dir, not the project root) — both required | `SPRING_LSP_WORKSPACE_ROOT` (project to analyze, required) |
 | Default port / override key | `8090` / `ORACLE_MCP_PORT` | `8091` / `LOKI_MCP_PORT` | `8092` / `JAVA_LSP_MCP_PORT` | `8093` / `SPRING_LSP_MCP_PORT` |
@@ -247,18 +247,7 @@ python3 --version
 java -version
 ```
 
-**If `java -version` is missing or below 21**, a Windows x64 JDK 21 (Eclipse Temurin) is available through the same internal npm registry as everything else — split across three small `npm pack` calls rather than one, since the whole JDK together (~195MB) exceeds `registry.npmjs.org`'s own real publish-payload ceiling (see `docs/lessons-learned.md`), but each individual part comfortably doesn't:
-
-```bash
-npm pack @kealthas-dev/opencode-toolkit@jdk-part1
-npm pack @kealthas-dev/opencode-toolkit@jdk-part2
-npm pack @kealthas-dev/opencode-toolkit@jdk-part3
-mkdir -p /tmp/jdk-parts && for f in kealthas-dev-opencode-toolkit-0.0.*.tgz; do tar -xzf "$f" -C /tmp/jdk-parts --strip-components=1; done
-cat /tmp/jdk-parts/OpenJDK21U-jdk_x64_windows_hotspot_*.zip.part-* > /tmp/jdk21.zip
-unzip /tmp/jdk21.zip -d ~/jdk21
-```
-
-No system install/PATH change needed — point `JAVA_EXECUTABLE` in the config file below at `~/jdk21/jdk-21*/bin/java.exe` instead (adjust the inner folder name to whatever the zip actually extracted). These three package versions are reached by dist-tag (`jdk-part1`/`jdk-part2`/`jdk-part3`, not by a version number you need to know — see `scripts/publish-jdk-parts.sh` if curious) and are never `latest`, so they don't affect a normal `npm install`/`npm pack` of this package; they exist purely to carry one chunk each. If this internal registry can't reach them for some reason, fall back to a manual transfer instead: download a JDK 21+ Windows build on a machine with public internet and copy it over (USB/internal file share/however this machine's other software already arrives).
+**If `java -version` is missing or below 21**, the internal npm registry (this doc's intro) doesn't help — a JDK isn't an npm package. Get a JDK 21+ Windows build (Temurin/Corretto/Microsoft Build of OpenJDK all work — jdtls doesn't care which vendor) onto this machine the same way anything else without an internal-registry path gets here: download the zip on a machine with public internet, transfer it over (USB/internal file share/however this machine's other software already arrives), unzip anywhere. No system install/PATH change needed — point `JAVA_EXECUTABLE` in the config file below at `<unzip-dir>/bin/java.exe` instead.
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-java-lsp
@@ -398,7 +387,7 @@ State plainly, as a checklist:
 - Did `opencode.json` already exist (merged) or get created fresh (copied)?
 - Did step 11 confirm the custom prompt is actually being sent? If not, what did the output look like instead?
 - Which `plugin` entries got installed (step 4, step 5, both, neither), and did `npm install` against this machine's registry succeed cleanly for them?
-- Did steps 6-9's `npm install` succeed against the internal registry? For steps 8/9: was `python3`/JDK 21+ `java` already on `PATH`, or did the vendored JDK (step 8's note) need pulling via `npm pack`/reassembling and `JAVA_EXECUTABLE` need setting?
+- Did steps 6-9's `npm install` succeed against the internal registry? For steps 8/9: were `python3`/JDK 21+ `java` already present, or did they need installing?
 - If step 10 was installed: did `npm install -g` put `mcp-server-memory` on `PATH`? Did the model actually call the memory tools during step 11, or does `deploy/system-prompt.txt`'s `# Memory` section need stronger wording for this model?
 
 ## Updating steps 6-9's MCP servers later

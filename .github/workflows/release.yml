@@ -56,9 +56,6 @@ jobs:
             (cd "$dir" && npm pkg set version="$VERSION" && npm publish --access public)
           done
 
-      - name: Publish vendored JDK parts
-        run: ./scripts/publish-jdk-parts.sh
-
       - name: Build zip with .git included
         run: |
           repo="${GITHUB_REPOSITORY##*/}"
