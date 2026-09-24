@@ -52,7 +52,7 @@ Historical debugging/verification lessons live in [docs/lessons-learned.md](docs
 | `tests/` | test suite — `./tests/run-all.sh` is the entry point |
 | `memory/` | git-tracked project memory |
 | `scripts/` | release/maintenance scripts |
-| `vendor/` | binaries vendored at the root package level because they're shared across multiple `mcp-servers/*` packages rather than owned by one — currently just the Windows x64 JRE 21 java-lsp/spring-lsp both need; see SETUP.md step 8 and `scripts/fetch-jdk.sh` |
+| `vendor/` | binaries vendored at the root package level because they're shared across multiple `mcp-servers/*` packages rather than owned by one — currently just the Windows x64 JDK 21 java-lsp/spring-lsp both need, split into <100MB parts (GitHub's per-file limit); see SETUP.md step 8 and `scripts/fetch-jdk.sh` |
 
 ## Deep reference
 
