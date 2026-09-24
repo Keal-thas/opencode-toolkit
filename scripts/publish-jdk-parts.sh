@@ -81,4 +81,24 @@ EOF
   echo "Publishing ${PKG_NAME}@${version} (dist-tag ${tag}, ${part_name}, $(du -h "$part" | cut -f1))" >&2
   (cd "$work_dir" && npm publish --access public --tag "$tag")
   rm -rf "$work_dir"
+
+  # Wait for the registry to actually confirm this version before starting
+  # the next publish, rather than firing all three back-to-back - the
+  # 0.0.1 incident (see docs/lessons-learned.md) was three publishes to
+  # the same package name within ~15 seconds of each other, and the first
+  # one got stuck server-side in a way a bare "npm publish exited 0"
+  # never caught. This also surfaces a stuck part immediately, as a clear
+  # failed step, instead of discovering it minutes later.
+  echo "Waiting for ${PKG_NAME}@${version} to become visible before continuing..." >&2
+  for attempt in $(seq 1 20); do
+    if npm view "${PKG_NAME}@${version}" version >/dev/null 2>&1; then
+      echo "  confirmed visible" >&2
+      break
+    fi
+    if [ "$attempt" -eq 20 ]; then
+      echo "${PKG_NAME}@${version} still not visible after 5 minutes - treating as stuck, aborting." >&2
+      exit 1
+    fi
+    sleep 15
+  done
 done
