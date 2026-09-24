@@ -1,8 +1,21 @@
-# Intentionally empty (must exist, content doesn't matter). Without this
-# file, `npm pack`/`publish` falls back to treating .gitignore as its own
-# exclusion list - which would silently drop docs/opencode-docs-reference/
+# Must exist (even before the two real entries below were added) so
+# `npm pack`/`publish` doesn't fall back to treating .gitignore as its own
+# exclusion list - that would silently drop docs/opencode-docs-reference/
 # and deploy/models-dev-snapshot.json, both gitignored-but-git-tracked on
 # purpose (see CLAUDE.md) and both things the offline target machine
-# actually needs. scripts/publish-npm.sh's git-archive step already
-# guarantees only git-tracked content reaches npm in the first place, so
-# there's nothing left for this file to actually exclude.
+# actually needs.
+#
+# The two entries below exclude mcp-servers/java-lsp's and
+# mcp-servers/spring-lsp's own vendored jdtls/spring-boot-language-server
+# tarballs (~51MB/~81MB) from THIS root package specifically - installing
+# either MCP server always goes through its own separately-published
+# @kealthas-dev/opencode-mcp-java-lsp/-spring-lsp package (which whitelists
+# vendor/*.tar.gz in its own package.json "files" field), never through the
+# root package, so carrying a second copy of either tarball here is pure
+# waste. This stopped being cosmetic 2026-09-24: once vendor/ at the repo
+# root also started carrying the ~200MB split JDK (see CLAUDE.md's `vendor/`
+# row), the root package's total size tripped npm's own publish payload
+# limit (real failure: 333.5MB packed -> 413 Payload Too Large) - trimming
+# this redundant ~132MB is what brings it back under.
+mcp-servers/java-lsp/vendor/
+mcp-servers/spring-lsp/vendor/
