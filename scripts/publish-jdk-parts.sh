@@ -32,10 +32,19 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 PKG_NAME="@kealthas-dev/opencode-toolkit"
-# Reserved for JDK-part publishes only (0.0.1, 0.0.2, ...) - always below
-# the real 1.x.y release line release.yml bumps on every tag, so these
-# never become `latest` even by accident.
+# Reserved for JDK-part publishes only (0.0.<offset+1>, 0.0.<offset+2>, ...)
+# - always below the real 1.x.y release line release.yml bumps on every
+# tag, so these never become `latest` even by accident.
 PART_BASE_VERSION="0.0"
+# 0.0.1 (the first-ever attempt, 2026-09-24) got stuck on npm's backend in
+# a "staged but never finalized" state - neither visible via npm view/pack
+# nor re-publishable (a real `npm publish` retry hit a genuine
+# `409 Conflict - Cannot publish over previously staged version "0.0.1"`,
+# ~20 minutes after the original publish reported success). npm gives no
+# way to clear or reclaim a version number once this happens, so 0.0.1 is
+# permanently burned - bump this offset (never reuse a burned number) if a
+# future part ever lands in the same stuck state.
+PART_VERSION_OFFSET=10
 
 i=0
 for part in vendor/*.zip.part-*; do
@@ -44,7 +53,7 @@ for part in vendor/*.zip.part-*; do
     exit 0
   fi
   i=$((i + 1))
-  version="${PART_BASE_VERSION}.${i}"
+  version="${PART_BASE_VERSION}.$((i + PART_VERSION_OFFSET))"
   tag="jdk-part${i}"
   part_name=$(basename "$part")
 

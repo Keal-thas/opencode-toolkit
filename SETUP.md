@@ -258,7 +258,7 @@ cat /tmp/jdk-parts/OpenJDK21U-jdk_x64_windows_hotspot_*.zip.part-* > /tmp/jdk21.
 unzip /tmp/jdk21.zip -d ~/jdk21
 ```
 
-No system install/PATH change needed — point `JAVA_EXECUTABLE` in the config file below at `~/jdk21/jdk-21*/bin/java.exe` instead (adjust the inner folder name to whatever the zip actually extracted). These three package versions are `0.0.1`/`0.0.2`/`0.0.3` under dist-tags `jdk-part1`/`jdk-part2`/`jdk-part3` — never `latest`, so they don't affect a normal `npm install`/`npm pack` of this package; they exist purely to carry one chunk each (see `scripts/publish-jdk-parts.sh`). If this internal registry can't reach them for some reason, fall back to a manual transfer instead: download a JDK 21+ Windows build on a machine with public internet and copy it over (USB/internal file share/however this machine's other software already arrives).
+No system install/PATH change needed — point `JAVA_EXECUTABLE` in the config file below at `~/jdk21/jdk-21*/bin/java.exe` instead (adjust the inner folder name to whatever the zip actually extracted). These three package versions are reached by dist-tag (`jdk-part1`/`jdk-part2`/`jdk-part3`, not by a version number you need to know — see `scripts/publish-jdk-parts.sh` if curious) and are never `latest`, so they don't affect a normal `npm install`/`npm pack` of this package; they exist purely to carry one chunk each. If this internal registry can't reach them for some reason, fall back to a manual transfer instead: download a JDK 21+ Windows build on a machine with public internet and copy it over (USB/internal file share/however this machine's other software already arrives).
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-java-lsp
