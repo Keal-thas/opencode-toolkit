@@ -247,6 +247,8 @@ python3 --version
 java -version
 ```
 
+**If `java -version` is missing or below 21**, the internal npm registry (this doc's intro) doesn't help — a JDK isn't an npm package. Get a JDK 21+ Windows build (Temurin/Corretto/Microsoft Build of OpenJDK all work — jdtls doesn't care which vendor) onto this machine the same way anything else without an internal-registry path gets here: download the zip on a machine with public internet, transfer it over (USB/internal file share/however this machine's other software already arrives), unzip anywhere. No system install/PATH change needed — point `JAVA_EXECUTABLE` in the config file below at `<unzip-dir>/bin/java.exe` instead.
+
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-java-lsp
 ```
@@ -385,7 +387,7 @@ State plainly, as a checklist:
 - Did `opencode.json` already exist (merged) or get created fresh (copied)?
 - Did step 11 confirm the custom prompt is actually being sent? If not, what did the output look like instead?
 - Which `plugin` entries got installed (step 4, step 5, both, neither), and did `npm install` against this machine's registry succeed cleanly for them?
-- Did steps 6-9's `npm install` succeed against the internal registry? For steps 8/9: were `python3`/JDK 21+ `java` already present, or did they need installing?
+- Did steps 6-9's `npm install` succeed against the internal registry? For steps 8/9: were `python3`/JDK 21+ `java` already present, or did they need manually transferring in (see step 8's note)?
 - If step 10 was installed: did `npm install -g` put `mcp-server-memory` on `PATH`? Did the model actually call the memory tools during step 11, or does `deploy/system-prompt.txt`'s `# Memory` section need stronger wording for this model?
 
 ## Updating steps 6-9's MCP servers later
