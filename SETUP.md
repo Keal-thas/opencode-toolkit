@@ -150,7 +150,7 @@ Per-server specifics:
 | Package | `@kealthas-dev/opencode-mcp-oracle` | `@kealthas-dev/opencode-mcp-loki` | `@kealthas-dev/opencode-mcp-java-lsp` | `@kealthas-dev/opencode-mcp-spring-lsp` |
 | Prerequisites | none | none | `python3` + JDK 21+ `java` on `PATH`, separate from whatever JDK the analyzed project targets — neither confirmed present on the actual target machine yet | JDK 21+ `java` on `PATH` (no `python3` needed) |
 | Config env var | `ORACLE_CONFIG_ENV` | `LOKI_CONFIG_ENV` | `JAVA_LSP_CONFIG_ENV` | `SPRING_LSP_CONFIG_ENV` |
-| Config file keys | `ORACLE_CONNECT_STRING`, `ORACLE_USER`, `ORACLE_PASSWORD` (required); `ORACLE_DEFAULT_SCHEMA` (optional — sets the session's default schema; `oracle_query`'s own `schema` argument overrides it per call) | `LOKI_BASE_URL` (required); `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` (optional, only if that instance requires them) | `JAVA_LSP_WORKSPACE_ROOT` (project to analyze), `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch dir, not the project root) — both required | `SPRING_LSP_WORKSPACE_ROOT` (project to analyze, required) |
+| Config file keys | `ORACLE_CONNECT_STRING`, `ORACLE_USER`, `ORACLE_PASSWORD` (required); `ORACLE_DEFAULT_SCHEMA` (optional — sets the session's default schema; `oracle_query`'s own `schema` argument overrides it per call) | `LOKI_BASE_URL` (required); `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` (optional, only if that instance requires them); `LOKI_VIA_GRAFANA`/`LOKI_GRAFANA_DATASOURCE_ID` (optional — set when Loki is only reachable through Grafana's own datasource proxy, not directly; see step 7 below) | `JAVA_LSP_WORKSPACE_ROOT` (project to analyze), `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch dir, not the project root) — both required | `SPRING_LSP_WORKSPACE_ROOT` (project to analyze, required) |
 | Default port / override key | `8090` / `ORACLE_MCP_PORT` | `8091` / `LOKI_MCP_PORT` | `8092` / `JAVA_LSP_MCP_PORT` | `8093` / `SPRING_LSP_MCP_PORT` |
 | Passthrough / notes | full passthrough, no read-only enforcement, by deliberate design — see `mcp-servers/oracle/README.md` | full passthrough, any LogQL, by deliberate design — see `mcp-servers/loki/README.md` | vendored `jdtls` (Eclipse JDT Language Server) ships inside the npm package — nothing extra to download | vendored `spring-boot-language-server` ships inside the npm package; classpath-aware richness needs pairing with a `java-lsp` jdtls instance via a "classpath listener" not implemented yet — see `mcp-servers/TODO.md` |
 
@@ -205,6 +205,22 @@ cat > ~/.config/kealthas-dev/opencode-mcp-loki/config.json <<'EOF'
 }
 EOF
 ```
+
+**If Loki has no directly reachable port of its own and the only way in is Grafana's own datasource proxy** — check this first if the config above returns a redirect-to-login error instead of data — point `LOKI_BASE_URL` at Grafana's own URL instead of Loki's, and add `LOKI_VIA_GRAFANA`/`LOKI_GRAFANA_DATASOURCE_ID`/`LOKI_USERNAME`/`LOKI_PASSWORD` (a real Grafana user's Basic Auth, not a Loki credential):
+
+```bash
+cat > ~/.config/kealthas-dev/opencode-mcp-loki/config.json <<'EOF'
+{
+  "LOKI_BASE_URL": "http://<grafana-host>:3000",
+  "LOKI_VIA_GRAFANA": true,
+  "LOKI_GRAFANA_DATASOURCE_ID": "1",
+  "LOKI_USERNAME": "...",
+  "LOKI_PASSWORD": "..."
+}
+EOF
+```
+
+See `mcp-servers/loki/README.md`'s Configuration section for the full field list and how to find the datasource ID.
 
 ```bash
 opencode-mcp-loki

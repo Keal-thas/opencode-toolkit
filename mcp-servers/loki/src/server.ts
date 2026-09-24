@@ -150,7 +150,22 @@ async function lokiFetch(path: string, params?: Record<string, unknown>): Promis
   if (lokiConfig.LOKI_ORG_ID) headers["X-Scope-OrgID"] = lokiConfig.LOKI_ORG_ID;
 
   try {
-    const response = await fetch(url, { headers });
+    // Manual redirect handling: a Grafana instance rejecting the request
+    // (missing/expired auth, or LOKI_VIA_GRAFANA off when it should be on)
+    // responds with a 302 to its own login page, not a 401. Node's fetch
+    // follows that by default, landing on the login page's HTML with a
+    // misleadingly "successful" 200 status - the JSON.parse below would
+    // then fail with an opaque syntax error instead of a diagnosable one.
+    const response = await fetch(url, { headers, redirect: "manual" });
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location") ?? "(no Location header)";
+      const hint = lokiConfig.LOKI_VIA_GRAFANA
+        ? "check LOKI_USERNAME/LOKI_PASSWORD (must be a real Grafana user's Basic Auth) and LOKI_GRAFANA_DATASOURCE_ID"
+        : "if this Loki is only reachable through Grafana's datasource proxy, set LOKI_VIA_GRAFANA: true (see README's Configuration section)";
+      return { success: false, error: `Request was redirected (${response.status}) to ${location} instead of returning data - ${hint}.` };
+    }
+
     // Text first, not response.json() - Loki's error responses aren't
     // guaranteed the same JSON shape as success (sometimes plain text).
     const text = await response.text();
