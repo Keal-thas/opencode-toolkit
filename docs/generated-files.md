@@ -17,4 +17,4 @@ The spring-lsp and java-lsp vendor tarballs are ordinary tracked files, not giti
 
 ## Staleness enforcement
 
-`.husky/pre-push` re-runs all four fetch scripts above on every `git push` and blocks the push if any of them produce a change not yet committed — see the hook's own header comment for the fail-open behavior when a check can't run (no network/Docker/Homebrew). Bypass with `git push --no-verify` when needed.
+`./scripts/refresh-generated-files.sh` re-runs all four fetch scripts above and auto-commits any drift under the `sync-bot <sync-bot@localhost>` identity, so `git log`/`git blame` show it as a mechanical refresh rather than a hand-edit. Not wired into a git hook — these downloads (50-80MB vendor tarballs, a Docker-backed models snapshot) are too slow and too network/Docker/Homebrew-dependent to run on every commit or push, so run it by hand occasionally (e.g. before cutting a release) instead. Each fetch step fails open: a script that can't run (no network/Docker/Homebrew, upstream API hiccup) is skipped with a warning rather than aborting the rest.
