@@ -2,7 +2,7 @@
 
 本地跑,不用 docker sandbox —— 沙箱镜像没装 JDK,这两个服务的测试本来就是在宿主机跑的（见 `mcp-servers/TODO.md`）。
 
-前提:JDK 21+(`java -version`);java-lsp 额外需要 `python3`。目标机器没有 JDK21 的话,见 SETUP.md 第 8 步(手动下载一份 JDK zip 传上去,`JAVA_EXECUTABLE` 指过去——vendor 进仓库这条路试过了,会把根包 npm 发布搞挂,已经回退,见 `docs/lessons-learned.md`)。
+前提:JDK 21+(`java -version`);java-lsp 额外需要 `python3`。目标机器没有 JDK21 的话,见 SETUP.md 第 8 步(手动下载一份 JDK zip 传上去,`JAVA_EXECUTABLE` 指过去)。
 
 ## java-lsp
 
