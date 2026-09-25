@@ -1,0 +1,20 @@
+{
+  "name": "@kealthas-dev/opencode-gitbash-edit-path-fix",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "gitbash-edit-path-fix.ts opencode plugin (rewrites Git-Bash/MSYS/Cygwin/WSL-style absolute paths like \"/c/Users/x\" to \"C:/Users/x\" before the built-in \"edit\" tool runs on Windows, working around anomalyco/opencode#22799 whose fix in #22800 was closed without merging), published to npm so opencode's own npm-plugin loader can install it directly from a bare package name in opencode.json's plugin array - see CLAUDE.md. Written in TypeScript against @opencode-ai/plugin's Plugin type.",
+  "main": "gitbash-edit-path-fix.ts",
+  "files": ["gitbash-edit-path-fix.ts"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Keal-thas/opencode-toolkit.git",
+    "directory": "plugins/gitbash-edit-path-fix"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.0.0",
+    "@types/node": "^22.0.0"
+  }
+}
