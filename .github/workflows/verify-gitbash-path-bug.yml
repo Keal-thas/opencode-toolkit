@@ -22,7 +22,7 @@ jobs:
           echo "git: $(which git)"
           echo "node: $(node --version)"
 
-      - name: Reproduce edit.ts's path.isAbsolute(...) ? ... : path.join(...) branch
+      - name: "Reproduce edit.ts's path.isAbsolute(...) ? ... : path.join(...) branch"
         shell: pwsh
         run: |
           $script = @'
