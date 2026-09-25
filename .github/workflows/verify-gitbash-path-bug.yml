@@ -1,0 +1,117 @@
+name: verify-gitbash-path-bug
+
+# Manual-trigger-only diagnostic (workflow_dispatch, never runs on push/PR):
+# confirms on a real Windows kernel (not just Node's platform-independent
+# path.win32 string math) what actually happens when a Git-Bash-style
+# absolute path like "/c/opencode-verify/marker.txt" is handed straight to
+# fs.writeFile the way packages/opencode/src/tool/edit.ts does in
+# anomalyco/opencode - see docs/lessons-learned.md's 2026-09-26 entry for the
+# confirmed result and TODO.md's gitbash-edit-path-fix entry for what's still
+# open (write/apply_patch have the same/an analogous bug and aren't checked
+# here yet). Kept around as a reusable manual check - e.g. to re-run after an
+# opencode upgrade, or to extend to write/apply_patch - rather than
+# recreated from scratch each time. Free to run: public repo, GitHub-hosted
+# runner minutes are unmetered regardless of OS (see docs/free-tier-limits.md).
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - name: Environment sanity check (Git Bash present, Node version)
+        shell: bash
+        run: |
+          echo "pwd (bash): $(pwd)"
+          echo "git: $(which git)"
+          echo "node: $(node --version)"
+
+      - name: "Reproduce edit.ts's path.isAbsolute(...) ? ... : path.join(...) branch"
+        shell: pwsh
+        run: |
+          $script = @'
+          const path = require("path");
+          const fs = require("fs");
+
+          const cwd = process.cwd();
+          const currentDrive = cwd.slice(0, 2);
+          console.log("cwd:", cwd);
+          console.log("current drive:", currentDrive);
+
+          // The exact literal a real Git Bash `pwd`/model-issued filePath would produce.
+          const gitBashPath = "/c/opencode-verify/marker.txt";
+          console.log("path.isAbsolute(gitBashPath):", path.isAbsolute(gitBashPath));
+
+          // packages/opencode/src/tool/edit.ts:80-82, verbatim:
+          //   const filePath = path.isAbsolute(params.filePath) ? params.filePath : path.join(instance.directory, params.filePath)
+          const instanceDirectory = "D:\\fake-workspace-never-used-because-isAbsolute-is-true";
+          const filePath = path.isAbsolute(gitBashPath) ? gitBashPath : path.join(instanceDirectory, gitBashPath);
+          console.log("edit.ts would use filePath:", filePath);
+
+          // What Node itself thinks this resolves to (pure string math, but the
+          // same logic fs.* consults internally) - the direct answer, not a guess.
+          const resolved = path.resolve(filePath);
+          console.log("path.resolve(filePath):", resolved);
+
+          fs.mkdirSync(path.dirname(filePath), { recursive: true });
+          fs.writeFileSync(filePath, "opencode-gitbash-path-bug-marker");
+          console.log("wrote a file using that literal string as the fs.* path argument");
+
+          // Belt-and-suspenders: recursively search both real drives' roots for the
+          // marker file, in case path.resolve's answer and fs's real target diverge.
+          function findMarker(root) {
+            const found = [];
+            function walk(dir, depth) {
+              if (depth > 4) return;
+              let entries;
+              try {
+                entries = fs.readdirSync(dir, { withFileTypes: true });
+              } catch {
+                return;
+              }
+              for (const entry of entries) {
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) walk(full, depth + 1);
+                else if (entry.name === "marker.txt") found.push(full);
+              }
+            }
+            walk(root, 0);
+            return found;
+          }
+          const foundOnC = findMarker("C:\\");
+          const foundOnD = fs.existsSync("D:\\") ? findMarker("D:\\") : [];
+          console.log("marker.txt found under C:\\ ->", JSON.stringify(foundOnC));
+          console.log("marker.txt found under D:\\ ->", JSON.stringify(foundOnD));
+
+          const intendedLocation = "C:\\opencode-verify\\marker.txt";
+          const intendedExists = fs.existsSync(intendedLocation);
+          const allFound = [...foundOnC, ...foundOnD];
+          console.log("intended C:\\ (" + intendedLocation + ") exists:", intendedExists);
+
+          const verdict = intendedExists
+            ? "NOT REPRODUCED: it landed at the intended C:\\ location."
+            : allFound.length > 0
+              ? "CONFIRMED: the Git-Bash path landed somewhere other than C:\\opencode-verify\\ - found at: " + allFound.join(", ")
+              : "INCONCLUSIVE: marker.txt not found anywhere searched - see full log for where fs.writeFileSync actually wrote to (or whether it silently no-op'd).";
+          console.log("VERDICT:", verdict);
+
+          const summary = [
+            "## Git-Bash path bug verification",
+            "",
+            "| field | value |",
+            "|---|---|",
+            "| cwd | `" + cwd + "` |",
+            "| current drive | `" + currentDrive + "` |",
+            "| gitBashPath (model-issued) | `" + gitBashPath + "` |",
+            "| path.isAbsolute(gitBashPath) | `" + path.isAbsolute(gitBashPath) + "` |",
+            "| filePath edit.ts would use | `" + filePath + "` |",
+            "| path.resolve(filePath) | `" + resolved + "` |",
+            "| intended C:\\ exists (`" + intendedLocation + "`) | `" + intendedExists + "` |",
+            "| marker.txt found at | `" + JSON.stringify(allFound) + "` |",
+            "",
+            "**VERDICT:** " + verdict,
+            "",
+          ].join("\n");
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+          '@
+          $script | node -
