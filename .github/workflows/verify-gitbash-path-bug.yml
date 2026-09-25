@@ -1,0 +1,83 @@
+name: verify-gitbash-path-bug
+
+# One-off diagnostic, not part of normal CI: manually triggered only, never
+# runs on push/PR. Confirms on a real Windows kernel (not just Node's
+# platform-independent path.win32 string math) what actually happens when a
+# Git-Bash-style absolute path like "/c/opencode-verify/marker.txt" is handed
+# straight to fs.writeFile the way packages/opencode/src/tool/edit.ts does in
+# anomalyco/opencode - see docs/lessons-learned.md and TODO.md's
+# gitbash-edit-path-fix entry. This file is meant to be deleted once it's
+# answered that question, not kept as ongoing CI.
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - name: Environment sanity check (Git Bash present, Node version)
+        shell: bash
+        run: |
+          echo "pwd (bash): $(pwd)"
+          echo "git: $(which git)"
+          echo "node: $(node --version)"
+
+      - name: Reproduce edit.ts's path.isAbsolute(...) ? ... : path.join(...) branch
+        shell: pwsh
+        run: |
+          $script = @'
+          const path = require("path");
+          const fs = require("fs");
+
+          const cwd = process.cwd();
+          const currentDrive = cwd.slice(0, 2);
+          console.log("cwd:", cwd);
+          console.log("current drive:", currentDrive);
+
+          // The exact literal a real Git Bash `pwd`/model-issued filePath would produce.
+          const gitBashPath = "/c/opencode-verify/marker.txt";
+          console.log("path.isAbsolute(gitBashPath):", path.isAbsolute(gitBashPath));
+
+          // packages/opencode/src/tool/edit.ts:80-82, verbatim:
+          //   const filePath = path.isAbsolute(params.filePath) ? params.filePath : path.join(instance.directory, params.filePath)
+          const instanceDirectory = "D:\\fake-workspace-never-used-because-isAbsolute-is-true";
+          const filePath = path.isAbsolute(gitBashPath) ? gitBashPath : path.join(instanceDirectory, gitBashPath);
+          console.log("edit.ts would use filePath:", filePath);
+
+          fs.mkdirSync(path.dirname(filePath), { recursive: true });
+          fs.writeFileSync(filePath, "opencode-gitbash-path-bug-marker");
+          console.log("wrote a file using that literal string as the fs.* path argument");
+
+          const bugLocation = currentDrive + "\\opencode-verify\\marker.txt";
+          const intendedLocation = "C:\\opencode-verify\\marker.txt";
+          const bugExists = fs.existsSync(bugLocation);
+          const intendedExists = fs.existsSync(intendedLocation);
+          console.log("bug-location  (" + bugLocation + ") exists:", bugExists);
+          console.log("intended C:\\ (" + intendedLocation + ") exists:", intendedExists);
+
+          const verdict = bugExists && !intendedExists
+            ? "CONFIRMED: the Git-Bash path silently landed under the CURRENT drive (" + currentDrive + "), not C:\\ as intended."
+            : (intendedExists
+              ? "NOT REPRODUCED: it actually landed at the intended C:\\ location."
+              : "INCONCLUSIVE: neither location has the file - see full log.");
+          console.log("VERDICT:", verdict);
+
+          const summary = [
+            "## Git-Bash path bug verification",
+            "",
+            "| field | value |",
+            "|---|---|",
+            "| cwd | `" + cwd + "` |",
+            "| current drive | `" + currentDrive + "` |",
+            "| gitBashPath (model-issued) | `" + gitBashPath + "` |",
+            "| path.isAbsolute(gitBashPath) | `" + path.isAbsolute(gitBashPath) + "` |",
+            "| filePath edit.ts would use | `" + filePath + "` |",
+            "| bug-location exists (`" + bugLocation + "`) | `" + bugExists + "` |",
+            "| intended C:\\ exists (`" + intendedLocation + "`) | `" + intendedExists + "` |",
+            "",
+            "**VERDICT:** " + verdict,
+            "",
+          ].join("\n");
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+          '@
+          $script | node -
