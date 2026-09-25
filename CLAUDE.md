@@ -74,3 +74,4 @@ Read these when the task actually touches their area — not needed for everyday
 
 - [docs/deployment-environment.md](docs/deployment-environment.md) — the target machine, the model, opencode upstream source pointers. Before touching `deploy/`/`SETUP.md`.
 - [docs/npm-publishing.md](docs/npm-publishing.md) — how every package in this repo publishes together. Before cutting a release.
+- [docs/free-tier-limits.md](docs/free-tier-limits.md) — GitHub/npm/Docker Hub free-account limits and what actually applies to this repo. Before assuming something might hit a quota.
