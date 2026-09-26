@@ -26,6 +26,7 @@ mcp-servers/oracle/dist/
 mcp-servers/loki/dist/
 mcp-servers/java-lsp/dist/
 mcp-servers/spring-lsp/dist/
+mcp-servers/mysql/dist/
 
 # The extracted spring-boot-language-server (jar + ~170 lib/ jars, ~85MB
 # uncompressed) - mcp-servers/spring-lsp/src/server.ts extracts vendor/*.tar.gz into

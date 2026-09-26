@@ -21,11 +21,18 @@ services:
       - ORACLE_USER=${ORACLE_APP_USER:?set ORACLE_APP_USER in .env}
       - ORACLE_PASSWORD=${ORACLE_APP_USER_PASSWORD:?set ORACLE_APP_USER_PASSWORD in .env}
       - LOKI_BASE_URL=http://loki:3100
+      - MYSQL_HOST=mysql
+      - MYSQL_USER=${MYSQL_APP_USER:?set MYSQL_APP_USER in .env}
+      - MYSQL_PASSWORD=${MYSQL_APP_USER_PASSWORD:?set MYSQL_APP_USER_PASSWORD in .env}
+      - MYSQL_DATABASE=${MYSQL_APP_DATABASE:?set MYSQL_APP_DATABASE in .env}
+      - REDIS_HOST=redis
     networks:
       - default
       - oracle-net
       - loki-net
-    # No depends_on oracle/loki - it can't reach across compose projects; start them separately (see docker-notes.md).
+      - mysql-net
+      - redis-net
+    # No depends_on oracle/loki/mysql/redis - it can't reach across compose projects; start them separately (see docker-notes.md).
     stdin_open: true
     tty: true
     command: bash
@@ -36,4 +43,10 @@ networks:
     external: true
   loki-net:
     name: opencode-toolkit-loki-net
+    external: true
+  mysql-net:
+    name: opencode-toolkit-mysql-net
+    external: true
+  redis-net:
+    name: opencode-toolkit-redis-net
     external: true

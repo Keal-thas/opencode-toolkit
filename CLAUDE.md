@@ -63,7 +63,7 @@ Historical debugging/verification lessons live in [docs/lessons-learned.md](docs
 | `docker/` | dev/test sandbox — `.env` is intentionally committed, not secret; see `docker/docker-notes.md` |
 | `plugins/` | opencode plugins, one npm package each: `system-prompt-tools` (dumps the sent prompt), `hook-logger` (logs every hook event), `llm-review-gate` (LLM safety-gates `bash` calls) — see `docs/feature-points/02-04` and `docker/docker-notes.md`'s Plugin loading section |
 | `toolkits/` | scripts that drive opencode as a client, not a plugin or MCP server — `module-analysis/` so far, see its own README |
-| `mcp-servers/` | MCP servers, one per subdir (`oracle`, `loki`, `java-lsp`, `spring-lsp`) — see each one's own README, and `mcp-servers/TODO.md` |
+| `mcp-servers/` | MCP servers, one per subdir (`oracle`, `loki`, `java-lsp`, `spring-lsp`, `mysql`, `redis`) — see each one's own README, and `mcp-servers/TODO.md`. `redis/` has no code of its own, just docs for wiring in the official upstream package |
 | `docs/` | research notes, reference docs, the upstream opencode docs mirror |
 | `tests/` | test suite — `./tests/run-all.sh` is the entry point |
 | `memory/` | git-tracked project memory |
