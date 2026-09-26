@@ -1,0 +1,41 @@
+# Shared machine-wide fixture, same singleton rationale as oracle/loki (fixed-name project, started separately).
+name: opencode-toolkit-mysql
+
+services:
+  mysql:
+    image: mysql:${MYSQL_VERSION:?set MYSQL_VERSION in .env}
+    container_name: opencode-toolkit-mysql-test
+    ports:
+      # Host debugging only.
+      - "127.0.0.1:3306:3306"
+    environment:
+      # Official image convention: setting all three auto-creates APP_USER
+      # with full privileges on APP_DATABASE (not the restricted read-only
+      # grant README.md's "Recommended read-only account" section
+      # documents - that's a production deployment concern, verified by
+      # hand against this same image, not something the test fixture
+      # itself needs, since mysql.test.ts exercises the full read/write
+      # round trip and the READ ONLY transaction's own behavior, not the
+      # account-grants layer).
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      - MYSQL_DATABASE=${MYSQL_APP_DATABASE:?set MYSQL_APP_DATABASE in .env}
+      - MYSQL_USER=${MYSQL_APP_USER:?set MYSQL_APP_USER in .env}
+      - MYSQL_PASSWORD=${MYSQL_APP_USER_PASSWORD:?set MYSQL_APP_USER_PASSWORD in .env}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - mysql-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+volumes:
+  mysql-data:
+    name: opencode-toolkit-mysql-data
+
+networks:
+  mysql-net:
+    name: opencode-toolkit-mysql-net

@@ -1,0 +1,33 @@
+# Shared machine-wide fixture, same singleton rationale as oracle/loki/mysql (fixed-name project, started separately).
+name: opencode-toolkit-redis
+
+services:
+  redis:
+    image: redis:${REDIS_VERSION:?set REDIS_VERSION in .env}
+    container_name: opencode-toolkit-redis-test
+    ports:
+      # Host debugging only.
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+      # ACL users (default + readonlyuser) loaded at startup - see the
+      # file's own header comment and docker-notes.md's "Redis test
+      # instance" section for why this isn't a runtime ACL SETUSER call.
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    networks:
+      - redis-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "--user", "readonlyuser", "--pass", "readonlypass", "PING"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  redis-data:
+    name: opencode-toolkit-redis-data
+
+networks:
+  redis-net:
+    name: opencode-toolkit-redis-net

@@ -10,10 +10,10 @@ The root `package.json` packages the entire git-tracked tree as `@kealthas-dev/o
 
 ## One shared version number for every package
 
-**Pushing a `v*` tag is the single release trigger for every npm package in this repo** — root, `plugins/*` x3, `mcp-servers/oracle`, `mcp-servers/loki`, `mcp-servers/java-lsp`, `mcp-servers/spring-lsp` (7 packages total). `release.yml` loops over all of them:
+**Pushing a `v*` tag is the single release trigger for every npm package in this repo** — root, `plugins/*` x3, `mcp-servers/oracle`, `mcp-servers/loki`, `mcp-servers/java-lsp`, `mcp-servers/spring-lsp`, `mcp-servers/mysql` (8 packages total). `mcp-servers/redis` isn't in this list — it wraps the official upstream `redis-mcp-server` PyPI package unmodified, no code of its own to publish (see `mcp-servers/redis/README.md`). `release.yml` loops over all of them:
 
 - sets each one's version from the tag (`npm pkg set version=...`), skipping any already published at that exact version so a workflow re-run is safe
-- builds it first if its `package.json` has a `build` script (all four `mcp-servers/*` packages — `npm ci && npm run build` before `npm publish`, since the published tarball is `dist/` [+ `vendor/*.tar.gz` for `java-lsp`/`spring-lsp`], not source)
+- builds it first if its `package.json` has a `build` script (all five `mcp-servers/*` packages here — `npm ci && npm run build` before `npm publish`, since the published tarball is `dist/` [+ `vendor/*.tar.gz` for `java-lsp`/`spring-lsp`], not source)
 - publishes via npm Trusted Publishing (OIDC, `id-token: write`, no stored token)
 
 None of the individual `package.json` `version` fields are meaningful on their own — Franco decided against independent per-package versioning (bumping only the packages that actually changed) specifically to avoid tracking N different version numbers across N files. A release bumps every package together, even ones with no code change, which is the accepted tradeoff.
