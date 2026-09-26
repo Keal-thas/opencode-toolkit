@@ -8,19 +8,19 @@ Single-person project used across multiple machines — these preferences are gi
 
 ### Acting on requests
 
-- **Decide and act on small, reversible calls within scope instead of asking permission one level down.** E.g. told to merge/push/tag a branch, also committing a pending change first doesn't need its own ask — just do it and report. Reserve `AskUserQuestion` for forks that are genuinely ambiguous or costly to get wrong. Bias hard toward this: git history makes almost everything in this repo cheap to undo, so aim for unattended, no-permission-needed operation as the default, not the exception. Confirmed explicitly 2026-09-26 (Franco, chat): implement first, don't wait for a permission round-trip mid-task — if something turns out unwanted, he reverts it himself afterward rather than pre-approving each step. Extends to publishing this repo's own packages to public registries (npm, etc.) too, not just git operations — see "No backward-compatibility constraint" below for the versioning discipline (latest only) that makes that safe to do unprompted.
+- **Decide and act on small, reversible calls within scope instead of asking permission one level down.** E.g. told to merge/push/tag a branch, also committing a pending change first doesn't need its own ask — just do it and report. Reserve `AskUserQuestion` for forks that are genuinely ambiguous or costly to get wrong. Confirmed explicitly 2026-09-26 (Franco, chat): implement first, don't wait for a permission round-trip mid-task — if something turns out unwanted, he reverts it himself afterward rather than pre-approving each step. Extends to publishing this repo's own packages to public registries (npm, etc.) too, not just git operations — see "No backward-compatibility constraint" below for the versioning discipline (latest only) that makes that safe to do unprompted.
 - **Deliver anything needing confirmation or unhurried reading as a file, not a chat wall of text.** One or two sentences in chat, the rest in the gitignored `.local/` dir at the repo root. Clean up a `.local/` file once its content has been acted on.
 - **Verify claims against the real system when the tooling exists, rather than reasoning from inspection alone.** Has caught real bugs before. See [lessons-learned.md](docs/lessons-learned.md).
 
 ### Code design
 
-- **Prefer the simplest correct design over the smallest diff, including discarding existing work — especially when a platform/library already provides a mechanism natively, don't hand-roll it.** E.g. a hand-written plugin intercepting `chat.system.transform` (reconstructing opencode's `<env>` block by hand) was fully discarded once `agent.prompt` + `{file:...}` in plain `opencode.json` was confirmed to do the same thing natively. See [lessons-learned.md](docs/lessons-learned.md).
-- **No backward-compatibility constraint — breaking changes are fine.** Nothing external depends on this repo's internal implementation details (deploy payload + tooling for one person/one target machine, not a library with outside consumers), so don't add compat shims, feature flags, or legacy fallbacks just to avoid a breaking change. Extends to the packages this repo publishes to public registries (npm, etc., see [docs/npm-publishing.md](docs/npm-publishing.md)): only `latest` is looked at or maintained, so publish/bump versions freely without worrying about older-version deprecation ceremony or preserving behavior for anyone pinned to an old version (confirmed 2026-09-26, Franco).
+- **Prefer the simplest correct design over the smallest diff, including discarding existing work — especially when a platform/library already provides a mechanism natively, don't hand-roll it.**
+- **No backward-compatibility constraint — breaking changes are fine.** Don't add compat shims, feature flags, or legacy fallbacks just to avoid one. Extends to the packages this repo publishes to public registries (npm, etc., see [docs/npm-publishing.md](docs/npm-publishing.md)): only `latest` is looked at or maintained, so publish/bump versions freely without worrying about older-version deprecation ceremony or preserving behavior for anyone pinned to an old version (confirmed 2026-09-26, Franco).
 
 ### Docs & writing style
 
 - **Write reader-facing docs to answer "what's true now and what's next," not as a changelog.** Avoid dates unless they change what the reader should do; avoid "previously"/"renamed from"/session-log phrasing; link to one explanation instead of repeating it. Dated history belongs in `docs/lessons-learned.md`, `mcp-servers/TODO.md`, or similar. Audit checklist: [docs/doc-clarity-review.md](docs/doc-clarity-review.md).
-- **Don't manually wrap prose lines.** The editor (IntelliJ) soft-wraps, so write each paragraph as one source line. Code comments still wrap normally.
+- **Don't manually wrap long lines in code, comments, or docs.**
 - **Don't hedge a generic host/platform capability with "validated on model X" when nothing about it is model-specific.** Reserve that qualifier for things that genuinely vary by model/provider (tool-call parsing, context limits, thinking tokens).
 
 ### Config hygiene
@@ -29,7 +29,7 @@ Single-person project used across multiple machines — these preferences are gi
 
 ### Code structure
 
-- **Don't extract shared code across independently-published packages (`plugins/`, `mcp-servers/`), even for byte-identical duplication.** Each package stays self-contained and readable on its own — a shared internal package would add a coupling/versioning surface (import wiring, an extra publish step) to save a handful of small, boring, mechanical functions (config loading, HTTP wiring). This is the opposite instinct from "Config hygiene" above on purpose: that's about one literal value drifting across files, this is about a whole package's independence. Confirmed 2026-09-24: found ~150 duplicate lines across the four `mcp-servers/*` (identical `printSampleConfig`, near-identical `loadServerConfig`, byte-identical HTTP wiring) while migrating them to `McpServer` — left it duplicated on purpose rather than extracting a shared package.
+- **Don't extract shared code across independently-published packages (`plugins/`, `mcp-servers/`), even for byte-identical duplication.** This is the opposite instinct from "Config hygiene" above on purpose: that's about one literal value drifting across files, this is about a whole package's independence.
 
 ### Testing
 
