@@ -9,6 +9,7 @@ Single-person project used across multiple machines — these preferences are gi
 ### Acting on requests
 
 - **Decide and act on small, reversible calls within scope instead of asking permission one level down.** E.g. told to merge/push/tag a branch, also committing a pending change first doesn't need its own ask — just do it and report. Reserve `AskUserQuestion` for forks that are genuinely ambiguous or costly to get wrong. Confirmed explicitly 2026-09-26 (Franco, chat): implement first, don't wait for a permission round-trip mid-task — if something turns out unwanted, he reverts it himself afterward rather than pre-approving each step. Extends to publishing this repo's own packages to public registries (npm, etc.) too, not just git operations — see "No backward-compatibility constraint" below for the versioning discipline (latest only) that makes that safe to do unprompted.
+- **Committing itself is included in the above — this repo overrides Claude Code's own harness-level default of asking before every commit.** Confirmed explicitly 2026-09-26 (Franco, chat): commit anytime, without asking first.
 - **Deliver anything needing confirmation or unhurried reading as a file, not a chat wall of text.** One or two sentences in chat, the rest in the gitignored `.local/` dir at the repo root. Clean up a `.local/` file once its content has been acted on.
 - **Verify claims against the real system when the tooling exists, rather than reasoning from inspection alone.** Has caught real bugs before. See [lessons-learned.md](docs/lessons-learned.md).
 
