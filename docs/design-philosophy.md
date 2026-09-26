@@ -42,6 +42,10 @@ Small, in-scope decisions get made and acted on directly rather than escalated f
 
 Every unit that needs to be independently installable by some other mechanism gets its own package, even when that multiplies the number of packages published together. opencode's plugin loader installs a bare package name directly from the registry, so each plugin has to be its own package for that mechanism to work at all — bundling them would prevent installing just one. Each MCP server is a separately deployed CLI process with its own runtime dependencies (one pulls in a heavyweight database driver that the others don't need), so merging them would force an unrelated dependency onto every install. All of them are still released together under one shared version bump, accepting redundant republishing of unchanged packages, specifically to avoid tracking independent version numbers across many files.
 
+## Duplication across independent packages is cheaper than coupling them
+
+Each independently-published package (`plugins/*`, `mcp-servers/*`) stays self-contained, even where that means duplicating a handful of small, boring, mechanical functions (config loading, HTTP wiring) byte-for-byte across packages. A shared internal package to remove that duplication would add a coupling/versioning surface — import wiring, an extra publish step — that costs more than the duplication it would save, and it would work against the same installability boundary described above.
+
 ## The offline target machine is a root constraint, not a series of unrelated decisions
 
 Several separate-looking choices — publishing to npm as a second channel alongside a GitHub release zip, vendoring a models-metadata snapshot instead of fetching it live, bundling language-server binaries into a package instead of downloading them at install time, pinning every third-party version instead of tracking latest — all trace back to the same fact: the machine this eventually runs on has no internet access. Treating that as one constraint that radiates outward, rather than as coincidentally-similar independent decisions, is what keeps the reasoning for any one of them consistent with the others.
