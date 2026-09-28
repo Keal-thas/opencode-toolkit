@@ -54,3 +54,4 @@ docs/opencode-docs-reference/
 # catalog), not hand-authored content, so it's excluded from broad
 # recursive search the same way. Re-add with `git add -f` after refreshing.
 deploy/models-dev-snapshot.json
+tests/integration/mcp-playwright/.playwright-mcp/
