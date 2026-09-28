@@ -3,7 +3,7 @@ import http from "node:http";
 import path from "node:path";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { homedir } from "node:os";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -76,6 +76,13 @@ function loadSpringLspConfig(): SpringLspConfig {
     return { SPRING_LSP_WORKSPACE_ROOT: raw.SPRING_LSP_WORKSPACE_ROOT, JAVA_EXECUTABLE: raw.JAVA_EXECUTABLE };
   } catch (err) {
     console.error(`Failed to load spring-lsp config from ${resolvedPath}: ${(err as Error).message}`);
+    // A raw Windows path like "C:\Users\x\project" typed into JSON without
+    // escaping its backslashes breaks JSON.parse with a cryptic "Unexpected
+    // token"/"Bad control character" error that gives no hint what's wrong -
+    // this is the single most likely way a Windows user's config fails.
+    if (err instanceof SyntaxError && process.platform === "win32") {
+      console.error("If this file has a Windows path like \"C:\\Users\\...\", either escape every backslash (\"C:\\\\Users\\\\...\") or just use forward slashes instead (\"C:/Users/...\") - Node accepts both on Windows, and forward slashes need no escaping in JSON.");
+    }
     printSampleConfig("spring-lsp config file", resolvedPath, SAMPLE_SPRING_LSP_CONFIG);
     process.exit(1);
   }
@@ -85,6 +92,26 @@ const serverConfig = loadServerConfig();
 const springLspConfig = loadSpringLspConfig();
 const WORKSPACE_ROOT = springLspConfig.SPRING_LSP_WORKSPACE_ROOT;
 const JAVA_EXECUTABLE = springLspConfig.JAVA_EXECUTABLE ?? "java"; // spring-boot-language-server itself needs JDK 21+ - see README's "JDK version"
+
+// Runs a vendor-setup command (mkdir/tar) with a clear, actionable error on
+// failure instead of a raw Node stack trace - in particular distinguishing
+// "the command isn't on PATH at all" (e.g. GNU coreutils missing on Windows
+// outside Git Bash/WSL) from "the command ran and failed" (stderr already
+// captured in the thrown error by execFileSync's default 'pipe' stdio).
+function runVendorSetupCommand(command: string, args: string[], failureContext: string): void {
+  try {
+    execFileSync(command, args);
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException & { stderr?: Buffer };
+    if (e.code === "ENOENT") {
+      throw new Error(
+        `${failureContext}: \`${command}\` isn't on PATH. This server needs GNU coreutils (mkdir, tar) on ` +
+          `PATH - on Windows, run it from Git Bash or WSL, not plain cmd.exe/PowerShell.`,
+      );
+    }
+    throw new Error(`${failureContext}: ${e.stderr?.toString("utf8").trim() || e.message}`);
+  }
+}
 
 // vendor/spring-boot-language-server-<version>.tar.gz is committed (not
 // published to any registry - see fetch-spring-boot-language-server.sh),
@@ -102,13 +129,18 @@ function resolveLanguageServerDir(): { dir: string; jarName: string } {
   const execJarGlob = existsSync(extractedDir) ? readdirSync(extractedDir).find((f) => f.endsWith("-exec.jar")) : undefined;
   if (!existsSync(extractedDir) || !execJarGlob) {
     console.error(`Extracting ${tarball} into ${extractedDir} (first run only)...`);
-    execFileSync("mkdir", ["-p", extractedDir]);
+    runVendorSetupCommand("mkdir", ["-p", extractedDir], `Failed to create ${extractedDir}`);
     // --force-local: without it, GNU tar misparses a Windows path through an
     // npm-scope dir (.../node_modules/@kealthas-dev/...) as a remote
     // user@host:file spec (the "@" plus the drive-letter colon earlier in
     // the path triggers it) and fails with "Cannot connect to ...: resolve
     // failed" instead of extracting.
-    execFileSync("tar", ["-xzf", path.join(vendorDir, tarball), "-C", extractedDir, "--force-local"]);
+    runVendorSetupCommand(
+      "tar",
+      ["-xzf", path.join(vendorDir, tarball), "-C", extractedDir, "--force-local"],
+      `Failed to extract ${tarball} into ${extractedDir}`,
+    );
+    console.error(`Extracted ${tarball}.`);
   }
   const execJar = readdirSync(extractedDir).find((f) => f.endsWith("-exec.jar"));
   if (!execJar) throw new Error(`Extracted ${extractedDir} but found no *-exec.jar inside it.`);
@@ -253,7 +285,7 @@ function createMcpServer(): McpServer {
       respond(
         await toolResult(async () => {
           const client = await getClient(log);
-          const rootUri = `file://${path.resolve(WORKSPACE_ROOT)}`;
+          const rootUri = pathToFileURL(path.resolve(WORKSPACE_ROOT)).href;
           return client.request("workspace/executeCommand", {
             command: "sts/spring-boot/structure",
             arguments: [{ identifier: rootUri }],

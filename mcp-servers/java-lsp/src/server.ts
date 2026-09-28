@@ -85,6 +85,13 @@ function loadJavaLspConfig(): JavaLspConfig {
     return { JAVA_LSP_WORKSPACE_ROOT, JDTLS_DATA_DIR, JDTLS_COMMAND, JAVA_EXECUTABLE };
   } catch (err) {
     console.error(`Failed to load java-lsp config from ${resolvedPath}: ${(err as Error).message}`);
+    // A raw Windows path like "C:\Users\x\project" typed into JSON without
+    // escaping its backslashes breaks JSON.parse with a cryptic "Unexpected
+    // token"/"Bad control character" error that gives no hint what's wrong -
+    // this is the single most likely way a Windows user's config fails.
+    if (err instanceof SyntaxError && process.platform === "win32") {
+      console.error("If this file has a Windows path like \"C:\\Users\\...\", either escape every backslash (\"C:\\\\Users\\\\...\") or just use forward slashes instead (\"C:/Users/...\") - Node accepts both on Windows, and forward slashes need no escaping in JSON.");
+    }
     printSampleConfig("java-lsp config file", resolvedPath, SAMPLE_JAVA_LSP_CONFIG);
     process.exit(1);
   }
@@ -96,6 +103,26 @@ const WORKSPACE_ROOT = javaLspConfig.JAVA_LSP_WORKSPACE_ROOT;
 
 const LINE_CHAR_DESCRIPTION =
   "0-indexed, per the LSP spec (not the 1-indexed line numbers most editors display) - line 0 is the file's first line, character 0 is the first column.";
+
+// Runs a vendor-setup command (mkdir/tar) with a clear, actionable error on
+// failure instead of a raw Node stack trace - in particular distinguishing
+// "the command isn't on PATH at all" (e.g. GNU coreutils missing on Windows
+// outside Git Bash/WSL) from "the command ran and failed" (stderr already
+// captured in the thrown error by execFileSync's default 'pipe' stdio).
+function runVendorSetupCommand(command: string, args: string[], failureContext: string): void {
+  try {
+    execFileSync(command, args);
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException & { stderr?: Buffer };
+    if (e.code === "ENOENT") {
+      throw new Error(
+        `${failureContext}: \`${command}\` isn't on PATH. This server needs GNU coreutils (mkdir, tar) on ` +
+          `PATH - on Windows, run it from Git Bash or WSL, not plain cmd.exe/PowerShell.`,
+      );
+    }
+    throw new Error(`${failureContext}: ${e.stderr?.toString("utf8").trim() || e.message}`);
+  }
+}
 
 // vendor/jdt-language-server-<version>.tar.gz is committed (see README's
 // Vendoring section), extracted lazily on first startup rather than at
@@ -114,13 +141,18 @@ function resolveJdtlsCommand(): { command: string; prefixArgs: string[] } {
   const launcher = path.join(extractedDir, "bin", "jdtls");
   if (!existsSync(launcher)) {
     console.error(`Extracting ${tarball} into ${extractedDir} (first run only)...`);
-    execFileSync("mkdir", ["-p", extractedDir]);
+    runVendorSetupCommand("mkdir", ["-p", extractedDir], `Failed to create ${extractedDir}`);
     // --force-local: without it, GNU tar misparses a Windows path through an
     // npm-scope dir (.../node_modules/@kealthas-dev/...) as a remote
     // user@host:file spec (the "@" plus the drive-letter colon earlier in
     // the path triggers it) and fails with "Cannot connect to ...: resolve
     // failed" instead of extracting.
-    execFileSync("tar", ["-xzf", path.join(vendorDir, tarball), "-C", extractedDir, "--force-local"]);
+    runVendorSetupCommand(
+      "tar",
+      ["-xzf", path.join(vendorDir, tarball), "-C", extractedDir, "--force-local"],
+      `Failed to extract ${tarball} into ${extractedDir}`,
+    );
+    console.error(`Extracted ${tarball}.`);
   }
   // bin/jdtls is Eclipse's own python3 launcher script - a POSIX shebang
   // script with no .exe/.bat/.cmd. macOS/Linux's spawn() reads the shebang
