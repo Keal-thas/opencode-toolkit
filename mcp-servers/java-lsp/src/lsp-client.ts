@@ -11,6 +11,7 @@
 
 import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
 
 const CONTENT_LENGTH_RE = /Content-Length: (\d+)/i;
 
@@ -125,7 +126,12 @@ export class LspClient {
     this.#child.on("error", (err) => this.#markDead(`spawn error: ${err.message}`));
     this.#child.on("exit", (code, signal) => this.#markDead(`process exited (code=${code}, signal=${signal})`));
 
-    const rootUri = `file://${this.#rootPath}`;
+    // pathToFileURL, not manual `file://${path}` concatenation: on Windows a
+    // raw path like C:\Users\x\proj has a drive letter and backslashes, which
+    // string concatenation turns into an invalid URI (file://C:\Users\x\proj
+    // instead of file:///C:/Users/x/proj) that jdtls won't match against its
+    // own normalized URIs - breaking every tool call, not just extraction.
+    const rootUri = pathToFileURL(this.#rootPath).href;
     this.#initializeResult = (await this.request("initialize", {
       processId: process.pid,
       rootUri,
@@ -247,7 +253,7 @@ export class LspClient {
   }
 
   async openFile(absolutePath: string, languageId: string): Promise<string> {
-    const uri = `file://${absolutePath}`;
+    const uri = pathToFileURL(absolutePath).href;
     const text = await readFile(absolutePath, "utf8");
     await this.openDocument(uri, languageId, text);
     return uri;
@@ -258,7 +264,7 @@ export class LspClient {
   // on an already-open document is invalid per LSP, so this sends didChange
   // instead once a uri is already tracked, didOpen only the first time.
   async syncFile(absolutePath: string, languageId: string): Promise<string> {
-    const uri = `file://${absolutePath}`;
+    const uri = pathToFileURL(absolutePath).href;
     const text = await readFile(absolutePath, "utf8");
     if (this.#openDocs.has(uri)) {
       const version = this.#openDocs.get(uri)! + 1;
