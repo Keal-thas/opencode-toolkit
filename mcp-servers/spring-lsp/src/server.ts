@@ -103,7 +103,12 @@ function resolveLanguageServerDir(): { dir: string; jarName: string } {
   if (!existsSync(extractedDir) || !execJarGlob) {
     console.error(`Extracting ${tarball} into ${extractedDir} (first run only)...`);
     execFileSync("mkdir", ["-p", extractedDir]);
-    execFileSync("tar", ["-xzf", path.join(vendorDir, tarball), "-C", extractedDir]);
+    // --force-local: without it, GNU tar misparses a Windows path through an
+    // npm-scope dir (.../node_modules/@kealthas-dev/...) as a remote
+    // user@host:file spec (the "@" plus the drive-letter colon earlier in
+    // the path triggers it) and fails with "Cannot connect to ...: resolve
+    // failed" instead of extracting.
+    execFileSync("tar", ["-xzf", path.join(vendorDir, tarball), "-C", extractedDir, "--force-local"]);
   }
   const execJar = readdirSync(extractedDir).find((f) => f.endsWith("-exec.jar"));
   if (!execJar) throw new Error(`Extracted ${extractedDir} but found no *-exec.jar inside it.`);

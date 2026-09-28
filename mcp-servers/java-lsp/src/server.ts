@@ -115,7 +115,12 @@ function resolveJdtlsCommand(): { command: string; prefixArgs: string[] } {
   if (!existsSync(launcher)) {
     console.error(`Extracting ${tarball} into ${extractedDir} (first run only)...`);
     execFileSync("mkdir", ["-p", extractedDir]);
-    execFileSync("tar", ["-xzf", path.join(vendorDir, tarball), "-C", extractedDir]);
+    // --force-local: without it, GNU tar misparses a Windows path through an
+    // npm-scope dir (.../node_modules/@kealthas-dev/...) as a remote
+    // user@host:file spec (the "@" plus the drive-letter colon earlier in
+    // the path triggers it) and fails with "Cannot connect to ...: resolve
+    // failed" instead of extracting.
+    execFileSync("tar", ["-xzf", path.join(vendorDir, tarball), "-C", extractedDir, "--force-local"]);
   }
   // bin/jdtls is Eclipse's own python3 launcher script - a POSIX shebang
   // script with no .exe/.bat/.cmd. macOS/Linux's spawn() reads the shebang
