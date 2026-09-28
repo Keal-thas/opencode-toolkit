@@ -53,7 +53,12 @@ jobs:
               (cd "$dir" && npm ci && npm run build)
             fi
             echo "Publishing $name@$VERSION"
-            (cd "$dir" && npm pkg set version="$VERSION" && npm publish --access public)
+            # --ignore-scripts: npm publish otherwise runs the package's
+            # own lifecycle scripts (e.g. root package.json's `prepare:
+            # husky`), which fail here since node_modules/husky was never
+            # installed for this package - none of these packages need
+            # lifecycle scripts to run for a publish anyway.
+            (cd "$dir" && npm pkg set version="$VERSION" && npm publish --access public --ignore-scripts)
           done
 
       - name: Build zip with .git included
