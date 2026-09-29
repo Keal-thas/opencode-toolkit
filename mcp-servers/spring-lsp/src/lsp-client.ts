@@ -2,9 +2,10 @@
 // JSON-RPC correlation, the initialize/initialized handshake, and just enough
 // document sync (didOpen/didChange/didClose) for one-shot navigation queries.
 // Not a generic "any language" framework - built only for what java-lsp/spring-lsp
-// need, and copied verbatim between the two rather than shared, keeping each
+// need, and copied between the two rather than shared, keeping each
 // package independently installable (see root CLAUDE.md's plugins/ note for
-// the same reasoning).
+// the same reasoning). spring-lsp's copy adds one thing: the onServerRequest
+// hook, which answers the server's sts/addClasspathListener request.
 //
 // Verified against two real servers (jdtls, spring-boot-language-server
 // 2.5.0-SNAPSHOT) - see each package's README Status section.
@@ -59,6 +60,9 @@ export interface LspClientOptions {
   spawnOptions?: SpawnOptions;
   rootPath: string;
   log?: (kind: string, message: string) => void;
+  // Answers requests *from* the server (e.g. the custom sts/addClasspathListener). Return the result to send
+  // back; anything not handled here gets a null result so the server doesn't stall.
+  onServerRequest?: (method: string, params: unknown) => unknown;
 }
 
 interface PendingRequest {
@@ -102,8 +106,10 @@ export class LspClient {
   #dead = false;
   #deadReason?: string;
   #log: (kind: string, message: string) => void;
+  #onServerRequest?: (method: string, params: unknown) => unknown;
 
-  constructor({ command, args = [], spawnOptions = {}, rootPath, log = () => {} }: LspClientOptions) {
+  constructor({ command, args = [], spawnOptions = {}, rootPath, log = () => {}, onServerRequest }: LspClientOptions) {
+    this.#onServerRequest = onServerRequest;
     this.#command = command;
     this.#args = args;
     this.#spawnOptions = spawnOptions;
@@ -243,7 +249,13 @@ export class LspClient {
     // Requests *from* the server (registerCapability, workspace/configuration, etc.)
     // need a response or it'll stall - reply empty since nothing here depends on it.
     if (msg.id !== undefined && msg.method) {
-      this.#send({ jsonrpc: "2.0", id: msg.id, result: null });
+      let result: unknown = null;
+      try {
+        result = this.#onServerRequest?.(msg.method, msg.params) ?? null;
+      } catch (e) {
+        this.#log("error", `handler for server request ${msg.method} threw: ${(e as Error).message}`);
+      }
+      this.#send({ jsonrpc: "2.0", id: msg.id, result });
     }
   }
 

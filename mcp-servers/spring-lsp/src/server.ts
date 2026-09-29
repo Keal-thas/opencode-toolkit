@@ -10,6 +10,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 import { LspClient, LspClientError } from "./lsp-client.js";
 import type { ServerConfig, SpringLspConfig } from "./types/config.js";
+import { buildClasspathEvent } from "./classpath.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PORT = 8093; // the next free port after mcp-servers/java-lsp's 8092
@@ -20,6 +21,7 @@ const SAMPLE_SERVER_CONFIG = { SPRING_LSP_MCP_PORT: DEFAULT_PORT };
 const SAMPLE_SPRING_LSP_CONFIG = {
   SPRING_LSP_WORKSPACE_ROOT: "/path/to/your/spring-boot/project",
   KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE: "/path/to/jdk21/bin/java (optional, defaults to java on PATH)",
+  KEALTHAS_SPRING_LSP_MAVEN_COMMAND: "/path/to/mvn (optional, defaults to mvn on PATH)",
 };
 
 function printSampleConfig(label: string, path_: string, sample: unknown): void {
@@ -73,7 +75,11 @@ function loadSpringLspConfig(): SpringLspConfig {
     if (!raw.SPRING_LSP_WORKSPACE_ROOT) {
       throw new Error("missing required key SPRING_LSP_WORKSPACE_ROOT (the Spring Boot project root to analyze)");
     }
-    return { SPRING_LSP_WORKSPACE_ROOT: raw.SPRING_LSP_WORKSPACE_ROOT, KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE: raw.KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE };
+    return {
+      SPRING_LSP_WORKSPACE_ROOT: raw.SPRING_LSP_WORKSPACE_ROOT,
+      KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE: raw.KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE,
+      KEALTHAS_SPRING_LSP_MAVEN_COMMAND: raw.KEALTHAS_SPRING_LSP_MAVEN_COMMAND,
+    };
   } catch (err) {
     console.error(`Failed to load spring-lsp config from ${resolvedPath}: ${(err as Error).message}`);
     // A raw Windows path like "C:\Users\x\project" typed into JSON without
@@ -163,23 +169,50 @@ const LINE_CHAR_DESCRIPTION =
 // Same reasoning as java-lsp/src/server.ts: one persistent process for the
 // server's whole lifetime, not one per request - see that file's comments.
 let clientPromise: Promise<LspClient> | undefined;
+
+// spring-boot-language-server gets a project's classpath from its client, not by itself: right after startup it
+// sends sts/addClasspathListener and waits for the client to call back the command id it registered with the
+// project's classpath (VS Code's Java extension supplies this; standalone, nothing does and every tool answers
+// empty after a ~15s timeout). Computed once from Maven, in the background, so it is usually ready by the time
+// the server asks; a project without a pom.xml, or a failed Maven run, just leaves the server without one.
+const classpathEvent = (async () => {
+  try {
+    return await buildClasspathEvent(WORKSPACE_ROOT, springLspConfig.KEALTHAS_SPRING_LSP_MAVEN_COMMAND ?? "mvn", JAVA_EXECUTABLE);
+  } catch (err) {
+    console.error(`Could not compute the project's classpath with Maven (${(err as Error).message}) - spring_* tools will return little or nothing.`);
+    return undefined;
+  }
+})();
+
 function getClient(log: (kind: string, message: string) => void): Promise<LspClient> {
   if (!clientPromise) {
-    const { dir, jarName } = resolveLanguageServerDir();
-    const client = new LspClient({
-      command: JAVA_EXECUTABLE,
-      args: ["-jar", jarName],
-      spawnOptions: { cwd: dir },
-      rootPath: WORKSPACE_ROOT,
-      log,
+    clientPromise = (async () => {
+      // Start the language server only once the classpath is ready: it gives up on the listener after ~15s and
+      // never asks again, so an event that arrives later than that would be dropped for the process's lifetime.
+      await classpathEvent;
+      const { dir, jarName } = resolveLanguageServerDir();
+      const client: LspClient = new LspClient({
+        command: JAVA_EXECUTABLE,
+        args: ["-jar", jarName],
+        spawnOptions: { cwd: dir },
+        rootPath: WORKSPACE_ROOT,
+        log,
+        onServerRequest: (method, params) => {
+          if (method !== "sts/addClasspathListener") return null;
+          const { callbackCommandId } = params as { callbackCommandId: string };
+          void classpathEvent.then((event) => {
+            if (!event) return;
+            client.request("workspace/executeCommand", { command: callbackCommandId, arguments: [[event.projectUri, event.name, event.deleted, event.classpath, event.projectBuild, event.javaCoreOptions]] }).catch((e) => log("error", `classpath callback failed: ${(e as Error).message}`));
+          });
+          return null;
+        },
+      });
+      await client.start();
+      return client;
+    })().catch((err) => {
+      clientPromise = undefined; // allow retry on the next call instead of caching a permanent failure
+      throw err;
     });
-    clientPromise = client.start().then(
-      () => client,
-      (err) => {
-        clientPromise = undefined;
-        throw err;
-      },
-    );
   }
   return clientPromise;
 }

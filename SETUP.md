@@ -148,7 +148,7 @@ Per-server specifics:
 | | oracle (step 6) | loki (step 7) | java-lsp (step 8) | spring-lsp (step 9) | mysql (step 10) |
 |---|---|---|---|---|---|
 | Package | `@kealthas-dev/opencode-mcp-oracle` | `@kealthas-dev/opencode-mcp-loki` | `@kealthas-dev/opencode-mcp-java-lsp` | `@kealthas-dev/opencode-mcp-spring-lsp` | `@kealthas-dev/opencode-mcp-mysql` |
-| Prerequisites | none | none | `python3` + JDK 21+ `java` on `PATH`, separate from whatever JDK the analyzed project targets — neither confirmed present on the actual target machine yet | JDK 21+ `java` on `PATH` (no `python3` needed) | none |
+| Prerequisites | none | none | `python3` + JDK 21+ `java` on `PATH`, separate from whatever JDK the analyzed project targets — neither confirmed present on the actual target machine yet | JDK 21+ `java` on `PATH` (no `python3` needed), and Maven (`mvn`) on `PATH` for a Maven project (see step 9) | none |
 | Config env var | `ORACLE_CONFIG_ENV` | `LOKI_CONFIG_ENV` | `JAVA_LSP_CONFIG_ENV` | `SPRING_LSP_CONFIG_ENV` | `MYSQL_CONFIG_ENV` |
 | Config file keys | `ORACLE_CONNECT_STRING`, `ORACLE_USER`, `ORACLE_PASSWORD` (required); `ORACLE_DEFAULT_SCHEMA` (optional — sets the session's default schema; `oracle_query`'s own `schema` argument overrides it per call) | `LOKI_BASE_URL` (required); `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` (optional, only if that instance requires them); `LOKI_VIA_GRAFANA`/`LOKI_GRAFANA_DATASOURCE_ID` (optional — set when Loki is only reachable through Grafana's own datasource proxy, not directly; see step 7 below) | `JAVA_LSP_WORKSPACE_ROOT` (project to analyze), `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch dir, not the project root) — both required | `SPRING_LSP_WORKSPACE_ROOT` (project to analyze, required) | `MYSQL_CONNECT_STRING` (required — a single `mysql://user:pass@host:port/db` URI; any reserved character in the password needs percent-encoding first, see `mcp-servers/mysql/README.md`) |
 | Default port / override key | `8090` / `ORACLE_MCP_PORT` | `8091` / `LOKI_MCP_PORT` | `8092` / `JAVA_LSP_MCP_PORT` | `8093` / `SPRING_LSP_MCP_PORT` | `8094` / `MYSQL_MCP_PORT` |
@@ -285,10 +285,11 @@ If port `8092` is taken, write `~/.config/kealthas-dev/opencode-mcp-java-lsp/ser
 
 ## 9. Add the spring-lsp MCP server
 
-Check the prerequisite first (same as step 8's `java -version`; `python3` is not needed here):
+Check the prerequisites first (same as step 8's `java -version`; `python3` is not needed here). The project to analyze must be a Maven project (`pom.xml` at `SPRING_LSP_WORKSPACE_ROOT`): the server asks its client for the project's classpath and this package answers it by running `mvn dependency:build-classpath`, so `mvn` has to work on this machine (put its path in `KEALTHAS_SPRING_LSP_MAVEN_COMMAND` in the config file if it is not on `PATH`). Without a `pom.xml`, or if Maven fails, every `spring_*` tool answers empty.
 
 ```bash
 java -version
+mvn -v
 ```
 
 ```bash
