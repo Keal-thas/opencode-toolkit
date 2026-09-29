@@ -119,12 +119,12 @@ opencode does a real `npm install` of this on first use, against whatever regist
 
 ## 5. hook-logger (included by default) / llm-review-gate (opt-in) plugins
 
-Two more opencode plugins live in this repo, in `plugins/` — general-purpose tooling, unrelated to the prompt override itself. Each is its own separate published npm package, independent of the other. `deploy/opencode.json.example` includes `hook-logger` by default and leaves `llm-review-gate` out, because it changes real runtime behavior and is only meant to be switched on situationally.
+Two more opencode plugins live in this repo, in `plugins/` — general-purpose tooling, unrelated to the prompt override itself. Each is its own separate published npm package, independent of the other. `deploy/opencode.json.example` includes `hook-logger` by default and has `llm-review-gate` commented out, because it changes real runtime behavior and is only meant to be switched on situationally.
 
 - `hook-logger.ts` (`@kealthas-dev/opencode-hook-logger`) — logs essentially every opencode hook event (chat, tool execution, permission asks, compaction, etc.) as JSONL under `~/opencode-hook-output/`, for debugging/observability.
 - `llm-review-gate.ts` (`@kealthas-dev/opencode-llm-review-gate`) — gates `bash` tool calls behind an LLM safety review: before a command runs, it's sent to a hidden internal opencode session for an ALLOW/BLOCK verdict, layered on top of (not replacing) opencode's own permission config. Fails closed on review errors/timeouts by default (the command is blocked). **This changes real runtime behavior** (an extra hidden model call before every `bash` call).
 
-To turn `llm-review-gate` on, add its entry to the same `plugin` array as step 4's (the `review-gate` agent and `review_verdict` permission from step 2 are already in the example, so nothing else is needed); remove the entry again to turn it off:
+To turn `llm-review-gate` on, uncomment its line in the `plugin` array (or add the entry to the same array as step 4's if step 2 merged into an existing `opencode.json`); the `review-gate` agent and `review_verdict` permission from step 2 are already in the example, so nothing else is needed. Comment it out again to turn it off. opencode's config parser accepts `//` comments in `opencode.json`:
 
 ```json
 "plugin": ["@kealthas-dev/opencode-system-prompt-tools", "@kealthas-dev/opencode-hook-logger", "@kealthas-dev/opencode-llm-review-gate"]
