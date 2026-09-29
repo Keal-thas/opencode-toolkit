@@ -1,6 +1,6 @@
 # Setup instructions (for an agent to execute)
 
-Configure the local opencode installation on this machine to use a custom system prompt instead of the built-in default. Environment: git-bash on Windows, no public internet — an internal npm registry works for downloads (e.g. steps 6-10), but not for publishing anything. Step 12 needs PyPI instead (a different registry) — confirmed reachable too, see `docs/deployment-environment.md`. The repo arrives either as an extracted zip, or via `npm pack @kealthas-dev/opencode-toolkit` extracted to a `package/` directory (verify the package is actually published/mirrored first if using this route) — either way you end up with one plain extracted directory; step 0 just needs to find it. Don't `git clone` or fetch anything else over the network. Run each step's commands yourself, in order, and don't skip the verification step.
+Configure the local opencode installation on this machine to use a custom system prompt instead of the built-in default. Environment: git-bash on Windows, no public internet — an internal npm registry works for downloads (e.g. steps 6-10), but not for publishing anything. Step 12 needs PyPI instead (a different registry) — confirmed reachable too, see `docs/deployment-environment.md`. Step 13 (`npx @playwright/mcp`) needs the *public* npm registry plus Playwright's own browser-binary CDN, neither of which has been confirmed reachable from this restricted machine the way the internal registry and PyPI have — treat that step as unverified until it's actually run here, not assumed to work. The repo arrives either as an extracted zip, or via `npm pack @kealthas-dev/opencode-toolkit` extracted to a `package/` directory (verify the package is actually published/mirrored first if using this route) — either way you end up with one plain extracted directory; step 0 just needs to find it. Don't `git clone` or fetch anything else over the network. Run each step's commands yourself, in order, and don't skip the verification step.
 
 ## 0. Find the opencode config directory and the extracted source
 
@@ -115,7 +115,7 @@ This lets you actually see what gets sent to the model — a JSON-valid `opencod
 
 opencode does a real `npm install` of this on first use, against whatever registry this machine's npm is configured for (this machine's internal registry mirror — confirmed working via steps 6/7's `npm install` calls), and caches the result so later runs skip straight past it. Leaving off a version means every fresh cache picks up whatever's currently tagged `latest` on the registry at install time — it won't silently update again after that first install.
 
-**Important:** `opencode debug config` showing a `plugin_origins` entry is NOT proof the install succeeded — a bad/unreachable package name fails silently (exit 0, no log line) and leaves `$CACHE_DIR/packages/@kealthas-dev/opencode-system-prompt-tools@latest/` permanently empty. The real proof is step 13: does `~/.local/share/opencode/last-system-prompt.txt` exist with the expected content after `opencode run`? If not, check whether that cache directory actually has files in it (`package.json`/`node_modules` = real install; empty = failed) — if empty, delete it by hand and retry rather than assuming the config itself is wrong.
+**Important:** `opencode debug config` showing a `plugin_origins` entry is NOT proof the install succeeded — a bad/unreachable package name fails silently (exit 0, no log line) and leaves `$CACHE_DIR/packages/@kealthas-dev/opencode-system-prompt-tools@latest/` permanently empty. The real proof is step 14: does `~/.local/share/opencode/last-system-prompt.txt` exist with the expected content after `opencode run`? If not, check whether that cache directory actually has files in it (`package.json`/`node_modules` = real install; empty = failed) — if empty, delete it by hand and retry rather than assuming the config itself is wrong.
 
 ## 5. (Included by default) hook-logger / llm-review-gate plugins
 
@@ -438,7 +438,25 @@ Then wire it in. **`--host`/`--port` have to be CLI args, not `REDIS_HOST`/`REDI
 
 `deploy/opencode.json.example` already carries this block with `REPLACE_WITH_...` placeholders for the four real values (host/port/username/password) — substitute them rather than adding a fresh block (merge, don't replace, same rule as step 2).
 
-## 13. Verify
+## 13. Add the Playwright MCP server
+
+Also not a server this repo wrote — the official upstream `@playwright/mcp` npm package (source: `microsoft/playwright-mcp`), used unmodified for browser automation/screenshots. See `mcp-servers/playwright/README.md` for the full design. Wired as `type: "local"`, same as steps 11/12 — `npx` spawns it fresh each time, nothing to install ahead of time beyond `npx` itself already being on `PATH` from Node.
+
+```json
+"mcp": {
+  "playwright": {
+    "type": "local",
+    "command": ["npx", "@playwright/mcp@latest"],
+    "enabled": true
+  }
+}
+```
+
+`deploy/opencode.json.example` already carries this block — merge, don't replace, same rule as step 2.
+
+**If the target page needs a login**, this package has no read/write split to enforce (unlike steps 6/10/12) — it drives a real browser as whatever account is signed into it. Export a logged-in session once with Playwright's own `--storage-state <path>` flag (added to the `command` array above), or point `--user-data-dir <path>` at a persistent browser profile if the login expires often enough that re-exporting `storage-state` every time is a hassle. Either way that file/directory is a credential — keep it outside the repo, not committed. See `mcp-servers/playwright/README.md`'s "Logging into a page" section.
+
+## 14. Verify
 
 Run a trivial request against your actual local model:
 
@@ -456,20 +474,21 @@ Confirm: the output should start with the content of `system-prompt.txt` (not th
 
 If you installed either plugin (steps 4/5) and `opencode run` errors out instead, that's more likely this machine's `npm install` failing against its registry (network/proxy issue, same class of failure as steps 6-10) than a problem with the prompt override itself — check `opencode debug config` output for a `plugin_origins` entry resolving correctly before assuming the whole setup is broken.
 
-## 14. Cleanup (optional)
+## 15. Cleanup (optional)
 
-`$SRC_DIR` (the extracted zip) and the original zip file can be deleted once `$CONFIG_DIR/system-prompt.txt` and the globally-installed `@kealthas-dev/opencode-mcp-oracle`/`@kealthas-dev/opencode-mcp-loki`/`@kealthas-dev/opencode-mcp-java-lsp`/`@kealthas-dev/opencode-mcp-spring-lsp`/`@kealthas-dev/opencode-mcp-mysql`/`@modelcontextprotocol/server-memory` (whichever of steps 6-11 were installed — nothing under `$SRC_DIR` to clean up for any of them, they're global installs, not copied-in source trees) are in place — those are the only files that matter going forward. Steps 4/5's plugins install themselves into `$CACHE_DIR/packages/<name>@latest/` the first time opencode runs with them configured — nothing under `$SRC_DIR` to clean up for those either. Step 12's redis-mcp-server isn't installed at all in the same sense — `uvx` caches it under its own directory (`uv cache dir`) and re-resolves `@latest` on every spawn — nothing under `$SRC_DIR` for that either. Ask the human running this before deleting anything, don't assume.
+`$SRC_DIR` (the extracted zip) and the original zip file can be deleted once `$CONFIG_DIR/system-prompt.txt` and the globally-installed `@kealthas-dev/opencode-mcp-oracle`/`@kealthas-dev/opencode-mcp-loki`/`@kealthas-dev/opencode-mcp-java-lsp`/`@kealthas-dev/opencode-mcp-spring-lsp`/`@kealthas-dev/opencode-mcp-mysql`/`@modelcontextprotocol/server-memory` (whichever of steps 6-11 were installed — nothing under `$SRC_DIR` to clean up for any of them, they're global installs, not copied-in source trees) are in place — those are the only files that matter going forward. Steps 4/5's plugins install themselves into `$CACHE_DIR/packages/<name>@latest/` the first time opencode runs with them configured — nothing under `$SRC_DIR` to clean up for those either. Step 12's redis-mcp-server and step 13's `@playwright/mcp` aren't installed at all in the same sense — both are spawned fresh via `uvx`/`npx` each time and cache under their own tool's directory, re-resolving `@latest` on every spawn — nothing under `$SRC_DIR` for either. Ask the human running this before deleting anything, don't assume.
 
 ## Report back
 
 State plainly, as a checklist:
 
 - Did `opencode.json` already exist (merged) or get created fresh (copied)?
-- Did step 13 confirm the custom prompt is actually being sent? If not, what did the output look like instead?
+- Did step 14 confirm the custom prompt is actually being sent? If not, what did the output look like instead?
 - Which `plugin` entries got installed (step 4, step 5, both, neither), and did `npm install` against this machine's registry succeed cleanly for them?
 - Did steps 6-10's `npm install` succeed against the internal registry? For steps 8/9: were `python3`/JDK 21+ `java` already present, or did they need manually transferring in (see step 8's note)?
-- If step 11 was installed: did `npm install -g` put `mcp-server-memory` on `PATH`? Did the model actually call the memory tools during step 13, or does `deploy/system-prompt.txt`'s `# Memory` section need stronger wording for this model?
+- If step 11 was installed: did `npm install -g` put `mcp-server-memory` on `PATH`? Did the model actually call the memory tools during step 14, or does `deploy/system-prompt.txt`'s `# Memory` section need stronger wording for this model?
 - If step 12 was attempted: was `uv`/`uvx` already present, or did it need installing (PyPI access is confirmed, see `docs/deployment-environment.md` — this should just work)?
+- If step 13 was attempted: did `npx @playwright/mcp@latest` launch cleanly (it downloads a browser binary on first run — confirm the target machine can reach wherever Playwright fetches that from)? If a login-gated page is the actual use case, was `--storage-state`/`--user-data-dir` set up, or is that still open?
 
 ## Updating steps 6-10's MCP servers later
 
@@ -483,4 +502,4 @@ npm install -g @kealthas-dev/opencode-mcp-oracle @kealthas-dev/opencode-mcp-loki
 
 Then re-run each server's same start command from steps 6-10 to pick the update back up. If an `EPERM` happens anyway (a lock survives the killed process, or antivirus is holding the directory open), the leftover is at `%APPDATA%\npm\node_modules\@kealthas-dev\opencode-mcp-<name>` on Windows — delete that directory by hand, then re-run the `npm install -g` command above.
 
-Step 12's `redis` entry doesn't need this at all — `redis-mcp-server@latest` in its `command` array re-resolves the newest published version every time opencode spawns it, so it's already always current with no update step of its own.
+Steps 12/13's `redis`/`playwright` entries don't need this at all — `redis-mcp-server@latest`/`@playwright/mcp@latest` in their `command` arrays re-resolve the newest published version every time opencode spawns them, so they're already always current with no update step of their own.

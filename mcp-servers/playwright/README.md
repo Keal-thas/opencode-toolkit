@@ -31,4 +31,4 @@ Either way, whatever file/directory holds the session state is a credential and 
 
 ## Status
 
-Not yet wired into `deploy/opencode.json.example` or exercised against a real target — added on request, pending Franco actually driving a login-gated internal page with it.
+Wired into `deploy/opencode.json.example` (`mcp.playwright`, `type: "local"`, `enabled: true`) and SETUP.md step 13. Not yet exercised against a real target — added on request, pending Franco actually driving a login-gated internal page with it. Unlike steps 6-12, `npx @playwright/mcp@latest` needs the public npm registry plus Playwright's own browser-binary CDN reachable, neither confirmed yet against the restricted target machine described in `docs/deployment-environment.md` (only the internal npm mirror and PyPI are confirmed there) — flag this back if it turns out blocked.
