@@ -35,7 +35,7 @@ test("registers a /verify command", async () => {
 
 test("/verify creates a separate session, seeds it with claim + user requests + git evidence, and switches the TUI to it", async () => {
   const { hooksP, calls, restore } = setup({
-    messages: [msg("user", "make add() add"), msg("assistant", "SECRET-REASONING"), msg("user", "synthetic", true)],
+    messages: [msg("user", "make add() add"), msg("assistant", "I finished it, tests pass"), { info: { role: "assistant" }, parts: [{ type: "tool", text: "SECRET-REASONING" }] }, msg("user", "synthetic", true)],
   });
   const hooks = await hooksP;
   const output = { parts: [] };
@@ -48,8 +48,10 @@ test("/verify creates a separate session, seeds it with claim + user requests + 
   assert.equal(calls.prompts[0].path.id, "new-session");
   assert.match(prompt, /add works/);
   assert.match(prompt, /make add\(\) add/);
-  assert.match(prompt, /git diff HEAD/);
-  assert.doesNotMatch(prompt, /SECRET-REASONING/, "assistant messages from the origin session must not leak");
+  assert.match(prompt, /git diff/);
+  assert.match(prompt, /UNVERIFIED/);
+  assert.match(prompt, /I finished it, tests pass/, "the last assistant text is passed as the unverified report");
+  assert.doesNotMatch(prompt, /SECRET-REASONING/, "tool calls / reasoning must not leak");
   assert.doesNotMatch(prompt, /synthetic/);
   assert.deepEqual(calls.fetches, [{ url: "http://127.0.0.1:4096/tui/select-session", body: { sessionID: "new-session" } }]);
   assert.match(output.parts[0].text, /new-session/);

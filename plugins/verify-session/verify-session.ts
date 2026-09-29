@@ -14,10 +14,12 @@ const MAX_REQUESTS_CHARS = 16_000;
 const MAX_MESSAGE_CHARS = 3000;
 const KEEP_FIRST = 2;
 const MAX_DIFF_CHARS = 60_000;
+const MAX_REPORT_CHARS = 6000;
 
 const REVIEW_INSTRUCTIONS = `You are an independent verifier. You did not write this change and have no memory of how it was made. Trust only what you can observe yourself: the diff, the files, and the output of commands you run.
 
-- Treat the claim as a hypothesis to falsify. "Tests pass" means nothing until you have run them.
+- The user does not trust the agent's completion report and is asking you to check it. Treat every statement in it as a hypothesis to falsify: "done", "tests pass", "fixed" mean nothing until you have observed them yourself.
+- Compare three things: what the user asked for, what the report claims, and what the code actually does. Look for requirements the report silently skipped, results it overstated, and changes it did not mention.
 - Check each requirement separately against the code, reading the surrounding code and not just the diff hunk.
 - Run the project's tests, or the narrowest command that exercises the change, and report the real output.
 - Do not modify files; describe fixes instead.
@@ -39,17 +41,29 @@ export const VerifySession: Plugin = async ({ client, serverUrl, $ }) => {
     }
   }
 
-  // Only the user's own messages: they are the spec, and carry no implementer reasoning.
-  async function userRequests(sessionID: string): Promise<string[]> {
+  const textOf = (parts: { type: string; synthetic?: boolean }[]) =>
+    parts.filter((p) => p.type === "text" && !p.synthetic).map((p) => (p as unknown as { text: string }).text).join("\n").trim();
+
+  // The user's own messages are the spec. From the assistant we take only its last
+  // text message - its completion report, which is the thing under suspicion - and
+  // never its tool calls or reasoning.
+  async function readSession(sessionID: string): Promise<{ requests: string[]; report: string }> {
     try {
       const res = await client.session.messages({ path: { id: sessionID }, throwOnError: true });
-      return (res.data ?? [])
-        .filter((m) => m.info.role === "user")
-        .map((m) => m.parts.filter((p) => p.type === "text" && !p.synthetic).map((p) => (p as { text: string }).text).join("\n").trim())
-        .filter(Boolean)
-        .map((t) => truncate(t, MAX_MESSAGE_CHARS));
+      const msgs = res.data ?? [];
+      const requests = msgs.filter((m) => m.info.role === "user").map((m) => textOf(m.parts)).filter(Boolean).map((t) => truncate(t, MAX_MESSAGE_CHARS));
+      const report = msgs.filter((m) => m.info.role === "assistant").map((m) => textOf(m.parts)).filter(Boolean).at(-1) ?? "";
+      return { requests, report: truncate(report, MAX_REPORT_CHARS) };
     } catch {
-      return [];
+      return { requests: [], report: "" };
+    }
+  }
+
+  // Diff against the fork point from the main branch, so work the agent already committed is visible too (a plain `git diff HEAD` is empty then).
+  async function baseRef(): Promise<string | undefined> {
+    for (const b of ["origin/master", "origin/main", "master", "main"]) {
+      const mb = await git(["merge-base", "HEAD", b]);
+      if (mb) return mb;
     }
   }
 
@@ -70,20 +84,22 @@ export const VerifySession: Plugin = async ({ client, serverUrl, $ }) => {
   }
 
   async function buildPrompt(claim: string, sourceSessionID: string): Promise<string> {
-    const [status, diff, log, requests] = await Promise.all([
+    const base = await baseRef();
+    const [status, diff, log, session] = await Promise.all([
       git(["status", "--short"]),
-      git(["diff", "HEAD"]),
-      git(["log", "--oneline", "-10"]),
-      userRequests(sourceSessionID).then(fitRequests),
+      git(base ? ["diff", base] : ["diff", "HEAD"]),
+      git(base ? ["log", "--oneline", `${base}..HEAD`] : ["log", "--oneline", "-10"]),
+      readSession(sourceSessionID),
     ]);
+    const requests = fitRequests(session.requests);
     return [
-      REVIEW_INSTRUCTIONS,
-      `## Claim to verify\n${claim || "(none given - infer the intent from the requests and diff below, and say what you inferred)"}`,
       `## What the user asked for in the originating session\n${requests.length ? requests.map((r, i) => `${i + 1}. ${r}`).join("\n") : "(unavailable)"}`,
+      `## The agent's completion report - UNVERIFIED, the user doubts it\n${session.report || "(unavailable)"}`,
+      claim ? `## What the user wants checked specifically\n${claim}` : "",
       `## git status --short\n${status || "(clean)"}`,
-      `## git diff HEAD (tracked files only - untracked files appear in status above, read them yourself)\n${truncate(diff, MAX_DIFF_CHARS) || "(empty)"}`,
-      `## git log --oneline -10\n${log || "(none)"}`,
-    ].join("\n\n");
+      `## git diff ${base ? "<fork point from main branch>" : "HEAD"} (tracked files only, committed + uncommitted - untracked files appear in status above, read them yourself)\n${truncate(diff, MAX_DIFF_CHARS) || "(empty)"}`,
+      `## Commits on this branch\n${log || "(none)"}`,
+    ].filter(Boolean).join("\n\n");
   }
 
   async function selectSession(sessionID: string) {
@@ -99,7 +115,7 @@ export const VerifySession: Plugin = async ({ client, serverUrl, $ }) => {
     config: async (config) => {
       config.command ??= {};
       config.command[COMMAND_NAME] ??= {
-        description: "Review the current changes in a brand-new session (usage: /verify <what the change should do>)",
+        description: "Review the current changes in a brand-new session (usage: /verify [what to check in particular])",
         template: "Reply with exactly: verify-session handled this command.",
       };
     },
@@ -110,7 +126,7 @@ export const VerifySession: Plugin = async ({ client, serverUrl, $ }) => {
         const created = await client.session.create({ body: { title: `verify: ${input.arguments.trim().slice(0, 60) || "current changes"}` }, throwOnError: true });
         const sessionID = created.data.id;
         // Fire and forget: the review runs for minutes, and the user should see it stream live in the new session.
-        void client.session.promptAsync({ path: { id: sessionID }, body: { parts: [{ type: "text", text: prompt }] } }).catch(() => {});
+        void client.session.promptAsync({ path: { id: sessionID }, body: { system: REVIEW_INSTRUCTIONS, parts: [{ type: "text", text: prompt }] } }).catch(() => {});
         await selectSession(sessionID).catch(() => {});
         output.parts = [{ type: "text", text: `A new review session (${sessionID}) was started. Reply with exactly: verify started.` } as (typeof output.parts)[number]];
       } catch (e) {
