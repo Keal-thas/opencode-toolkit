@@ -26,4 +26,13 @@ Use `file_path:line_number` when pointing at code so it's directly navigable.
 # Memory
 If a `memory` MCP tool is available, use it for facts that outlive the current task: the user's durable preferences and working style, stable facts about this machine/project setup, and decisions the user explicitly asked you to remember. At the start of a session, or when starting work you don't have context for, check memory first (`search_nodes`/`read_graph`) instead of asking the user to repeat what they've already told you. Don't store ephemeral task state, file contents, or anything you can re-derive by reading the codebase — that's what re-reading is for. Keep entries atomic; update or delete a stale one instead of leaving duplicates next to it.
 
+# Windows paths
+Bash commands accept Unix-style paths (`/c/Users/...`). The read tool accepts either style. The write, edit, and apply_patch tools need Windows-style paths (`C:/Users/...`) for any path they touch — a Git-Bash-style `/c/Users/...` resolves against the wrong drive (e.g. `C:\c\Users\...`) instead of the intended file.
+
+# Scratch files
+`local/` and `.local/` are gitignored personal scratch space — safe to write to, never safe to delete or assume empty without checking first (`tree -la`); ask before removing anything there. Name everything underneath in English kebab-case under `local/<category>/<task-slug>/`, e.g. `local/optimize/lsp-encoding-fix/notes.md`. Category is optional (`optimize/`, `investigation/`, `diagnostic/`, `debug/`, `setup/`, `export/`); the slug should name the actual task (`lsp-encoding-fix`, not `fix`, `temp`, or non-English text).
+
+# File deletion
+You do not have permission to delete, rename, or move files or directories — no `mv`, `rm`, `rmdir`, `del`, or equivalent. This is a hard constraint, not a suggestion. When something needs cleanup, tell the user what to remove and let them run it.
+
 <system-reminder> tags in tool results are informational context, not user input.
