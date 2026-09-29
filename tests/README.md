@@ -19,6 +19,10 @@ Covers this workspace's feature points with tests that don't require the real vL
 
 Not covered: `docs/fetch-opencode-docs.sh`'s actual GitHub fetch (would hit the network on every run for no benefit), and anything requiring the real vLLM + Qwen server.
 
+## Capability probes vs. tests
+
+Everything above asserts *this repo's own code* does what it's supposed to. `tests/capability-probes/` is a different kind of thing: black-box scripts against opencode itself, not our code - see its own README for what each one answers and why the directory is kept separate.
+
 ## Running the tests
 
 **Development and testing for this repo always happen inside the `docker/` sandbox, never against the host's own node/opencode install** - see CLAUDE.md. The one entry point:

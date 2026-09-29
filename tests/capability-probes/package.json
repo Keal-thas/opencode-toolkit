@@ -1,0 +1,10 @@
+{
+  "name": "opencode-toolkit-capability-probes",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Not pass/fail tests - black-box capability probes against a real opencode server, answering questions about opencode's own runtime behavior (what it sends the model, which Hooks-interface keys actually fire, what common tools actually do, how permission tiers actually behave) that this repo's plugins depend on but a fake-client unit test can't observe. See tests/README.md's \"Capability probes vs. tests\" section.",
+  "dependencies": {
+    "@opencode-ai/sdk": "^1.18.0"
+  }
+}
