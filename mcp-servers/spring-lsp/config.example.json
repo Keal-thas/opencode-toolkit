@@ -1,4 +1,4 @@
 {
   "SPRING_LSP_WORKSPACE_ROOT": "/path/to/your/spring-boot/project",
-  "JAVA_EXECUTABLE": "/path/to/jdk21/bin/java"
+  "KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE": "/path/to/jdk21/bin/java"
 }

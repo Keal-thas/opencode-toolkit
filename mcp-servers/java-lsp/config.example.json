@@ -2,6 +2,6 @@
   "JAVA_LSP_WORKSPACE_ROOT": "/path/to/your/java/project",
   "JDTLS_DATA_DIR": "/path/to/a/scratch/dir/jdtls-data",
   "JDTLS_COMMAND": "/path/to/some/other/jdtls",
-  "JDTLS_LAUNCHER_JAVA_EXECUTABLE": "/path/to/jdk21/bin/java",
-  "ANALYZED_PROJECT_JDK_RUNTIMES": [{ "name": "JavaSE-1.8", "path": "/path/to/jdk8", "default": true }]
+  "KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE": "/path/to/jdk21/bin/java",
+  "KEALTHAS_JAVA_LSP_ANALYZED_PROJECT_JDK_RUNTIMES": [{ "name": "JavaSE-1.8", "path": "/path/to/jdk8", "default": true }]
 }

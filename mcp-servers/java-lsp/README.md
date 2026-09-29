@@ -21,8 +21,8 @@ This exists because opencode's own built-in `jdtls` LSP integration only auto-de
 
 Two different JDKs are involved, configured by two different keys:
 
-- **The JDK that launches jdtls itself** must be 21+ (jdtls refuses to start on anything older). By default it's whatever `JAVA_HOME`/`PATH` provides; set `JDTLS_LAUNCHER_JAVA_EXECUTABLE` (passed to jdtls's own `--java-executable` flag) to a `java` binary only when no 21+ JDK is on the machine's `PATH`.
-- **The JDK(s) your analyzed project builds against** — e.g. a JDK 8 project — go in `ANALYZED_PROJECT_JDK_RUNTIMES`, a list of `{ "name", "path", "default" }` entries handed to jdtls as its `java.configuration.runtimes` setting. `name` must be jdtls's own execution-environment name (`JavaSE-1.8`, `JavaSE-11`, `JavaSE-17`, ...), `path` a JDK home directory (not `bin/java`), and `default: true` marks the one used when the project doesn't say. Pointing `JDTLS_LAUNCHER_JAVA_EXECUTABLE` at an old JDK does not do this — jdtls rejects it at startup with `jdtls requires at least Java 21`.
+- **The JDK that launches jdtls itself** must be 21+ (jdtls refuses to start on anything older). By default it's whatever `JAVA_HOME`/`PATH` provides; set `KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE` (passed to jdtls's own `--java-executable` flag) to a `java` binary only when no 21+ JDK is on the machine's `PATH`.
+- **The JDK(s) your analyzed project builds against** — e.g. a JDK 8 project — go in `KEALTHAS_JAVA_LSP_ANALYZED_PROJECT_JDK_RUNTIMES`, a list of `{ "name", "path", "default" }` entries handed to jdtls as its `java.configuration.runtimes` setting. `name` must be jdtls's own execution-environment name (`JavaSE-1.8`, `JavaSE-11`, `JavaSE-17`, ...), `path` a JDK home directory (not `bin/java`), and `default: true` marks the one used when the project doesn't say. Pointing `KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE` at an old JDK does not do this — jdtls rejects it at startup with `jdtls requires at least Java 21`.
 
 This package is verified against the vendored `jdtls` 1.61.0 above (see Vendoring). Vendoring the jdtls distribution itself doesn't remove the JDK-21+-to-launch-it requirement — a system `java` still needs to be on `PATH` (or however the process supervisor provides one); see SETUP.md step 8.
 
@@ -40,11 +40,11 @@ Config is file-based, not env-var-based — same two-file split as `mcp-servers/
     "JAVA_LSP_WORKSPACE_ROOT": "/path/to/your/java/project",
     "JDTLS_DATA_DIR": "/path/to/a/scratch/dir/jdtls-data",
     "JDTLS_COMMAND": "/path/to/some/other/jdtls",
-    "JDTLS_LAUNCHER_JAVA_EXECUTABLE": "/path/to/jdk21/bin/java",
-    "ANALYZED_PROJECT_JDK_RUNTIMES": [{ "name": "JavaSE-1.8", "path": "/path/to/jdk8", "default": true }]
+    "KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE": "/path/to/jdk21/bin/java",
+    "KEALTHAS_JAVA_LSP_ANALYZED_PROJECT_JDK_RUNTIMES": [{ "name": "JavaSE-1.8", "path": "/path/to/jdk8", "default": true }]
   }
   ```
-  `JAVA_LSP_WORKSPACE_ROOT` — absolute path to the Java project jdtls should analyze. `JDTLS_DATA_DIR` — jdtls's own workspace/index storage directory (its `-data` flag), **not** the project root; dedicate one per project — jdtls refuses to share a `-data` dir across concurrently-running instances for different projects. `JDTLS_COMMAND` — optional, the jdtls launcher, defaults to the vendored jdtls above. `JDTLS_LAUNCHER_JAVA_EXECUTABLE`, `ANALYZED_PROJECT_JDK_RUNTIMES` — both optional, see "JDK version" above. On Windows, write these paths with forward slashes (`C:/Users/you/project`) rather than backslashes — Node accepts both, and forward slashes need no escaping in JSON (an unescaped `C:\Users\...` breaks `JSON.parse` with a cryptic error).
+  `JAVA_LSP_WORKSPACE_ROOT` — absolute path to the Java project jdtls should analyze. `JDTLS_DATA_DIR` — jdtls's own workspace/index storage directory (its `-data` flag), **not** the project root; dedicate one per project — jdtls refuses to share a `-data` dir across concurrently-running instances for different projects. `JDTLS_COMMAND` — optional, the jdtls launcher, defaults to the vendored jdtls above. `KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE`, `KEALTHAS_JAVA_LSP_ANALYZED_PROJECT_JDK_RUNTIMES` — both optional, see "JDK version" above. On Windows, write these paths with forward slashes (`C:/Users/you/project`) rather than backslashes — Node accepts both, and forward slashes need no escaping in JSON (an unescaped `C:\Users\...` breaks `JSON.parse` with a cryptic error).
 
 ## Run
 
@@ -77,6 +77,6 @@ Either way, point opencode at it with a `type: "remote"` entry (see `deploy/open
 
 **Not yet wired into `tests/run-in-container.sh` / the docker/ sandbox** — the sandbox's base image has no JDK, and adding one needs explicit sign-off, same as any new download source (see `mcp-servers/TODO.md`). Run `java-lsp.test.ts` directly on a machine with a JDK 21+ `java` and Python 3 on `PATH` — the vendored jdtls handles the rest, same as on a real deployment (SETUP.md step 8).
 
-**Verified on Windows 10 (Git Bash, JDK 21, Python 3.12 with no `python3` on `PATH`)** starting from a clean checkout: first-run extraction, the launcher, and the automated tests all pass, and `ANALYZED_PROJECT_JDK_RUNTIMES` pointed at a JDK 8 makes `java_diagnostics` reject Java 10+ syntax (`var`) that JDK 21 accepts.
+**Verified on Windows 10 (Git Bash, JDK 21, Python 3.12 with no `python3` on `PATH`)** starting from a clean checkout: first-run extraction, the launcher, and the automated tests all pass, and `KEALTHAS_JAVA_LSP_ANALYZED_PROJECT_JDK_RUNTIMES` pointed at a JDK 8 makes `java_diagnostics` reject Java 10+ syntax (`var`) that JDK 21 accepts.
 
 **Not tested:** `java_definition`/`java_implementation` on Windows, a real multi-file/Maven/Gradle project (only single loose `.java` files were used), concurrent tool calls while jdtls is still indexing a large project, and behavior once `JDTLS_DATA_DIR` already has a populated index from a previous run.

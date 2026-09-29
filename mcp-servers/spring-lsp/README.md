@@ -12,7 +12,7 @@ This exists because generic Java tooling (jdtls, and opencode's own built-in `jd
 
 ## JDK version
 
-`spring-boot-language-server` itself needs a **JDK 21+** runtime — confirmed directly from the vendored 2.5.0-SNAPSHOT build's own `MANIFEST.MF` (`Java-Version: 21`), not from older STS4 docs (which say 11+ for older releases — this build has moved past that). Set `JAVA_EXECUTABLE` if the `java` on `PATH` isn't 21+; this is separate from whatever JDK your actual Spring Boot project targets.
+`spring-boot-language-server` itself needs a **JDK 21+** runtime — confirmed directly from the vendored 2.5.0-SNAPSHOT build's own `MANIFEST.MF` (`Java-Version: 21`), not from older STS4 docs (which say 11+ for older releases — this build has moved past that). Set `KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE` if the `java` on `PATH` isn't 21+; this is separate from whatever JDK your actual Spring Boot project targets.
 
 ## Configuration
 
@@ -26,10 +26,10 @@ Config is file-based, not env-var-based — same two-file split as `mcp-servers/
   ```json
   {
     "SPRING_LSP_WORKSPACE_ROOT": "/path/to/your/spring-boot/project",
-    "JAVA_EXECUTABLE": "/path/to/jdk21/bin/java"
+    "KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE": "/path/to/jdk21/bin/java"
   }
   ```
-  `SPRING_LSP_WORKSPACE_ROOT` — absolute path to the Spring Boot project to analyze. `JAVA_EXECUTABLE` — optional, see "JDK version" above; defaults to whatever `java` resolves to on `PATH`. On Windows, write these paths with forward slashes (`C:/Users/you/project`) rather than backslashes — Node accepts both, and forward slashes need no escaping in JSON (an unescaped `C:\Users\...` breaks `JSON.parse` with a cryptic error).
+  `SPRING_LSP_WORKSPACE_ROOT` — absolute path to the Spring Boot project to analyze. `KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE` — optional, see "JDK version" above; defaults to whatever `java` resolves to on `PATH`. On Windows, write these paths with forward slashes (`C:/Users/you/project`) rather than backslashes — Node accepts both, and forward slashes need no escaping in JSON (an unescaped `C:\Users\...` breaks `JSON.parse` with a cryptic error).
 
 ## Run
 

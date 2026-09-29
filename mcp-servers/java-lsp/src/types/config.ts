@@ -7,7 +7,7 @@ export interface JavaLspConfig {
   JDTLS_DATA_DIR: string;
   JDTLS_COMMAND?: string;
   // The java that launches jdtls itself - jdtls requires 21+, see README.md's "JDK version" section.
-  JDTLS_LAUNCHER_JAVA_EXECUTABLE?: string;
+  KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE?: string;
   // The JDKs the analyzed project builds against, handed to jdtls as java.configuration.runtimes.
-  ANALYZED_PROJECT_JDK_RUNTIMES?: { name: string; path: string; default?: boolean }[];
+  KEALTHAS_JAVA_LSP_ANALYZED_PROJECT_JDK_RUNTIMES?: { name: string; path: string; default?: boolean }[];
 }

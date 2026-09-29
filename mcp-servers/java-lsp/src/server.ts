@@ -21,8 +21,8 @@ const SAMPLE_JAVA_LSP_CONFIG = {
   JAVA_LSP_WORKSPACE_ROOT: "/path/to/your/java/project",
   JDTLS_DATA_DIR: "/path/to/a/scratch/dir/jdtls-data",
   JDTLS_COMMAND: "/path/to/some/other/jdtls (optional, defaults to the vendored jdtls)",
-  JDTLS_LAUNCHER_JAVA_EXECUTABLE: "/path/to/jdk21/bin/java (optional, launches jdtls itself, must be 21+ - see README.md's JDK version section)",
-  ANALYZED_PROJECT_JDK_RUNTIMES: [{ name: "JavaSE-1.8", path: "/path/to/jdk8 (a JDK home, not bin/java)", default: true }],
+  KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE: "/path/to/jdk21/bin/java (optional, launches jdtls itself, must be 21+ - see README.md's JDK version section)",
+  KEALTHAS_JAVA_LSP_ANALYZED_PROJECT_JDK_RUNTIMES: [{ name: "JavaSE-1.8", path: "/path/to/jdk8 (a JDK home, not bin/java)", default: true }],
 };
 
 function printSampleConfig(label: string, path_: string, sample: unknown): void {
@@ -73,7 +73,7 @@ function loadJavaLspConfig(): JavaLspConfig {
 
   try {
     const raw = JSON.parse(readFileSync(resolvedPath, "utf8"));
-    const { JAVA_LSP_WORKSPACE_ROOT, JDTLS_DATA_DIR, JDTLS_COMMAND, JDTLS_LAUNCHER_JAVA_EXECUTABLE, ANALYZED_PROJECT_JDK_RUNTIMES } = raw;
+    const { JAVA_LSP_WORKSPACE_ROOT, JDTLS_DATA_DIR, JDTLS_COMMAND, KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE, KEALTHAS_JAVA_LSP_ANALYZED_PROJECT_JDK_RUNTIMES } = raw;
     if (!JAVA_LSP_WORKSPACE_ROOT) {
       throw new Error("missing required key JAVA_LSP_WORKSPACE_ROOT (the Java project root jdtls should analyze)");
     }
@@ -83,7 +83,7 @@ function loadJavaLspConfig(): JavaLspConfig {
           "not the project root - use a directory dedicated to this one project)",
       );
     }
-    return { JAVA_LSP_WORKSPACE_ROOT, JDTLS_DATA_DIR, JDTLS_COMMAND, JDTLS_LAUNCHER_JAVA_EXECUTABLE, ANALYZED_PROJECT_JDK_RUNTIMES };
+    return { JAVA_LSP_WORKSPACE_ROOT, JDTLS_DATA_DIR, JDTLS_COMMAND, KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE, KEALTHAS_JAVA_LSP_ANALYZED_PROJECT_JDK_RUNTIMES };
   } catch (err) {
     console.error(`Failed to load java-lsp config from ${resolvedPath}: ${(err as Error).message}`);
     // A raw Windows path like "C:\Users\x\project" typed into JSON without
@@ -199,7 +199,7 @@ function getClient(log: (kind: string, message: string) => void): Promise<LspCli
     const { command, prefixArgs } = resolveJdtlsCommand();
     const client = new LspClient({
       command,
-      args: [...prefixArgs, "-data", javaLspConfig.JDTLS_DATA_DIR, ...(javaLspConfig.JDTLS_LAUNCHER_JAVA_EXECUTABLE ? ["--java-executable", javaLspConfig.JDTLS_LAUNCHER_JAVA_EXECUTABLE] : [])],
+      args: [...prefixArgs, "-data", javaLspConfig.JDTLS_DATA_DIR, ...(javaLspConfig.KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE ? ["--java-executable", javaLspConfig.KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE] : [])],
       rootPath: WORKSPACE_ROOT,
       log,
     });
@@ -207,9 +207,9 @@ function getClient(log: (kind: string, message: string) => void): Promise<LspCli
       () => {
         // The JDKs the *analyzed project* builds against - independent of the
         // JDK 21+ that launches jdtls itself (see README's "JDK version").
-        if (javaLspConfig.ANALYZED_PROJECT_JDK_RUNTIMES?.length) {
+        if (javaLspConfig.KEALTHAS_JAVA_LSP_ANALYZED_PROJECT_JDK_RUNTIMES?.length) {
           client.notify("workspace/didChangeConfiguration", {
-            settings: { java: { configuration: { runtimes: javaLspConfig.ANALYZED_PROJECT_JDK_RUNTIMES } } },
+            settings: { java: { configuration: { runtimes: javaLspConfig.KEALTHAS_JAVA_LSP_ANALYZED_PROJECT_JDK_RUNTIMES } } },
           });
         }
         return client;
