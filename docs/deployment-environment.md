@@ -1,6 +1,6 @@
 # Deployment environment
 
-Background facts about the upstream project, the target machine, and the model this repo's `deploy/`/`SETUP.md` setup targets. Linked from [CLAUDE.md](../CLAUDE.md)'s "Where things live".
+Background facts about the upstream project, the target machine, and the model this repo's `deploy/`/`SETUP.md` setup targets. Linked from [CLAUDE.md](../CLAUDE.md)'s "Deep reference".
 
 ## opencode upstream
 

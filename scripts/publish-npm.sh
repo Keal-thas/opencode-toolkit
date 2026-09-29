@@ -16,9 +16,7 @@
 # actually needs.
 #
 # Requires you to already be logged in (`npm login`) with publish rights on
-# the @kealthas-dev scope (note: this now targets the opencode-toolkit
-# package name; the legacy opencode-qwen-prompt package is no longer
-# published to, see CLAUDE.md). Bump the version in package.json and commit that
+# the @kealthas-dev scope. Bump the version in package.json and commit that
 # before running this.
 #
 # Usage: ./scripts/publish-npm.sh [extra npm publish flags, e.g. --otp=123456 --dry-run]
