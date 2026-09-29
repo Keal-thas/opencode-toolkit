@@ -63,7 +63,8 @@ function startServer(port: number, configOverrides?: Record<string, unknown>): P
     ),
   );
 
-  const env = { ...process.env, HOME: home };
+  // os.homedir() reads USERPROFILE on Windows, HOME elsewhere.
+  const env = { ...process.env, HOME: home, USERPROFILE: home };
   delete env.LOKI_CONFIG_ENV;
 
   return new Promise((resolve, reject) => {

@@ -62,7 +62,8 @@ function createFakeHome(port: number, connectString: string): { home: string } {
 
 function startServer(port: number, connectString: string = buildConnectString()): Promise<ChildProcess> {
   const { home } = createFakeHome(port, connectString);
-  const env = { ...process.env, HOME: home };
+  // os.homedir() reads USERPROFILE on Windows, HOME elsewhere.
+  const env = { ...process.env, HOME: home, USERPROFILE: home };
   delete env.MYSQL_CONFIG_ENV;
 
   return new Promise((resolve, reject) => {
