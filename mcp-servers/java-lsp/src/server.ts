@@ -2,7 +2,7 @@
 import http from "node:http";
 import path from "node:path";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -21,7 +21,8 @@ const SAMPLE_JAVA_LSP_CONFIG = {
   JAVA_LSP_WORKSPACE_ROOT: "/path/to/your/java/project",
   JDTLS_DATA_DIR: "/path/to/a/scratch/dir/jdtls-data",
   JDTLS_COMMAND: "/path/to/some/other/jdtls (optional, defaults to the vendored jdtls)",
-  JAVA_EXECUTABLE: "/path/to/jdk8/bin/java (optional, see README.md's JDK version section)",
+  JDTLS_LAUNCHER_JAVA_EXECUTABLE: "/path/to/jdk21/bin/java (optional, launches jdtls itself, must be 21+ - see README.md's JDK version section)",
+  ANALYZED_PROJECT_JDK_RUNTIMES: [{ name: "JavaSE-1.8", path: "/path/to/jdk8 (a JDK home, not bin/java)", default: true }],
 };
 
 function printSampleConfig(label: string, path_: string, sample: unknown): void {
@@ -72,7 +73,7 @@ function loadJavaLspConfig(): JavaLspConfig {
 
   try {
     const raw = JSON.parse(readFileSync(resolvedPath, "utf8"));
-    const { JAVA_LSP_WORKSPACE_ROOT, JDTLS_DATA_DIR, JDTLS_COMMAND, JAVA_EXECUTABLE } = raw;
+    const { JAVA_LSP_WORKSPACE_ROOT, JDTLS_DATA_DIR, JDTLS_COMMAND, JDTLS_LAUNCHER_JAVA_EXECUTABLE, ANALYZED_PROJECT_JDK_RUNTIMES } = raw;
     if (!JAVA_LSP_WORKSPACE_ROOT) {
       throw new Error("missing required key JAVA_LSP_WORKSPACE_ROOT (the Java project root jdtls should analyze)");
     }
@@ -82,7 +83,7 @@ function loadJavaLspConfig(): JavaLspConfig {
           "not the project root - use a directory dedicated to this one project)",
       );
     }
-    return { JAVA_LSP_WORKSPACE_ROOT, JDTLS_DATA_DIR, JDTLS_COMMAND, JAVA_EXECUTABLE };
+    return { JAVA_LSP_WORKSPACE_ROOT, JDTLS_DATA_DIR, JDTLS_COMMAND, JDTLS_LAUNCHER_JAVA_EXECUTABLE, ANALYZED_PROJECT_JDK_RUNTIMES };
   } catch (err) {
     console.error(`Failed to load java-lsp config from ${resolvedPath}: ${(err as Error).message}`);
     // A raw Windows path like "C:\Users\x\project" typed into JSON without
@@ -109,6 +110,8 @@ const LINE_CHAR_DESCRIPTION =
 // "the command isn't on PATH at all" (e.g. GNU coreutils missing on Windows
 // outside Git Bash/WSL) from "the command ran and failed" (stderr already
 // captured in the thrown error by execFileSync's default 'pipe' stdio).
+const toPosix = (p: string): string => p.replaceAll("\\", "/");
+
 function runVendorSetupCommand(command: string, args: string[], failureContext: string): void {
   try {
     execFileSync(command, args);
@@ -122,6 +125,25 @@ function runVendorSetupCommand(command: string, args: string[], failureContext: 
     }
     throw new Error(`${failureContext}: ${e.stderr?.toString("utf8").trim() || e.message}`);
   }
+}
+
+// The official python.org Windows installer provides python.exe and the py
+// launcher but no python3.exe, and the Microsoft Store's python3.exe is a stub
+// that exits non-zero - so probe by actually running --version instead of
+// assuming a name.
+function findWindowsPython(): { command: string; args: string[] } {
+  const candidates = [
+    { command: "python3", args: [] as string[] },
+    { command: "python", args: [] as string[] },
+    { command: "py", args: ["-3"] },
+  ];
+  for (const c of candidates) {
+    const r = spawnSync(c.command, [...c.args, "--version"], { encoding: "utf8" });
+    if (r.status === 0 && /^Python 3\./.test(`${r.stdout}${r.stderr}`.trim())) return c;
+  }
+  throw new Error(
+    "jdtls's launcher needs Python 3, but none of `python3`, `python`, `py -3` runs on PATH (the Microsoft Store's python3 stub doesn't count).",
+  );
 }
 
 // vendor/jdt-language-server-<version>.tar.gz is committed (see README's
@@ -142,25 +164,28 @@ function resolveJdtlsCommand(): { command: string; prefixArgs: string[] } {
   if (!existsSync(launcher)) {
     console.error(`Extracting ${tarball} into ${extractedDir} (first run only)...`);
     runVendorSetupCommand("mkdir", ["-p", extractedDir], `Failed to create ${extractedDir}`);
-    // --force-local: without it, GNU tar misparses a Windows path through an
-    // npm-scope dir (.../node_modules/@kealthas-dev/...) as a remote
-    // user@host:file spec (the "@" plus the drive-letter colon earlier in
-    // the path triggers it) and fails with "Cannot connect to ...: resolve
-    // failed" instead of extracting.
+    // Forward slashes, not the native path: Git for Windows' GNU tar fails to
+    // open a backslash path ("Cannot open: No such file or directory"), and
+    // --force-local alone doesn't fix that. --force-local is still needed on
+    // top: with a drive-letter colon (or an "@" from an npm scope dir, as in
+    // node_modules/@kealthas-dev/...) tar otherwise treats the path as a
+    // remote host:file spec.
     runVendorSetupCommand(
       "tar",
-      ["-xzf", path.join(vendorDir, tarball), "-C", extractedDir, "--force-local"],
+      ["-xzf", toPosix(path.join(vendorDir, tarball)), "-C", toPosix(extractedDir), "--force-local"],
       `Failed to extract ${tarball} into ${extractedDir}`,
     );
     console.error(`Extracted ${tarball}.`);
   }
-  // bin/jdtls is Eclipse's own python3 launcher script - a POSIX shebang
+  // bin/jdtls is Eclipse's own python launcher script - a POSIX shebang
   // script with no .exe/.bat/.cmd. macOS/Linux's spawn() reads the shebang
   // itself and runs it fine, but Windows has no shebang support at all -
   // spawn() there fails with ENOENT trying to launch the script directly.
-  // Invoke python3 on it explicitly there instead (needs python3 on PATH,
-  // same prerequisite the README/SETUP.md already document).
-  if (process.platform === "win32") return { command: "python3", prefixArgs: [launcher] };
+  // Invoke a Python 3 interpreter on it explicitly there instead.
+  if (process.platform === "win32") {
+    const python = findWindowsPython();
+    return { command: python.command, prefixArgs: [...python.args, launcher] };
+  }
   return { command: launcher, prefixArgs: [] };
 }
 
@@ -174,12 +199,21 @@ function getClient(log: (kind: string, message: string) => void): Promise<LspCli
     const { command, prefixArgs } = resolveJdtlsCommand();
     const client = new LspClient({
       command,
-      args: [...prefixArgs, "-data", javaLspConfig.JDTLS_DATA_DIR, ...(javaLspConfig.JAVA_EXECUTABLE ? ["--java-executable", javaLspConfig.JAVA_EXECUTABLE] : [])],
+      args: [...prefixArgs, "-data", javaLspConfig.JDTLS_DATA_DIR, ...(javaLspConfig.JDTLS_LAUNCHER_JAVA_EXECUTABLE ? ["--java-executable", javaLspConfig.JDTLS_LAUNCHER_JAVA_EXECUTABLE] : [])],
       rootPath: WORKSPACE_ROOT,
       log,
     });
     clientPromise = client.start().then(
-      () => client,
+      () => {
+        // The JDKs the *analyzed project* builds against - independent of the
+        // JDK 21+ that launches jdtls itself (see README's "JDK version").
+        if (javaLspConfig.ANALYZED_PROJECT_JDK_RUNTIMES?.length) {
+          client.notify("workspace/didChangeConfiguration", {
+            settings: { java: { configuration: { runtimes: javaLspConfig.ANALYZED_PROJECT_JDK_RUNTIMES } } },
+          });
+        }
+        return client;
+      },
       (err) => {
         clientPromise = undefined; // allow retry on the next call instead of caching a permanent failure
         throw err;

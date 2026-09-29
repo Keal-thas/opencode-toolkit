@@ -1,10 +1,10 @@
-// Requires a real `jdtls` on PATH and a JDK 21+ runtime to launch it with
-// (see README's "JDK version" section). Not mockable: LSP is a genuinely
+// Requires a JDK 21+ `java` on PATH (and `python3`/`python`/`py -3` on Windows)
+// to launch the vendored jdtls (see README's "JDK version" section). Not mockable: LSP is a genuinely
 // stateful protocol, and the whole point is talking to a real jdtls process.
 //
 // Not yet wired into tests/run-in-container.sh / the docker/ sandbox - no JDK
-// or jdtls in that image (see mcp-servers/TODO.md). Run directly on a machine
-// with jdtls installed: `cd mcp-servers/java-lsp && npm install && npm run
+// in that image (see mcp-servers/TODO.md). Run directly on a machine with a
+// JDK 21+: `cd mcp-servers/java-lsp && npm install && npm run
 // build && npm test`.
 //
 // server.ts is config-file-driven (see README's Configuration section, and
@@ -25,13 +25,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 const DIST_SERVER_PATH = join(here, "dist", "server.js");
 const READY_TIMEOUT_MS = 20_000;
 
+// The server launches its own vendored jdtls, so all the test needs on the
+// machine is a JDK 21+ `java` for that launcher to find.
 try {
-  execSync("jdtls --help", { stdio: "ignore" });
+  execSync("java -version", { stdio: "ignore" });
 } catch {
-  throw new Error(
-    "jdtls not found on PATH - this test needs a real jdtls install (e.g. `brew install jdtls` on " +
-      "macOS), not a mock. See README.md's 'JDK version' section.",
-  );
+  throw new Error("java not found on PATH - jdtls needs a JDK 21+ runtime to launch. See README.md's 'JDK version' section.");
 }
 
 // A fresh sample project per run, under the OS temp dir - not committed
@@ -76,7 +75,8 @@ function startServer(port: number): Promise<ChildProcess> {
     JSON.stringify({ JAVA_LSP_WORKSPACE_ROOT: workspaceRoot, JDTLS_DATA_DIR: dataDir }),
   );
 
-  const env = { ...process.env, HOME: home };
+  // os.homedir() reads USERPROFILE on Windows, HOME elsewhere.
+  const env = { ...process.env, HOME: home, USERPROFILE: home };
   delete env.JAVA_LSP_CONFIG_ENV;
 
   return new Promise((resolve, reject) => {
