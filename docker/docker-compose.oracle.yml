@@ -8,10 +8,17 @@ services:
     ports:
       # Host debugging only.
       - "127.0.0.1:1521:1521"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     environment:
       - ORACLE_PASSWORD=${ORACLE_SYS_PASSWORD:?set ORACLE_SYS_PASSWORD in .env}
       - APP_USER=${ORACLE_APP_USER:?set ORACLE_APP_USER in .env}
       - APP_USER_PASSWORD=${ORACLE_APP_USER_PASSWORD:?set ORACLE_APP_USER_PASSWORD in .env}
+      - ORACLE_MEMORY=1G
+      - _SGA_TARGET=512M
+      - _PGA_AGGREGATE_TARGET=128M
     volumes:
       - oracle-data:/opt/oracle/oradata
     networks:

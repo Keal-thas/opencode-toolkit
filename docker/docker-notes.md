@@ -95,6 +95,40 @@ First-time init is effectively instant (no schema/DB bootstrap) — the `loki-da
 
 Reachable from `opencode-dev` as `loki:3100`, same `external: true` shared-network join as the Oracle fixture above. `opencode-dev`'s `environment` block pre-wires `LOKI_BASE_URL=http://loki:3100`; since the server is config-file-driven (see its README's Configuration section), `docker-entrypoint.sh` turns this into `~/.config/kealthas-dev/opencode-mcp-loki/config.json` at container start, so `cd mcp-servers/loki && npm install && npm run build && npm start` just works with zero setup. No credentials needed — the sandbox's `loki` runs unauthenticated, matching `mcp-servers/loki/README.md`'s "auth is optional" design.
 
+## MySQL test instance, for exercising mcp-servers/mysql/
+
+Same shared-fixture shape as the Oracle/Loki sections above: its own compose file/project, `docker/docker-compose.mysql.yml` (fixed project name `opencode-toolkit-mysql`), separate from `docker-compose.yml`'s per-worktree one. `mysql` (official `mysql` image, version pinned via `MYSQL_VERSION` in `docker/.env`, same reasoning as `OPENCODE_VERSION`/`ORACLE_FREE_VERSION`) gives `mcp-servers/mysql/` a real MySQL instance to test against. Setting `MYSQL_ROOT_PASSWORD`/`MYSQL_DATABASE`/`MYSQL_USER`/`MYSQL_PASSWORD` together is the official image's own convention for auto-creating an app user with full privileges on that one database at first init — no custom init script needed, unlike a restricted read-only grant (that's `mcp-servers/mysql/README.md`'s "Recommended read-only account" section, a production deployment concern verified by hand against this same image, not something the test fixture itself needs).
+
+Start it manually, same as `oracle`/`loki`:
+
+```sh
+docker compose -f docker/docker-compose.mysql.yml up -d --wait
+```
+
+`--wait` blocks until `mysqladmin ping` passes. First-time init (creating the `testdb` database and `testuser` account) takes a few seconds and only happens once — the `mysql-data` volume persists it; once warm, later starts are healthy within seconds. Stop it explicitly with `docker compose -f docker/docker-compose.mysql.yml down`.
+
+Reachable from `opencode-dev` as `mysql:3306`, same `external: true` shared-network join as the Oracle/Loki fixtures. `opencode-dev`'s `environment` block pre-wires `MYSQL_HOST=mysql`/`MYSQL_USER`/`MYSQL_PASSWORD`/`MYSQL_DATABASE`; since the server itself reads a single `MYSQL_CONNECT_STRING` (see its README's Configuration section), `docker-entrypoint.sh` assembles one from those four at container start, so `cd mcp-servers/mysql && npm install && npm run build && npm start` just works with zero setup. Credentials (`MYSQL_APP_USER`/`MYSQL_APP_USER_PASSWORD`/`MYSQL_ROOT_PASSWORD` in `docker/.env`) are throwaway sandbox fixtures, never exposed outside this docker network.
+
+## Redis test instance, for exercising mcp-servers/redis/
+
+Same shared-fixture shape as the sections above: its own compose file/project, `docker/docker-compose.redis.yml` (fixed project name `opencode-toolkit-redis`), separate from `docker-compose.yml`'s per-worktree one. `redis` (official `redis` image, version pinned via `REDIS_VERSION` in `docker/.env`) gives `mcp-servers/redis/`'s real target - the official upstream `redis-mcp-server` package, not our own code (see its README) - a real Redis instance to test against.
+
+Unlike Oracle/MySQL's app users, the ACL users here are baked into a mounted `docker/redis.conf` rather than created via env vars or a runtime `ACL SETUSER` call - Redis's in-memory ACL state doesn't survive a container restart on its own, and a config file loaded at startup sidesteps that entirely. Two users: `default` (no password, full access - ad-hoc `redis-cli` debugging inside this docker network only) and `readonlyuser` (`>readonlypass`, `+@read -@write` - the account `mcp-servers/redis/`'s tests actually connect as, mirroring its README's ACL recommendation). Confirmed against a real Redis 7 instance, not assumed: `readonlyuser` can `GET`/`KEYS` but gets `NOPERM` on `SET`/`DEL`/`FLUSHALL`, and on `EVAL` (Lua scripting) and `SORT ... STORE` too - Redis categorizes any command with a possible write side effect as `@write` entirely, unlike MySQL's DDL-vs-DML split (see `mcp-servers/mysql/README.md`'s documented gap) - there's no equivalent gap here.
+
+Start it manually, same as the others:
+
+```sh
+docker compose -f docker/docker-compose.redis.yml up -d --wait
+```
+
+`--wait` blocks until `redis-cli --user readonlyuser --pass readonlypass PING` passes. No slow first-time init - ready within a couple of seconds. Stop it explicitly with `docker compose -f docker/docker-compose.redis.yml down`.
+
+Reachable from `opencode-dev` as `redis:6379`, same `external: true` shared-network join as the other fixtures. `opencode-dev`'s `environment` block pre-wires `REDIS_HOST=redis` for convenience (e.g. ad-hoc `redis-cli -h $REDIS_HOST`) - unlike Oracle/Loki/MySQL, there's no config file for an entrypoint script to generate, since `redis-mcp-server` (the official package) reads plain `REDIS_HOST`/`REDIS_USERNAME`/`REDIS_PWD` env vars itself (see its own README, linked from `mcp-servers/redis/README.md`). `tests/integration/mcp-redis/redis.test.mjs` spawns it via `uvx` (see the next section) with those env vars pointed at the fixed `readonlyuser`/`readonlypass` credentials `docker/redis.conf` defines.
+
+## uv/uvx, for running the official redis-mcp-server package
+
+Installed in the `Dockerfile` via the official installer script (`curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh`) - a self-contained Rust binary, no `python3` dependency of its own (it manages its own Python toolchain on demand, downloaded the first time `uvx` actually needs one). Exists solely so `mcp-servers/redis/`'s test can spawn the real upstream `redis-mcp-server` package the same way a real deployment's `opencode.json`'s `type: "local"` entry would (see `mcp-servers/redis/README.md`), rather than leaving it manual-only the way `java-lsp`/`spring-lsp` had to stay for a missing JDK (see `mcp-servers/TODO.md`).
+
 ## Verifying the system-prompt override actually works
 
 **Automatic now, not a manual step.** `docker-entrypoint.sh` (re)generates `~/.config/opencode/opencode.jsonc` fresh on every container start — `agent.build/plan/general.prompt` wired to `/home/dev/project/deploy/system-prompt.txt` (the bind-mounted, live file) and the diagnostic plugin loaded via the bare `@kealthas-dev/opencode-system-prompt-tools` (the published npm package — see "Plugin loading" above). There's no config volume to hand-edit anymore.

@@ -48,7 +48,7 @@ Config is file-based, not env-var-based — two separate files, matching how the
     "ORACLE_DEFAULT_SCHEMA": "schema_name"
   }
   ```
-  `ORACLE_CONNECT_STRING` accepts either an Easy Connect string (`host:port/service_name`) or a full TNS descriptor — both are passed straight through to `oracledb.getConnection()`, which supports both natively. Not a JDBC URL either way. `ORACLE_DEFAULT_SCHEMA` is optional — when set, every connection runs `ALTER SESSION SET CURRENT_SCHEMA` before the agent's SQL, so queries don't need to qualify every table with `schema.table`. `oracle_query`'s own optional `schema` argument overrides this per call.
+  `ORACLE_CONNECT_STRING` accepts either an Easy Connect string (`host:port/service_name`) or a full TNS descriptor — both are passed straight through to `oracledb.getConnection()`, which supports both natively. Not a JDBC URL either way. `ORACLE_DEFAULT_SCHEMA` is optional — when set, every connection runs `ALTER SESSION SET CURRENT_SCHEMA` before the agent's SQL, so queries don't need to qualify every table with `schema.table`. `oracle_query`'s own optional `schema` argument overrides this per call. Like `sql` itself, this value is interpolated directly into the `ALTER SESSION` statement, not bind-parameterized — same full-passthrough stance (see Design above).
 
 A typical multi-environment layout:
 

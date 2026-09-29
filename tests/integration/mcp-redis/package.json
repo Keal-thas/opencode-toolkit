@@ -1,0 +1,11 @@
+{
+  "name": "opencode-toolkit-mcp-redis-test",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Test-only harness for the official redis-mcp-server PyPI package wired in by deploy/opencode.json.example (see docs/feature-points/20-redis-mcp-server.md) - no server code of our own here, this just verifies the upstream package behaves as documented (and as actually observed - see mcp-servers/redis/README.md's CLI-args-vs-env-vars note). The `redis` dependency is test-only, to seed/verify data independently of the tool under test - not something mcp-servers/redis/ itself depends on, since there's no code there.",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "redis": "^4.7.0"
+  }
+}

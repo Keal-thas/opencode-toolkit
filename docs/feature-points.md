@@ -19,3 +19,6 @@ A feature-by-feature inventory of this workspace. Index only — details in `fea
 15. [opencode memory MCP](feature-points/15-opencode-memory-mcp.md) — wires in the official `@modelcontextprotocol/server-memory` package (config + prompt policy only, no server code of our own). **Tested.**
 16. [java-lsp MCP server](feature-points/16-java-lsp-mcp-server.md) — jdtls-backed Java code-intelligence tools. **Tested** (real jdtls, manual — not yet in `./tests/run-all.sh`).
 17. [spring-lsp MCP server](feature-points/17-spring-lsp-mcp-server.md) — spring-boot-language-server-backed Spring-aware tools. **Protocol-tested only** — Spring-specific semantic richness not verified, see its feature-point doc.
+18. [gitbash-edit-path-fix.ts plugin](feature-points/18-gitbash-edit-path-fix-plugin.md) — rewrites the built-in `edit` tool's `filePath` to work around a Windows/Git-Bash path-resolution bug in opencode itself. **Tested.**
+19. [mysql MCP server](feature-points/19-mysql-mcp-server.md) — passthrough `mysql_query` tool unconditionally wrapped in a read-only transaction, per-request connection. **Tested.**
+20. [redis MCP server](feature-points/20-redis-mcp-server.md) — wires in the official upstream `redis-mcp-server` PyPI package (config + ACL policy only, no server code of our own). **Tested.**

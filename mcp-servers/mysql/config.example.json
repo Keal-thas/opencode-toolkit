@@ -1,0 +1,3 @@
+{
+  "MYSQL_CONNECT_STRING": "mysql://username:password@hostname:3306/database_name"
+}

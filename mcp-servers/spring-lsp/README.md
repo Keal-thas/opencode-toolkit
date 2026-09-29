@@ -29,7 +29,7 @@ Config is file-based, not env-var-based — same two-file split as `mcp-servers/
     "JAVA_EXECUTABLE": "/path/to/jdk21/bin/java"
   }
   ```
-  `SPRING_LSP_WORKSPACE_ROOT` — absolute path to the Spring Boot project to analyze. `JAVA_EXECUTABLE` — optional, see "JDK version" above; defaults to whatever `java` resolves to on `PATH`.
+  `SPRING_LSP_WORKSPACE_ROOT` — absolute path to the Spring Boot project to analyze. `JAVA_EXECUTABLE` — optional, see "JDK version" above; defaults to whatever `java` resolves to on `PATH`. On Windows, write these paths with forward slashes (`C:/Users/you/project`) rather than backslashes — Node accepts both, and forward slashes need no escaping in JSON (an unescaped `C:\Users\...` breaks `JSON.parse` with a cryptic error).
 
 ## Run
 

@@ -46,6 +46,18 @@ cat > /home/dev/.config/kealthas-dev/opencode-mcp-loki/config.json <<EOF
 }
 EOF
 
+# Same pattern for mcp-servers/mysql/, generated from docker-compose.yml's
+# MYSQL_HOST/MYSQL_USER/MYSQL_PASSWORD/MYSQL_DATABASE into the single
+# connect-string shape the server actually reads (see its README's
+# Configuration section) - these are throwaway sandbox fixtures with no
+# reserved URI characters, so no percent-encoding needed here.
+mkdir -p /home/dev/.config/kealthas-dev/opencode-mcp-mysql
+cat > /home/dev/.config/kealthas-dev/opencode-mcp-mysql/config.json <<EOF
+{
+  "MYSQL_CONNECT_STRING": "mysql://$MYSQL_USER:$MYSQL_PASSWORD@$MYSQL_HOST:3306/$MYSQL_DATABASE"
+}
+EOF
+
 chown -R dev:dev /home/dev/.config/kealthas-dev
 
 # Load provider API keys from the read-only ~/.keys mount into this

@@ -90,6 +90,14 @@ async function auditQuery(sql: string): Promise<{ allow: boolean; reason?: strin
   return { allow: true };
 }
 
+// oracledb has no timeout of any kind by default (getConnection() can hang
+// forever against a host that accepts the TCP connection but never
+// responds, and execute() the same against a connection that goes dark
+// mid-session, e.g. blocked on a lock) - both units are oracledb's own,
+// not a shared convention: connectTimeout is seconds, callTimeout is ms.
+const CONNECT_TIMEOUT_SECONDS = 10;
+const CALL_TIMEOUT_MS = 30_000;
+
 // One connection per request, not pooled - deliberate:
 // - a stray DML statement can't outlive the request (closing rolls it back)
 // - concurrent calls never race on the same session
@@ -110,7 +118,9 @@ async function executeQuery(sql: string, schema?: string) {
       connectString: dbConfig.ORACLE_CONNECT_STRING,
       user: dbConfig.ORACLE_USER,
       password: dbConfig.ORACLE_PASSWORD,
+      connectTimeout: CONNECT_TIMEOUT_SECONDS,
     });
+    connection.callTimeout = CALL_TIMEOUT_MS;
 
     // No bind variables for identifiers in ALTER SESSION - same full-
     // passthrough stance as sql itself, safety lives elsewhere (read-only

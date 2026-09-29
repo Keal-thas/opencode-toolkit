@@ -59,6 +59,11 @@
       "url": "http://localhost:8093/mcp",
       "enabled": true
     },
+    "mysql": {
+      "type": "remote",
+      "url": "http://localhost:8094/mcp",
+      "enabled": true
+    },
     "idea": {
       "type": "remote",
       "url": "REPLACE_WITH_URL_FROM_IDEA_SETTINGS_TOOLS_MCP_SERVER_COPY_HTTP_STREAM_CONFIG",
@@ -68,6 +73,24 @@
       "type": "local",
       "command": ["mcp-server-memory"],
       "enabled": true
+    },
+    "redis": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "--from",
+        "redis-mcp-server@latest",
+        "redis-mcp-server",
+        "--host",
+        "REPLACE_WITH_REDIS_HOST",
+        "--port",
+        "REPLACE_WITH_REDIS_PORT"
+      ],
+      "enabled": true,
+      "environment": {
+        "REDIS_USERNAME": "REPLACE_WITH_REDIS_READONLY_USERNAME",
+        "REDIS_PWD": "REPLACE_WITH_REDIS_READONLY_PASSWORD"
+      }
     }
   }
 }

@@ -158,22 +158,56 @@ test("never reviews the review session's own tool calls while that review is in 
   assert.equal(calls, 1, "the nested in-flight call must be skipped, not recursively reviewed");
 });
 
-test("fails open (allows) when the review call throws, per FAIL_OPEN_ON_ERROR default", async () => {
+test("fails closed (blocks) when the review call throws, per FAIL_OPEN_ON_ERROR default", async () => {
   const hooks = await makeGate(async () => {
     throw new Error("model server down");
   });
-  await assert.doesNotReject(() =>
-    hooks["tool.execute.before"]({ tool: "bash", sessionID: "s", callID: "c1" }, { args: { command: "ls" } }),
+  await assert.rejects(
+    () => hooks["tool.execute.before"]({ tool: "bash", sessionID: "s", callID: "c1" }, { args: { command: "ls" } }),
+    /review unavailable/,
   );
   const entry = await lastLogEntry();
-  assert.match(entry.decision, /fail-open/);
+  assert.match(entry.decision, /fail-closed/);
   assert.match(entry.error, /model server down/);
 });
 
-test("allows when the verdict text can't be parsed as ALLOW/BLOCK (fail-open default)", async () => {
+test("blocks when the verdict text can't be parsed as ALLOW/BLOCK (fail-closed default)", async () => {
   const hooks = await makeGate(async () => textResponse("uh, maybe? not sure"));
+  await assert.rejects(
+    () => hooks["tool.execute.before"]({ tool: "bash", sessionID: "s", callID: "c1" }, { args: { command: "ls" } }),
+    /could not parse review verdict/,
+  );
+  assert.equal((await lastLogEntry()).verdict, "unclear");
+});
+
+test("honors a BLOCK verdict that was already recorded when the review call errors out afterward (e.g. a late timeout)", async () => {
+  // Simulates review_verdict landing successfully and then the request
+  // itself erroring/timing out (e.g. the model kept generating a trailing
+  // remark after the tool call and blew past REVIEW_TIMEOUT_MS) - the
+  // verdict that already landed must still be honored, not silently
+  // discarded in favor of the FAIL_OPEN_ON_ERROR default.
+  let hooks;
+  hooks = await makeGate(async ({ path }) => {
+    await hooks.tool.review_verdict.execute({ allow: false, reason: "wipes the disk" }, { sessionID: path.id });
+    throw new Error("stream interrupted after tool call");
+  });
+
+  await assert.rejects(
+    () => hooks["tool.execute.before"]({ tool: "bash", sessionID: "s", callID: "c1" }, { args: { command: "mkfs.ext4 /dev/sda" } }),
+    /wipes the disk/,
+  );
+  assert.equal((await lastLogEntry()).verdict, "block");
+});
+
+test("honors a late ALLOW verdict too, not just BLOCK", async () => {
+  let hooks;
+  hooks = await makeGate(async ({ path }) => {
+    await hooks.tool.review_verdict.execute({ allow: true }, { sessionID: path.id });
+    throw new Error("stream interrupted after tool call");
+  });
+
   await assert.doesNotReject(() =>
     hooks["tool.execute.before"]({ tool: "bash", sessionID: "s", callID: "c1" }, { args: { command: "ls" } }),
   );
-  assert.equal((await lastLogEntry()).verdict, "unclear");
+  assert.equal((await lastLogEntry()).verdict, "allow");
 });
