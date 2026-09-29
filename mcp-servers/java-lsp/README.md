@@ -11,6 +11,7 @@ This exists because opencode's own built-in `jdtls` LSP integration only auto-de
 - **`src/lsp-client.ts` is duplicated into `mcp-servers/spring-lsp/`, not shared via a package dependency.** Both packages need the same framing/handshake/sync engine, verbatim. Rather than introduce a cross-package `file:` dependency (which nothing else under `mcp-servers/` does — each package there is independently installable), the file is copied. See `mcp-servers/spring-lsp/README.md` for the same note from that side.
 - **File paths are resolved relative to `JAVA_LSP_WORKSPACE_ROOT` and checked against path traversal** (`resolveFile()` in `src/server.ts`) — a path that escapes the configured workspace root is rejected before ever reaching jdtls or the filesystem.
 - **Line/character positions are 0-indexed**, per the LSP spec — not the 1-indexed line numbers most editors display. Documented on every tool's `line`/`character` argument, not just here.
+- **`file://` URIs are built with Node's `pathToFileURL`, not string concatenation.** A local path is a filesystem path, not a URI - it needs its separators normalized to `/`, a Windows drive letter turned into `file:///C:/...` (not `file://C:\...`, which isn't a valid URI at all), and reserved characters (spaces, unicode) percent-encoded. `pathToFileURL` does all of that correctly; jdtls normalizes URIs the same way internally; a client sending anything else risks the two sides never matching on the same document.
 
 ## Vendoring
 
@@ -39,7 +40,7 @@ Config is file-based, not env-var-based — same two-file split as `mcp-servers/
     "JAVA_EXECUTABLE": "/path/to/jdk8/bin/java"
   }
   ```
-  `JAVA_LSP_WORKSPACE_ROOT` — absolute path to the Java project jdtls should analyze. `JDTLS_DATA_DIR` — jdtls's own workspace/index storage directory (its `-data` flag), **not** the project root; dedicate one per project — jdtls refuses to share a `-data` dir across concurrently-running instances for different projects. `JDTLS_COMMAND` — optional, the jdtls launcher, defaults to the vendored jdtls above. `JAVA_EXECUTABLE` — optional, see "JDK version" above.
+  `JAVA_LSP_WORKSPACE_ROOT` — absolute path to the Java project jdtls should analyze. `JDTLS_DATA_DIR` — jdtls's own workspace/index storage directory (its `-data` flag), **not** the project root; dedicate one per project — jdtls refuses to share a `-data` dir across concurrently-running instances for different projects. `JDTLS_COMMAND` — optional, the jdtls launcher, defaults to the vendored jdtls above. `JAVA_EXECUTABLE` — optional, see "JDK version" above. On Windows, write these paths with forward slashes (`C:/Users/you/project`) rather than backslashes — Node accepts both, and forward slashes need no escaping in JSON (an unescaped `C:\Users\...` breaks `JSON.parse` with a cryptic error).
 
 ## Run
 
