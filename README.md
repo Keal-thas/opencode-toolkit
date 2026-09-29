@@ -12,7 +12,7 @@ A workspace for building on top of `opencode` (the CLI coding agent): a system-p
 | `docker/` | Local Docker sandbox for exercising this workspace's prompt/plugins against a real opencode install, without touching your own machine's config; see `docker/docker-notes.md` |
 | `plugins/` | Three independent opencode plugins, one subdirectory/npm package each: `system-prompt-tools/` (the prompt override's diagnostic plugin) plus `hook-logger/`/`llm-review-gate/` (general "writing tools for opencode", not the prompt override) |
 | `toolkits/` | Standalone scripts that drive opencode as a client via `@opencode-ai/sdk` — `module-analysis/` (generates an architecture map of a large codebase, own thing, not tied to the prompt override; see `toolkits/module-analysis/README.md`) so far, more may be added |
-| `mcp-servers/` | MCP servers: LAN-internal ops tooling (`oracle/`, `loki/`), the official memory server wiring, and LSP-backed Java/Spring code intelligence (`java-lsp/`, `spring-lsp/`); see `mcp-servers/TODO.md` |
+| `mcp-servers/` | MCP servers: LAN-internal ops tooling (`oracle/`, `loki/`, `mysql/`, `redis/`), the official memory server wiring, browser automation (`playwright/`), and LSP-backed Java/Spring code intelligence (`java-lsp/`, `spring-lsp/`); see `mcp-servers/TODO.md` |
 | `docs/` | Research notes, a local mirror of opencode's own docs, a feature-by-feature inventory of this workspace ([docs/feature-points.md](docs/feature-points.md)), and an index of every generated/vendored file in the repo ([docs/generated-files.md](docs/generated-files.md)) |
 | `tests/` | Automated tests covering this workspace's feature points; `./tests/run-all.sh` is the entry point — see `tests/README.md` |
 | `memory/` | Git-tracked project memory |

@@ -91,6 +91,11 @@
         "REDIS_USERNAME": "REPLACE_WITH_REDIS_READONLY_USERNAME",
         "REDIS_PWD": "REPLACE_WITH_REDIS_READONLY_PASSWORD"
       }
+    },
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "@playwright/mcp@latest"],
+      "enabled": true
     }
   }
 }
