@@ -19,11 +19,15 @@ import type { Plugin, ToolContext, ToolResult } from "@opencode-ai/plugin";
 // Extend this to gate more tools (e.g. "edit", "webfetch").
 const GATED_TOOLS = new Set(["bash"]);
 
-// If the review call fails (server down, network error, timeout): true lets
-// the command through (an availability failure isn't a security verdict, and
-// fail-closed would brick every bash call including the ones needed to debug
-// why review is down). Flip to false for stricter fail-closed behavior.
-const FAIL_OPEN_ON_ERROR = true;
+// If the review call fails (server down, network error, timeout) or the
+// model's reply can't be parsed as ALLOW/BLOCK: false blocks the command,
+// since this plugin's whole job is to be a safety net and "couldn't get an
+// opinion" isn't a clean bill of health. The cost: on this repo's
+// self-hosted-model deployment (see docs/deployment-environment.md), a
+// hiccup on that model server blocks every bash call on the machine until
+// it recovers - including the ones that would help debug why review is
+// down. Flip to true to trade that safety margin away for availability.
+const FAIL_OPEN_ON_ERROR = false;
 
 const REVIEW_TIMEOUT_MS = 30_000;
 
@@ -57,6 +61,9 @@ async function logReview(entry: Record<string, unknown>) {
 // one plugin actually needing the package installed. `zod` alone (already
 // needed for the schema) avoids that.
 const VERDICT_TOOL_NAME = "review_verdict";
+// Cleaned up by tool.execute.before's own finally, not review()'s - see the
+// comment there for why: a verdict recorded just before a timeout/late error
+// must still be readable after review() itself has already thrown.
 const pendingVerdicts = new Map<string, { allow: boolean; reason?: string }>();
 
 const reviewVerdictArgs = {
@@ -94,12 +101,13 @@ export const LlmReviewGate: Plugin = async ({ client }) => {
   // cheap metadata calls, not model calls, so no second LLM round trip.
   const reviewSessionIDs = new Set<string>();
 
-  async function review(command: string) {
+  async function review(command: string, onSessionCreated?: (sessionID: string) => void) {
     const created = await client.session.create({
       body: { title: "llm-review-gate (internal, safe to delete)" },
       throwOnError: true,
     });
     const sessionID = created.data.id;
+    onSessionCreated?.(sessionID); // lets the caller check pendingVerdicts for this session if this call ends up racing a timeout
     reviewSessionIDs.add(sessionID); // never review this session's own tool calls (no self-recursion)
     try {
       const res = await client.session.prompt({
@@ -143,7 +151,6 @@ export const LlmReviewGate: Plugin = async ({ client }) => {
       }
       return { verdict: "unclear" as const, raw: text };
     } finally {
-      pendingVerdicts.delete(sessionID);
       reviewSessionIDs.delete(sessionID);
       await client.session.delete({ path: { id: sessionID } }).catch(() => {
         // best-effort cleanup; a leaked internal session is harmless clutter, not a correctness problem
@@ -160,44 +167,84 @@ export const LlmReviewGate: Plugin = async ({ client }) => {
       if (reviewSessionIDs.has(input.sessionID)) return; // never review the review session's own calls
 
       const command = input.tool === "bash" ? output.args?.command : JSON.stringify(output.args);
+      let reviewSessionID: string | undefined;
+      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 
-      let result;
       try {
-        result = await Promise.race([
-          review(command),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("review timed out")), REVIEW_TIMEOUT_MS)),
-        ]);
-      } catch (e) {
-        const decision = FAIL_OPEN_ON_ERROR ? "allow (fail-open)" : "block (fail-closed)";
+        let result;
+        try {
+          result = await Promise.race([
+            review(command, (id) => { reviewSessionID = id; }),
+            new Promise<never>((_, reject) => {
+              timeoutHandle = setTimeout(() => reject(new Error("review timed out")), REVIEW_TIMEOUT_MS);
+            }),
+          ]);
+        } catch (e) {
+          // The model may have already called review_verdict - recording a
+          // real verdict in pendingVerdicts - before this race was lost to a
+          // timeout, or before a late error (e.g. a dropped connection right
+          // after the tool call). Either way that's a real answer, not a
+          // "couldn't get an opinion" situation, so it must win over the
+          // FAIL_OPEN_ON_ERROR default below.
+          const lateVerdict = reviewSessionID ? pendingVerdicts.get(reviewSessionID) : undefined;
+          if (lateVerdict) {
+            await logReview({
+              tool: input.tool,
+              sessionID: input.sessionID,
+              callID: input.callID,
+              command,
+              verdict: lateVerdict.allow ? "allow" : "block",
+              raw: `[late verdict after "${errorMessage(e)}"] allow=${lateVerdict.allow} reason=${lateVerdict.reason ?? ""}`,
+            });
+            if (!lateVerdict.allow) {
+              throw new Error(`Blocked by LLM review: ${lateVerdict.reason || "blocked by LLM review"}`);
+            }
+            return;
+          }
+
+          const decision = FAIL_OPEN_ON_ERROR ? "allow (fail-open)" : "block (fail-closed)";
+          await logReview({
+            tool: input.tool,
+            sessionID: input.sessionID,
+            callID: input.callID,
+            command,
+            error: errorMessage(e),
+            decision,
+          });
+          if (FAIL_OPEN_ON_ERROR) return;
+          throw new Error(`llm-review-gate: review unavailable, blocking (fail-closed): ${errorMessage(e)}`);
+        }
+
         await logReview({
           tool: input.tool,
           sessionID: input.sessionID,
           callID: input.callID,
           command,
-          error: errorMessage(e),
-          decision,
+          verdict: result.verdict,
+          raw: result.raw,
         });
-        if (FAIL_OPEN_ON_ERROR) return;
-        throw new Error(`llm-review-gate: review unavailable, blocking (fail-closed): ${errorMessage(e)}`);
-      }
 
-      await logReview({
-        tool: input.tool,
-        sessionID: input.sessionID,
-        callID: input.callID,
-        command,
-        verdict: result.verdict,
-        raw: result.raw,
-      });
-
-      if (result.verdict === "block") {
-        throw new Error(`Blocked by LLM review: ${result.reason}`);
+        if (result.verdict === "block") {
+          throw new Error(`Blocked by LLM review: ${result.reason}`);
+        }
+        if (result.verdict === "unclear" && !FAIL_OPEN_ON_ERROR) {
+          throw new Error(`llm-review-gate: could not parse review verdict, blocking (fail-closed). Raw: ${result.raw.slice(0, 200)}`);
+        }
+        // "allow", or "unclear" while fail-open: fall through to whatever
+        // the config's own allow/ask/deny tier would normally do.
+      } finally {
+        // Promise.race doesn't cancel its losing side - without this, a
+        // review that resolves quickly still leaves this timer running for
+        // the full REVIEW_TIMEOUT_MS, uselessly rejecting an already-settled
+        // promise once it fires (harmless, but it's a real dangling timer:
+        // reproduced by it keeping this plugin's test process alive for a
+        // full 30s per test despite every individual test finishing in
+        // milliseconds).
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+        // The only place pendingVerdicts is cleaned up - see the comment on
+        // its declaration for why review() itself no longer does this.
+        if (reviewSessionID) pendingVerdicts.delete(reviewSessionID);
       }
-      if (result.verdict === "unclear" && !FAIL_OPEN_ON_ERROR) {
-        throw new Error(`llm-review-gate: could not parse review verdict, blocking (fail-closed). Raw: ${result.raw.slice(0, 200)}`);
-      }
-      // "allow", or "unclear" while fail-open: fall through to whatever
-      // the config's own allow/ask/deny tier would normally do.
     },
   };
 };
