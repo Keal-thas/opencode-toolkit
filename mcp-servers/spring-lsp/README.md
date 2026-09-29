@@ -26,10 +26,11 @@ Config is file-based, not env-var-based — same two-file split as `mcp-servers/
   ```json
   {
     "SPRING_LSP_WORKSPACE_ROOT": "/path/to/your/spring-boot/project",
-    "KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE": "/path/to/jdk21/bin/java"
+    "KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE": "/path/to/jdk21/bin/java",
+    "KEALTHAS_SPRING_LSP_MAVEN_COMMAND": "/path/to/mvn"
   }
   ```
-  `SPRING_LSP_WORKSPACE_ROOT` — absolute path to the Spring Boot project to analyze. `KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE` — optional, see "JDK version" above; defaults to whatever `java` resolves to on `PATH`. On Windows, write these paths with forward slashes (`C:/Users/you/project`) rather than backslashes — Node accepts both, and forward slashes need no escaping in JSON (an unescaped `C:\Users\...` breaks `JSON.parse` with a cryptic error).
+  `SPRING_LSP_WORKSPACE_ROOT` — absolute path to the Spring Boot project to analyze. `KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE` — optional, see "JDK version" above; defaults to whatever `java` resolves to on `PATH`. `KEALTHAS_SPRING_LSP_MAVEN_COMMAND` — optional, the Maven used to compute the project's classpath (see "Classpath" below); defaults to `mvn` on `PATH`. On Windows, write these paths with forward slashes (`C:/Users/you/project`) rather than backslashes — Node accepts both, and forward slashes need no escaping in JSON (an unescaped `C:\Users\...` breaks `JSON.parse` with a cryptic error).
 
 ## Run
 
@@ -56,17 +57,20 @@ npm start   # reads ~/.config/kealthas-dev/opencode-mcp-spring-lsp/config.json
 
 Either way, point opencode at it with a `type: "remote"` entry (see `deploy/opencode.json.example`).
 
+## Classpath
+
+`spring-boot-language-server` does not work out the project's classpath itself. Right after startup it sends its client a custom `sts/addClasspathListener` request and waits for the client to call back the command id it registered with the project's classpath (VS Code's Java extension does this for it). Nothing here plays that role except this package: `src/classpath.ts` runs Maven's `dependency:build-classpath` once, in the background as soon as the server process starts, and builds the event the server expects (the dependency jars, the JDK's `jrt-fs.jar` as the system library, and the project's `src/main` / `src/test` source folders); `src/server.ts` starts the language server only after that is ready and answers its request by calling the command back with it. The event has to arrive within the language server's ~15s wait or it is dropped for the process's lifetime, hence the ordering; a slow first Maven run (tens of seconds while plugins resolve) therefore delays the first tool call rather than emptying its result.
+
+Maven projects only (`pom.xml` at `SPRING_LSP_WORKSPACE_ROOT`). Without one, or when the Maven run fails (a message is written to stderr), the server gets no classpath and every tool answers empty after its ~15s wait.
+
 ## Status
 
 **Protocol plumbing verified end-to-end against the real, vendored `spring-boot-language-server` 2.5.0-SNAPSHOT** — both manually and by `spring-lsp.test.ts`: the `initialize` handshake succeeds; the auto-extraction of the vendored tarball works; `.java`/`.properties` files can be opened and synced; `spring_boot_structure`'s real `sts/spring-boot/structure` custom command round-trips cleanly; `spring_diagnostics`/`spring_completion` on a `.properties` file return cleanly without crashing the server. The fuller client-capabilities object in `src/lsp-client.ts` is required for this server; keep the `defaultClientCapabilities()` comment if editing it.
 
 **Verified on Windows 10 (Git Bash, JDK 21):** first-run extraction from a clean checkout and all of `spring-lsp.test.ts` pass. The vendored tarball carries macOS `._*` AppleDouble files that GNU tar extracts as ordinary files, so `server.ts` skips them when locating the exec jar; `fetch-spring-boot-language-server.sh` packs with `COPYFILE_DISABLE=1` so a refreshed tarball won't have them. On Windows, run it from Git Bash (extraction needs `mkdir`/`tar` from `PATH`, with forward-slash paths).
 
-**Not verified: actual Spring-aware semantic richness.** Every tool call in testing was run against a bare loose `.java` file + `application.properties` with no real Maven/Gradle project and no resolved `spring-boot-starter-*` dependencies — against that fixture, every one of this server's own richer results (`spring_hover`/`spring_completion` finding real config properties, `spring_boot_structure` finding real beans, even plain `spring_document_symbols`) comes back an **empty array**, not an error. Two known reasons:
-
-1. **No real Spring Boot dependencies on the classpath** — `spring_hover`/`spring_completion`'s config-property awareness comes from the project's own resolved `spring-configuration-metadata.json` (inside its actual `spring-boot-starter-*` jars). A fixture project with no such dependencies has none to offer.
-2. **This server expects a paired jdtls providing classpath/project info via a "classpath listener" mechanism**, which VS Code's Java extension pack wires up between its `redhat.java` (jdtls) and `vmware.vscode-spring-boot` extensions. Standalone, `SpringSymbolIndex`/`JdtLsProjectCache` time out waiting for that listener (visible directly in this server's own stderr logs: `TimeoutException ... at SpringSymbolIndex.getDocumentSymbolsFromMetamodelIndex`) and degrade to empty results rather than erroring. **This pairing is not implemented in this package** — `mcp-servers/java-lsp`'s separate jdtls process and this one currently run fully independently, each unaware of the other. Wiring them together (so `spring_*` tools get real classpath-aware results) is real follow-up work, not attempted here — see `mcp-servers/TODO.md`.
+**Verified against a real Spring Boot 3.3.4 Maven project (macOS, JDK 21, Maven 3.9)** with its dependencies resolved and compiled (so `shop.*` from a `@ConfigurationProperties` class has generated metadata): `spring_diagnostics` flags an unknown property, `spring_completion` proposes `shop.max-items` and friends, `spring_hover` returns a property's default and description (`server.port`, and `shop.name` from the project's own javadoc), `spring_document_symbols` returns the Spring view of a controller (`@+ 'helloController' (@RestController <: @Controller, @Component)`, `@/api/hello -- GET`), and `spring_workspace_symbols` finds `/api` endpoints; all in well under a second once the language server is up. `spring_boot_structure` and hovering an annotation such as `@GetMapping` return empty: those describe a running Spring Boot app, which is not started here. Not yet run on Windows: there `mvn` is `mvn.cmd`, which this package runs through a shell.
 
 **Not yet wired into `tests/run-in-container.sh` / the docker/ sandbox** — same reason as `mcp-servers/java-lsp` (no JDK in the sandbox's base image; see that package's README). Run `spring-lsp.test.ts` directly on a machine with a JDK 21+ `java` for now.
 
-**To actually see this server's Spring-specific value**, point `SPRING_LSP_WORKSPACE_ROOT` at a real Maven/Gradle Spring Boot project with its dependencies already resolved (`mvn dependency:resolve` / a completed Gradle sync) — not attempted here, and the classpath-listener gap above may still limit results even then.
+**To see this server's Spring-specific value on your own project**, point `SPRING_LSP_WORKSPACE_ROOT` at a Maven Spring Boot project, and run `mvn compile` once so the project's own `@ConfigurationProperties` have generated metadata (`target/classes/META-INF/spring-configuration-metadata.json`, from `spring-boot-configuration-processor`); properties of the starters themselves (`server.port` and so on) work without it.

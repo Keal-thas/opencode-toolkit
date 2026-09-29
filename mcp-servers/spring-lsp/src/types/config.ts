@@ -7,4 +7,6 @@ export interface SpringLspConfig {
   // spring-boot-language-server itself needs JDK 21+ - see README's "JDK version".
   // Optional, defaults to whatever "java" resolves to on PATH.
   KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE?: string;
+  // The Maven command used to compute the project's classpath, defaults to "mvn" on PATH.
+  KEALTHAS_SPRING_LSP_MAVEN_COMMAND?: string;
 }
