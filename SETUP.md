@@ -243,11 +243,11 @@ If port `8091` is taken, write `~/.config/kealthas-dev/opencode-mcp-loki/server.
 Check the prerequisites first:
 
 ```bash
-python3 --version
+python3 --version   # on Windows, `python --version` or `py -3 --version` also count
 java -version
 ```
 
-**If `java -version` is missing or below 21**, the internal npm registry (this doc's intro) doesn't help — a JDK isn't an npm package. Get a JDK 21+ Windows build (Temurin/Corretto/Microsoft Build of OpenJDK all work — jdtls doesn't care which vendor) onto this machine the same way anything else without an internal-registry path gets here: download the zip on a machine with public internet, transfer it over (USB/internal file share/however this machine's other software already arrives), unzip anywhere. No system install/PATH change needed — point `JAVA_EXECUTABLE` in the config file below at `<unzip-dir>/bin/java.exe` instead.
+**If `java -version` is missing or below 21**, the internal npm registry (this doc's intro) doesn't help — a JDK isn't an npm package. Get a JDK 21+ Windows build (Temurin/Corretto/Microsoft Build of OpenJDK all work — jdtls doesn't care which vendor) onto this machine the same way anything else without an internal-registry path gets here: download the zip on a machine with public internet, transfer it over (USB/internal file share/however this machine's other software already arrives), unzip anywhere. No system install/PATH change needed — point `JDTLS_LAUNCHER_JAVA_EXECUTABLE` in the config file below at `<unzip-dir>/bin/java.exe` instead.
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-java-lsp
