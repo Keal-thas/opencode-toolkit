@@ -16,12 +16,9 @@ function extractJsonFences(markdown) {
   return fences;
 }
 
-// deploy/opencode.json.example may carry whole-line // comments (opencode's own config parser accepts them).
-const parseJsonc = (raw) => JSON.parse(raw.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n"));
-
 test("deploy/opencode.json.example is valid JSON wiring build/plan/general to system-prompt.txt", async () => {
   const raw = await readFile(join(repoRoot, "deploy", "opencode.json.example"), "utf-8");
-  const config = parseJsonc(raw);
+  const config = JSON.parse(raw);
   for (const agent of ["build", "plan", "general"]) {
     assert.equal(config.agent?.[agent]?.prompt, "{file:./system-prompt.txt}", `agent.${agent}.prompt`);
   }
@@ -29,7 +26,7 @@ test("deploy/opencode.json.example is valid JSON wiring build/plan/general to sy
 
 test("deploy/opencode.json.example wires the memory MCP server as a local, enabled-by-default stdio server", async () => {
   const raw = await readFile(join(repoRoot, "deploy", "opencode.json.example"), "utf-8");
-  const config = parseJsonc(raw);
+  const config = JSON.parse(raw);
   assert.equal(config.mcp?.memory?.type, "local");
   assert.deepEqual(config.mcp?.memory?.command, ["mcp-server-memory"]);
   assert.equal(config.mcp?.memory?.enabled, true, "should ship enabled, same as oracle/loki/java-lsp/spring-lsp");
@@ -53,7 +50,7 @@ test("SETUP.md's documented agent/permission merge JSON snippet matches deploy/o
     readFile(join(repoRoot, "SETUP.md"), "utf-8"),
     readFile(join(repoRoot, "deploy", "opencode.json.example"), "utf-8"),
   ]);
-  const example = parseJsonc(exampleRaw);
+  const example = JSON.parse(exampleRaw);
 
   const fences = extractJsonFences(setup);
   const mergeFence = fences.find((f) => f.trim().startsWith('"permission"'));
@@ -62,16 +59,4 @@ test("SETUP.md's documented agent/permission merge JSON snippet matches deploy/o
   const documented = JSON.parse(`{${mergeFence}}`);
   assert.deepEqual(documented.agent, example.agent);
   assert.deepEqual(documented.permission, example.permission);
-});
-
-test("deploy/commands/verify.md runs the deploy/agents/verifier.md agent as a fresh-context subtask that cannot edit files", async () => {
-  const [command, agent] = await Promise.all([
-    readFile(join(repoRoot, "deploy", "commands", "verify.md"), "utf-8"),
-    readFile(join(repoRoot, "deploy", "agents", "verifier.md"), "utf-8"),
-  ]);
-  assert.match(command, /^agent: verifier$/m);
-  assert.match(command, /^subtask: true$/m);
-  assert.match(command, /\$ARGUMENTS/);
-  assert.match(agent, /^mode: subagent$/m);
-  assert.match(agent, /^  edit: deny$/m);
 });

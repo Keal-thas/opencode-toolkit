@@ -22,3 +22,4 @@ A feature-by-feature inventory of this workspace. Index only — details in `fea
 18. [gitbash-edit-path-fix.ts plugin](feature-points/18-gitbash-edit-path-fix-plugin.md) — rewrites the built-in `edit` tool's `filePath` to work around a Windows/Git-Bash path-resolution bug in opencode itself. **Tested.**
 19. [mysql MCP server](feature-points/19-mysql-mcp-server.md) — passthrough `mysql_query` tool unconditionally wrapped in a read-only transaction, per-request connection. **Tested.**
 20. [redis MCP server](feature-points/20-redis-mcp-server.md) — wires in the official upstream `redis-mcp-server` PyPI package (config + ACL policy only, no server code of our own). **Tested.**
+21. [verify-session.ts plugin](feature-points/21-verify-session-plugin.md) — `/verify <claim>` starts a brand-new full-permission session that independently reviews the current changes. **Tested** (unit with fakes, plus a real `opencode serve` run; the TUI switch itself is untested headless).
