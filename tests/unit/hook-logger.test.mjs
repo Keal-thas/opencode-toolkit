@@ -9,6 +9,8 @@ import { join } from "node:path";
 
 const fakeHome = await mkdtemp(join(tmpdir(), "hook-logger-test-"));
 process.env.HOME = fakeHome;
+// os.homedir() reads USERPROFILE on Windows (not HOME) - without this the plugin writes into the real home there.
+process.env.USERPROFILE = fakeHome;
 
 const { HookLogger } = await import("../../plugins/hook-logger/hook-logger.ts");
 

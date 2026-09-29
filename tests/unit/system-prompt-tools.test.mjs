@@ -9,6 +9,8 @@ import { join } from "node:path";
 
 const fakeHome = await mkdtemp(join(tmpdir(), "system-prompt-tools-test-"));
 process.env.HOME = fakeHome;
+// os.homedir() reads USERPROFILE on Windows (not HOME) - without this the plugin writes into the real home there.
+process.env.USERPROFILE = fakeHome;
 
 const { SystemPromptTools } = await import("../../plugins/system-prompt-tools/system-prompt-tools.ts");
 const dumpFile = join(fakeHome, ".local", "share", "opencode", "last-system-prompt.txt");
