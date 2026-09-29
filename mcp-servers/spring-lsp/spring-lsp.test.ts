@@ -71,7 +71,8 @@ function startServer(port: number): Promise<ChildProcess> {
   // default.
   writeFileSync(join(configDir, "config.json"), JSON.stringify({ SPRING_LSP_WORKSPACE_ROOT: workspaceRoot }));
 
-  const env = { ...process.env, HOME: home };
+  // os.homedir() reads USERPROFILE on Windows, HOME elsewhere.
+  const env = { ...process.env, HOME: home, USERPROFILE: home };
   delete env.SPRING_LSP_CONFIG_ENV;
 
   return new Promise((resolve, reject) => {

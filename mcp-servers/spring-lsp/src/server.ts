@@ -93,6 +93,14 @@ const springLspConfig = loadSpringLspConfig();
 const WORKSPACE_ROOT = springLspConfig.SPRING_LSP_WORKSPACE_ROOT;
 const JAVA_EXECUTABLE = springLspConfig.JAVA_EXECUTABLE ?? "java"; // spring-boot-language-server itself needs JDK 21+ - see README's "JDK version"
 
+// The vendored tarball was packed on macOS and carries "._*" AppleDouble
+// sidecar files (one per real file, including "._<name>-exec.jar"); GNU tar
+// on Windows/Linux extracts them as ordinary files, and one sorts ahead of the
+// real jar - so match on the real name only.
+const isExecJar = (f: string): boolean => f.endsWith("-exec.jar") && !f.startsWith("._");
+
+const toPosix = (p: string): string => p.replaceAll("\\", "/");
+
 // Runs a vendor-setup command (mkdir/tar) with a clear, actionable error on
 // failure instead of a raw Node stack trace - in particular distinguishing
 // "the command isn't on PATH at all" (e.g. GNU coreutils missing on Windows
@@ -126,23 +134,24 @@ function resolveLanguageServerDir(): { dir: string; jarName: string } {
   }
   const version = tarball.replace(/^spring-boot-language-server-/, "").replace(/\.tar\.gz$/, "");
   const extractedDir = path.join(vendorDir, `spring-boot-language-server-${version}`);
-  const execJarGlob = existsSync(extractedDir) ? readdirSync(extractedDir).find((f) => f.endsWith("-exec.jar")) : undefined;
+  const execJarGlob = existsSync(extractedDir) ? readdirSync(extractedDir).find(isExecJar) : undefined;
   if (!existsSync(extractedDir) || !execJarGlob) {
     console.error(`Extracting ${tarball} into ${extractedDir} (first run only)...`);
     runVendorSetupCommand("mkdir", ["-p", extractedDir], `Failed to create ${extractedDir}`);
-    // --force-local: without it, GNU tar misparses a Windows path through an
-    // npm-scope dir (.../node_modules/@kealthas-dev/...) as a remote
-    // user@host:file spec (the "@" plus the drive-letter colon earlier in
-    // the path triggers it) and fails with "Cannot connect to ...: resolve
-    // failed" instead of extracting.
+    // Forward slashes, not the native path: Git for Windows' GNU tar fails to
+    // open a backslash path ("Cannot open: No such file or directory"), and
+    // --force-local alone doesn't fix that. --force-local is still needed on
+    // top: with a drive-letter colon (or an "@" from an npm scope dir, as in
+    // node_modules/@kealthas-dev/...) tar otherwise treats the path as a
+    // remote host:file spec.
     runVendorSetupCommand(
       "tar",
-      ["-xzf", path.join(vendorDir, tarball), "-C", extractedDir, "--force-local"],
+      ["-xzf", toPosix(path.join(vendorDir, tarball)), "-C", toPosix(extractedDir), "--force-local"],
       `Failed to extract ${tarball} into ${extractedDir}`,
     );
     console.error(`Extracted ${tarball}.`);
   }
-  const execJar = readdirSync(extractedDir).find((f) => f.endsWith("-exec.jar"));
+  const execJar = readdirSync(extractedDir).find(isExecJar);
   if (!execJar) throw new Error(`Extracted ${extractedDir} but found no *-exec.jar inside it.`);
   return { dir: extractedDir, jarName: execJar };
 }

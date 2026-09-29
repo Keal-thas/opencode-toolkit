@@ -72,6 +72,7 @@ echo "Found $JAR_BASENAME (version $LS_VERSION), lib/ has $(find "$LS_DIR/lib" -
 # further) has to ship alongside it.
 mkdir -p vendor
 OUT="vendor/spring-boot-language-server-${LS_VERSION}.tar.gz"
-tar -czf "$OUT" -C "$LS_DIR" "$JAR_BASENAME" lib
+# COPYFILE_DISABLE: on macOS, tar otherwise adds a "._*" AppleDouble file per real file, which GNU tar (Windows/Linux) extracts as junk.
+COPYFILE_DISABLE=1 tar -czf "$OUT" -C "$LS_DIR" "$JAR_BASENAME" lib
 echo "Wrote $OUT ($(du -h "$OUT" | cut -f1))" >&2
 echo "server.ts discovers the exec jar name and version from this tarball automatically (see resolveLanguageServerDir() in src/server.ts) - nothing else to update." >&2
