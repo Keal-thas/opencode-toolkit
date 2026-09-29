@@ -43,7 +43,7 @@ Same file-based shape as the other `mcp-servers/*` packages — see `mcp-servers
     "MYSQL_CONNECT_STRING": "mysql://username:password@hostname:3306/database_name"
   }
   ```
-  A single URI, passed straight to `mysql2`'s `createConnection()`, which parses it natively — no hand-rolled host/port/user splitting. **Any reserved character in the password — `@ : / ? #` or a space — must be percent-encoded first** (e.g. a literal `@` becomes `%40`), since those characters are also the URI's own delimiters; an unencoded one gets parsed as part of the host instead of the password, and the connection fails in a confusing way (wrong host/port, not an auth error). The database segment in the path is optional; when present it's the default, and `mysql_query`'s own optional `database` argument overrides it per call (`USE database` before the agent's SQL).
+  A single URI, passed straight to `mysql2`'s `createConnection()`, which parses it natively — no hand-rolled host/port/user splitting. **Any reserved character in the password — `@ : / ? #` or a space — must be percent-encoded first** (e.g. a literal `@` becomes `%40`), since those characters are also the URI's own delimiters; an unencoded one gets parsed as part of the host instead of the password, and the connection fails in a confusing way (wrong host/port, not an auth error). The database segment in the path is optional; when present it's the default, and `mysql_query`'s own optional `database` argument overrides it per call (`USE database` before the agent's SQL). Like `sql` itself, this value is interpolated directly into the `USE` statement, not bind-parameterized — same full-passthrough stance (see Design above).
 
 ## Run
 
