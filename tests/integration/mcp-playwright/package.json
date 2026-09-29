@@ -1,0 +1,10 @@
+{
+  "name": "opencode-toolkit-mcp-playwright-test",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Test-only harness for the official @playwright/mcp package (see mcp-servers/playwright/README.md) - no server code of our own here, this just verifies the upstream package behaves as documented (and as actually observed) against a real headless Chromium, spawned via docker/Dockerfile's global install.",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

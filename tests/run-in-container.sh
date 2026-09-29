@@ -11,7 +11,12 @@
 # MCP server tests - the official upstream packages, not our own code;
 # memory needs only network access to install it, redis additionally needs
 # the real Redis instance (also started separately, see docker-notes.md)
-# and `uv`/`uvx` (see the Dockerfile).
+# and `uv`/`uvx` (see the Dockerfile). Also the playwright MCP server test -
+# the official @playwright/mcp package, not our own code (see
+# mcp-servers/playwright/README.md) - against a real headless Chromium,
+# globally installed with its Linux system deps in docker/Dockerfile; no
+# external service needed, it drives a fixture page served by the test
+# itself.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -66,3 +71,7 @@ echo "== memory MCP server integration test (official @modelcontextprotocol/serv
 echo
 echo "== redis MCP server integration test (official redis-mcp-server package, real Redis instance) =="
 (cd tests/integration/mcp-redis && npm install --no-audit --no-fund && node --test redis.test.mjs)
+
+echo
+echo "== playwright MCP server integration test (official @playwright/mcp package, real headless Chromium) =="
+(cd tests/integration/mcp-playwright && npm install --no-audit --no-fund && node --test playwright.test.mjs)
