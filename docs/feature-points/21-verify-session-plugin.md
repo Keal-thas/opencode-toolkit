@@ -4,7 +4,7 @@
 
 **Context handed to the new session** (the reviewer must not inherit the implementer's blind spots):
 - the claim (`$ARGUMENTS`), treated as a hypothesis to falsify;
-- the calling session's *user* messages only (last 5, truncated) as the spec, never its assistant messages or reasoning;
+- the calling session's *user* messages only (all of them within a ~16k-char budget; if over, the first 2 plus the newest that fit, gap marked) as the spec, never its assistant messages or reasoning;
 - `git status --short`, `git diff HEAD` (capped) and `git log --oneline -10`, gathered by the plugin itself so nothing is relayed second-hand.
 
 It replies with `VERDICT: PASS | FAIL | UNVERIFIABLE` plus per-requirement evidence.

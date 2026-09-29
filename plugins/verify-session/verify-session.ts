@@ -9,8 +9,10 @@ import type { Plugin } from "@opencode-ai/plugin";
 // inherit the implementer's blind spots.
 
 const COMMAND_NAME = "verify";
-const MAX_USER_MESSAGES = 5;
-const MAX_MESSAGE_CHARS = 2000;
+// Char budget for the user's requests as a whole, not a message count: the opening messages usually define the task and the latest ones are often just "continue".
+const MAX_REQUESTS_CHARS = 16_000;
+const MAX_MESSAGE_CHARS = 3000;
+const KEEP_FIRST = 2;
 const MAX_DIFF_CHARS = 60_000;
 
 const REVIEW_INSTRUCTIONS = `You are an independent verifier. You did not write this change and have no memory of how it was made. Trust only what you can observe yourself: the diff, the files, and the output of commands you run.
@@ -45,11 +47,26 @@ export const VerifySession: Plugin = async ({ client, serverUrl, $ }) => {
         .filter((m) => m.info.role === "user")
         .map((m) => m.parts.filter((p) => p.type === "text" && !p.synthetic).map((p) => (p as { text: string }).text).join("\n").trim())
         .filter(Boolean)
-        .slice(-MAX_USER_MESSAGES)
         .map((t) => truncate(t, MAX_MESSAGE_CHARS));
     } catch {
       return [];
     }
+  }
+
+  // Keep everything if it fits; otherwise keep the first KEEP_FIRST plus as many of the newest as fit, marking the gap.
+  function fitRequests(all: string[]): string[] {
+    const total = all.reduce((n, t) => n + t.length, 0);
+    if (total <= MAX_REQUESTS_CHARS) return all;
+    const head = all.slice(0, KEEP_FIRST);
+    let budget = MAX_REQUESTS_CHARS - head.reduce((n, t) => n + t.length, 0);
+    const tail: string[] = [];
+    for (let i = all.length - 1; i >= KEEP_FIRST && budget > 0; i--) {
+      if (all[i].length > budget) break;
+      tail.unshift(all[i]);
+      budget -= all[i].length;
+    }
+    const omitted = all.length - head.length - tail.length;
+    return [...head, `[... ${omitted} earlier messages omitted ...]`, ...tail];
   }
 
   async function buildPrompt(claim: string, sourceSessionID: string): Promise<string> {
@@ -57,7 +74,7 @@ export const VerifySession: Plugin = async ({ client, serverUrl, $ }) => {
       git(["status", "--short"]),
       git(["diff", "HEAD"]),
       git(["log", "--oneline", "-10"]),
-      userRequests(sourceSessionID),
+      userRequests(sourceSessionID).then(fitRequests),
     ]);
     return [
       REVIEW_INSTRUCTIONS,

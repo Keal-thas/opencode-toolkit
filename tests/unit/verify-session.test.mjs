@@ -64,3 +64,22 @@ test("ignores other commands", async () => {
   assert.equal(calls.created.length, 0);
   assert.deepEqual(output.parts, []);
 });
+
+test("keeps every user message when they fit, and the first ones plus the newest when they don't", async () => {
+  const many = Array.from({ length: 40 }, (_, i) => msg("user", `req-${i} ${"x".repeat(1000)}`));
+  const { hooksP, calls, restore } = setup({ messages: many });
+  const hooks = await hooksP;
+  await hooks["command.execute.before"]({ command: "verify", sessionID: "o", arguments: "" }, { parts: [] });
+  restore();
+  const prompt = calls.prompts[0].body.parts[0].text;
+  assert.match(prompt, /req-0 /);
+  assert.match(prompt, /req-1 /);
+  assert.match(prompt, /req-39 /);
+  assert.match(prompt, /earlier messages omitted/);
+  assert.doesNotMatch(prompt, /req-10 /);
+
+  const few = setup({ messages: [msg("user", "a"), msg("user", "b"), msg("user", "c"), msg("user", "d"), msg("user", "e"), msg("user", "f"), msg("user", "g")] });
+  await (await few.hooksP)["command.execute.before"]({ command: "verify", sessionID: "o", arguments: "" }, { parts: [] });
+  few.restore();
+  assert.match(few.calls.prompts[0].body.parts[0].text, /1\. a[\s\S]*7\. g/);
+});
