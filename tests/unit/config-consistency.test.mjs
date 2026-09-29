@@ -63,3 +63,15 @@ test("SETUP.md's documented agent/permission merge JSON snippet matches deploy/o
   assert.deepEqual(documented.agent, example.agent);
   assert.deepEqual(documented.permission, example.permission);
 });
+
+test("deploy/commands/verify.md runs the deploy/agents/verifier.md agent as a fresh-context subtask that cannot edit files", async () => {
+  const [command, agent] = await Promise.all([
+    readFile(join(repoRoot, "deploy", "commands", "verify.md"), "utf-8"),
+    readFile(join(repoRoot, "deploy", "agents", "verifier.md"), "utf-8"),
+  ]);
+  assert.match(command, /^agent: verifier$/m);
+  assert.match(command, /^subtask: true$/m);
+  assert.match(command, /\$ARGUMENTS/);
+  assert.match(agent, /^mode: subagent$/m);
+  assert.match(agent, /^  edit: deny$/m);
+});

@@ -36,7 +36,12 @@ ls "$SRC_DIR"   # sanity check: should show README.md, deploy/, etc.
 
 ```bash
 cp "$SRC_DIR/deploy/system-prompt.txt" "$CONFIG_DIR/system-prompt.txt"
+mkdir -p "$CONFIG_DIR/commands" "$CONFIG_DIR/agents"
+cp "$SRC_DIR/deploy/commands/verify.md" "$CONFIG_DIR/commands/verify.md"
+cp "$SRC_DIR/deploy/agents/verifier.md" "$CONFIG_DIR/agents/verifier.md"
 ```
+
+The last two give you `/verify <what the change should do>`: it runs the `verifier` agent as a subtask, so the review starts from a fresh context. It is handed the claim plus `git status`/`git diff HEAD`/`git log` output, never the implementing session's conversation, and only its PASS/FAIL verdict comes back into your session.
 
 ## 2. Wire it into opencode.json
 
