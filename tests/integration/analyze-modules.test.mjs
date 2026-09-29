@@ -47,7 +47,8 @@ function startFakeProvider() {
         .flatMap((m) => (Array.isArray(m.content) ? m.content.map((p) => p.text ?? "") : [m.content]))
         .join("\n");
 
-      const moduleName = Object.keys(hits).find((name) => lastUserText.includes(`/${name}`));
+      // The module path in the prompt uses the OS separator (backslashes on Windows).
+      const moduleName = Object.keys(hits).find((name) => lastUserText.includes(`/${name}`) || lastUserText.includes(`\\${name}`));
       if (moduleName) hits[moduleName]++;
 
       if (moduleName === "moduleC") {
@@ -120,15 +121,17 @@ try {
 
   try {
     const moduleAnalysisDir = join(REPO_ROOT, "toolkits", "module-analysis");
-    // Local tsx devDependency, not a global install - resolved the same way
-    // `npm start` would resolve it, so this exercises the exact binary a
-    // real invocation uses.
-    const tsxBin = join(moduleAnalysisDir, "node_modules", ".bin", "tsx");
-    await execFileAsync(tsxBin, ["analyze-modules.ts"], {
+    // Local tsx devDependency, not a global install - run through its own
+    // entry script with the current node rather than node_modules/.bin/tsx,
+    // which on Windows is a tsx.cmd shim that execFile can't spawn directly.
+    const tsxCli = join(moduleAnalysisDir, "node_modules", "tsx", "dist", "cli.mjs");
+    await execFileAsync(process.execPath, [tsxCli, "analyze-modules.ts"], {
       cwd: moduleAnalysisDir,
       env: {
         ...process.env,
         HOME: fakeHome,
+        // os.homedir() reads USERPROFILE on Windows - without it the real opencode server the driver starts uses the real home.
+        USERPROFILE: fakeHome,
         MODULES_DIR: modulesDir,
         OUT_DIR: outDir,
         LOG_DIR: logDir,

@@ -94,6 +94,8 @@ export async function setupProbeEnv({ pluginFiles = {}, config = {} } = {}) {
   const provider = await startFakeProvider();
 
   process.env.HOME = fakeHome;
+  // os.homedir() reads USERPROFILE on Windows - without it the opencode server this starts uses the real home.
+  process.env.USERPROFILE = fakeHome;
   process.env.PROBE_LOG_DIR = logDir;
   process.env.OPENCODE_DISABLE_MODELS_FETCH = "1";
 
@@ -145,7 +147,8 @@ export async function setupProbeEnv({ pluginFiles = {}, config = {} } = {}) {
   async function cleanup() {
     opencodeServer.close();
     provider.server.close();
-    await rm(workDir, { recursive: true, force: true });
+    // The server process exits asynchronously and, on Windows, still holds its SQLite files (EBUSY) - retry.
+    await rm(workDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
   }
 
   return { client, provider, workDir, logDir, firedHooks, readHookLog, transcript, cleanup };

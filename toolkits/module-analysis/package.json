@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@opencode-ai/sdk": "^1.18.30"
+    "@opencode-ai/sdk": "^1.18.33"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

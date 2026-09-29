@@ -10,6 +10,8 @@ import { join } from "node:path";
 
 const fakeHome = await mkdtemp(join(tmpdir(), "llm-review-gate-test-"));
 process.env.HOME = fakeHome;
+// os.homedir() reads USERPROFILE on Windows (not HOME) - without this the plugin writes into the real home there.
+process.env.USERPROFILE = fakeHome;
 
 const { LlmReviewGate } = await import("../../plugins/llm-review-gate/llm-review-gate.ts");
 const logFile = join(fakeHome, "opencode-hook-output", "llm-review.jsonl");

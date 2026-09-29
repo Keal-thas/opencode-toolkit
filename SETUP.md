@@ -247,6 +247,8 @@ python3 --version   # on Windows, `python --version` or `py -3 --version` also c
 java -version
 ```
 
+Or run [scripts/windows-preflight.sh](scripts/windows-preflight.sh) in Git Bash (pass the path to a JDK 21 `java.exe` when the `java` on `PATH` is older) — it checks all of the above and says what is missing.
+
 **If `java -version` is missing or below 21**, the internal npm registry (this doc's intro) doesn't help — a JDK isn't an npm package. Get a JDK 21+ Windows build (Temurin/Corretto/Microsoft Build of OpenJDK all work — jdtls doesn't care which vendor) onto this machine the same way anything else without an internal-registry path gets here: download the zip on a machine with public internet, transfer it over (USB/internal file share/however this machine's other software already arrives), unzip anywhere. No system install/PATH change needed — point `KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE` in the config file below at `<unzip-dir>/bin/java.exe` instead.
 
 ```bash

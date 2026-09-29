@@ -63,7 +63,8 @@ function createFakeHome(port: number, dbConfigOverrides?: Record<string, string>
 
 function startServer(port: number, dbConfigOverrides: Record<string, string> = {}): Promise<ChildProcess> {
   const { home } = createFakeHome(port, dbConfigOverrides);
-  const env = { ...process.env, HOME: home };
+  // os.homedir() reads USERPROFILE on Windows, HOME elsewhere.
+  const env = { ...process.env, HOME: home, USERPROFILE: home };
   delete env.ORACLE_CONFIG_ENV;
 
   return new Promise((resolve, reject) => {
