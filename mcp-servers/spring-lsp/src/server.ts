@@ -143,10 +143,11 @@ function resolveLanguageServerDir(): { dir: string; jarName: string } {
     // --force-local alone doesn't fix that. --force-local is still needed on
     // top: with a drive-letter colon (or an "@" from an npm scope dir, as in
     // node_modules/@kealthas-dev/...) tar otherwise treats the path as a
-    // remote host:file spec.
+    // remote host:file spec. Windows only: macOS's bsdtar rejects the option
+    // ("Option --force-local is not supported") and has no such parsing.
     runVendorSetupCommand(
       "tar",
-      ["-xzf", toPosix(path.join(vendorDir, tarball)), "-C", toPosix(extractedDir), "--force-local"],
+      ["-xzf", toPosix(path.join(vendorDir, tarball)), "-C", toPosix(extractedDir), ...(process.platform === "win32" ? ["--force-local"] : [])],
       `Failed to extract ${tarball} into ${extractedDir}`,
     );
     console.error(`Extracted ${tarball}.`);
