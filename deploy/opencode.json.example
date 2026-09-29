@@ -36,6 +36,8 @@
   "plugin": [
     "@kealthas-dev/opencode-system-prompt-tools",
     "@kealthas-dev/opencode-hook-logger"
+    // Opt-in: adds a hidden model call before every bash command and blocks it when the review fails. Uncomment (and add a comma after the entry above) to enable, see SETUP.md step 5.
+    // "@kealthas-dev/opencode-llm-review-gate"
   ],
   "mcp": {
     "oracle": {
