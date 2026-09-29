@@ -11,7 +11,7 @@
 1. `opencode debug paths` 找到 `config` 目录(记作 `$CONFIG_DIR`)。
 2. 把 `deploy/system-prompt.txt` 拷贝到 `$CONFIG_DIR`。
 3. `$CONFIG_DIR/opencode.json` 不存在就直接拷贝 `deploy/opencode.json.example`;已经存在就只合并它的 `agent`/`plugin`/`mcp` 三个字段,不要动已有的 provider、权限等配置。
-4. `deploy/opencode.json.example` 里三个插件(system-prompt-tools 查看器、hook-logger、llm-review-gate)和五个 MCP 服务器(oracle、loki、java-lsp、spring-lsp、memory)默认全部启用,要不要真的用、要不要关掉哪个,自己决定:
+4. `deploy/opencode.json.example` 里两个插件(system-prompt-tools 查看器、hook-logger)和五个 MCP 服务器(oracle、loki、java-lsp、spring-lsp、memory)默认启用,要不要真的用、要不要关掉哪个,自己决定。llm-review-gate 默认不启用(每次 bash 调用前多一次模型调用,而且会拦截命令),需要时在 `plugin` 数组里加 `@kealthas-dev/opencode-llm-review-gate`:
    - oracle/loki/java-lsp/spring-lsp 是 `remote` 类型,要自己单独 `npm install && npm run build && npm start` 常驻。四个都是配置文件驱动的:真实连接信息写进一个固定位置的 JSON 文件(如 `~/.config/kealthas-dev/opencode-mcp-oracle/config.json`),不需要设置任何环境变量;要切换多个环境(prod/dev/...)才用 `<X>_CONFIG_ENV=<名字>` 这个环境变量,指向同目录下 `config-<名字>.json`——注意这个变量只接受一个简单的名字,不是路径,不会有 `~` 展不展开这种问题。端口是同目录下可选的 `server.json`。详见各自的 README.md。
    - memory 是 `local` 类型,opencode 自己启动,只要 `npm install -g @modelcontextprotocol/server-memory` 装一次。
 5. 跑一句 `opencode run --model <provider>/<model> "say hi"`,再看 `~/.local/share/opencode/last-system-prompt.txt`——内容应该以 `system-prompt.txt` 开头,而不是原来那段啰嗦的自我介绍,这样才算真的生效。

@@ -35,8 +35,7 @@
   },
   "plugin": [
     "@kealthas-dev/opencode-system-prompt-tools",
-    "@kealthas-dev/opencode-hook-logger",
-    "@kealthas-dev/opencode-llm-review-gate"
+    "@kealthas-dev/opencode-hook-logger"
   ],
   "mcp": {
     "oracle": {
