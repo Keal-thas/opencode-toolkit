@@ -127,6 +127,11 @@ function resolveTimeParam(value: string | undefined, tzOffset: string): string |
   return value;
 }
 
+// fetch() has no timeout by default - without this, a Loki/Grafana host
+// that accepts the TCP connection but never responds (e.g. stuck behind a
+// hung reverse proxy) leaves the request pending forever.
+const REQUEST_TIMEOUT_MS = 30_000;
+
 type LokiResult = { success: true; data: unknown } | { success: false; error: string };
 
 // Loki's API is read-only, so unlike Oracle there's no connection lifecycle
@@ -156,7 +161,7 @@ async function lokiFetch(path: string, params?: Record<string, unknown>): Promis
     // follows that by default, landing on the login page's HTML with a
     // misleadingly "successful" 200 status - the JSON.parse below would
     // then fail with an opaque syntax error instead of a diagnosable one.
-    const response = await fetch(url, { headers, redirect: "manual" });
+    const response = await fetch(url, { headers, redirect: "manual", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location") ?? "(no Location header)";

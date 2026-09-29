@@ -87,6 +87,14 @@ async function auditQuery(sql: string): Promise<{ allow: boolean; reason?: strin
   return { allow: true };
 }
 
+// mysql2 has no timeout of any kind by default (createConnection() can hang
+// forever against a host that accepts the TCP connection but never responds,
+// and query() the same against a connection that goes dark mid-session, e.g.
+// blocked on a lock) - both options are ms, same as mcp-servers/loki's
+// REQUEST_TIMEOUT_MS, unlike mcp-servers/oracle's seconds-based connectTimeout.
+const CONNECT_TIMEOUT_MS = 10_000;
+const QUERY_TIMEOUT_MS = 30_000;
+
 // One connection per request, not pooled - deliberate, same reasoning as
 // mcp-servers/oracle/src/server.ts:
 // - a stray statement can't outlive the request (closing ends its transaction)
@@ -106,12 +114,12 @@ async function executeQuery(sql: string, database?: string) {
     // mysql2 parses the URI natively - no hand-rolled host/port/user
     // splitting. The connect string's own database (if any) is the
     // default; the per-call `database` argument overrides it via USE below.
-    connection = await mysql.createConnection(dbConfig.MYSQL_CONNECT_STRING);
+    connection = await mysql.createConnection({ uri: dbConfig.MYSQL_CONNECT_STRING, connectTimeout: CONNECT_TIMEOUT_MS });
 
     // No bind variables for identifiers in USE - same full-passthrough stance
     // as sql itself, safety lives elsewhere (read-only DB account, see README).
     if (database) {
-      await connection.query(`USE \`${database}\``);
+      await connection.query({ sql: `USE \`${database}\``, timeout: QUERY_TIMEOUT_MS });
     }
 
     // The enforcement mechanism, not just a defense layer: unconditionally
@@ -121,10 +129,10 @@ async function executeQuery(sql: string, database?: string) {
     // before running, which takes them outside this transaction entirely -
     // also confirmed against a real instance, not assumed) - closing that
     // residual gap needs the account's own grants too, see README.
-    await connection.query("START TRANSACTION READ ONLY");
+    await connection.query({ sql: "START TRANSACTION READ ONLY", timeout: QUERY_TIMEOUT_MS });
 
     try {
-      const [result, fields] = await connection.query(sql);
+      const [result, fields] = await connection.query({ sql, timeout: QUERY_TIMEOUT_MS });
       await connection.commit();
 
       if (Array.isArray(result)) {

@@ -18,4 +18,8 @@ echo "## Docker sandbox integration test: system-prompt override via a real open
 bash tests/integration/docker-prompt-override.test.sh
 
 echo
+echo "## Docker sandbox integration test: docker-entrypoint.sh's MCP config generation + DEEPSEEK_API_KEY fallback =="
+bash tests/integration/docker-entrypoint-config.test.sh
+
+echo
 echo "All tests passed."
