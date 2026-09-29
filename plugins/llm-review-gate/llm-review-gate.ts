@@ -26,7 +26,10 @@ const GATED_TOOLS = new Set(["bash"]);
 // self-hosted-model deployment (see docs/deployment-environment.md), a
 // hiccup on that model server blocks every bash call on the machine until
 // it recovers - including the ones that would help debug why review is
-// down. Flip to true to trade that safety margin away for availability.
+// down. Accepted (2026-09-29, Franco): this plugin isn't left running by
+// default, only turned on situationally, so that blast radius stays
+// bounded to sessions that opted into it. Flip to true to trade the
+// safety margin away for availability instead.
 const FAIL_OPEN_ON_ERROR = false;
 
 const REVIEW_TIMEOUT_MS = 30_000;
