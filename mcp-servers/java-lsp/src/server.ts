@@ -314,8 +314,8 @@ function createMcpServer(): McpServer {
     "java_workspace_symbols",
     {
       description:
-        "Fuzzy-search real declared symbols (classes/methods/fields) by name across the whole workspace jdtls has indexed - matches against jdtls's own symbol index, not file contents, so it won't match a name that only appears in a comment or string literal.",
-      inputSchema: { query: z.string().describe("Symbol name or fragment to search for.") },
+        "Search real declared symbols (classes/methods/fields) by name across the whole workspace jdtls has indexed - matches against jdtls's own symbol index, not file contents, so it won't match a name that only appears in a comment or string literal. The query matches the START of a symbol name (\"Price\" and \"PriceCalc\" find PriceCalculator, but \"Calculator\" does not); put a * in front to match anywhere in the name (\"*Calculator\" finds StandardCalculator, DiscountCalculator and PriceCalculator).",
+      inputSchema: { query: z.string().describe("Start of a symbol name, or a pattern with * as a wildcard (e.g. \"*Calculator\" to match anywhere in the name). A fragment from the middle of a name without a leading * matches nothing.") },
     },
     async (args) =>
       respond(
