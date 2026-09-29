@@ -1,0 +1,20 @@
+{
+  "name": "@kealthas-dev/opencode-verify-session",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "verify-session.ts opencode plugin: adds a /verify command that starts a brand-new, full-permission opencode session to independently review the current changes, and switches the TUI to it. Written in TypeScript against @opencode-ai/plugin's Plugin type (type-only). Independently installable - not bundled with the other plugins.",
+  "main": "verify-session.ts",
+  "files": ["verify-session.ts"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Keal-thas/opencode-toolkit.git",
+    "directory": "plugins/verify-session"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.0.0",
+    "@types/node": "^22.0.0"
+  }
+}

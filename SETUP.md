@@ -117,20 +117,20 @@ opencode does a real `npm install` of this on first use, against whatever regist
 
 **Important:** `opencode debug config` showing a `plugin_origins` entry is NOT proof the install succeeded — a bad/unreachable package name fails silently (exit 0, no log line) and leaves `$CACHE_DIR/packages/@kealthas-dev/opencode-system-prompt-tools@latest/` permanently empty. The real proof is step 13: does `~/.local/share/opencode/last-system-prompt.txt` exist with the expected content after `opencode run`? If not, check whether that cache directory actually has files in it (`package.json`/`node_modules` = real install; empty = failed) — if empty, delete it by hand and retry rather than assuming the config itself is wrong.
 
-## 5. hook-logger (included by default) / llm-review-gate (opt-in) plugins
+## 5. (Included by default) hook-logger / llm-review-gate plugins
 
-Two more opencode plugins live in this repo, in `plugins/` — general-purpose tooling, unrelated to the prompt override itself. Each is its own separate published npm package, independent of the other. `deploy/opencode.json.example` includes `hook-logger` by default and has `llm-review-gate` commented out, because it changes real runtime behavior and is only meant to be switched on situationally.
+Two more opencode plugins live in this repo, in `plugins/` — general-purpose tooling, unrelated to the prompt override itself. `deploy/opencode.json.example` includes both by default (Franco's call — same template as step 4's plugin). Each is its own separate published npm package, independent of the other, so removing one from the `plugin` array doesn't affect the other:
 
 - `hook-logger.ts` (`@kealthas-dev/opencode-hook-logger`) — logs essentially every opencode hook event (chat, tool execution, permission asks, compaction, etc.) as JSONL under `~/opencode-hook-output/`, for debugging/observability.
-- `llm-review-gate.ts` (`@kealthas-dev/opencode-llm-review-gate`) — gates `bash` tool calls behind an LLM safety review: before a command runs, it's sent to a hidden internal opencode session for an ALLOW/BLOCK verdict, layered on top of (not replacing) opencode's own permission config. Fails closed on review errors/timeouts by default (the command is blocked). **This changes real runtime behavior** (an extra hidden model call before every `bash` call).
+- `llm-review-gate.ts` (`@kealthas-dev/opencode-llm-review-gate`) — gates `bash` tool calls behind an LLM safety review: before a command runs, it's sent to a hidden internal opencode session for an ALLOW/BLOCK verdict, layered on top of (not replacing) opencode's own permission config. Fails open on review errors/timeouts by default. **This changes real runtime behavior** (an extra hidden model call before every `bash` call).
 
-To turn `llm-review-gate` on, uncomment its line in the `plugin` array (or add the entry to the same array as step 4's if step 2 merged into an existing `opencode.json`); the `review-gate` agent and `review_verdict` permission from step 2 are already in the example, so nothing else is needed. Comment it out again to turn it off. opencode's config parser accepts `//` comments in `opencode.json`:
+If step 2 merged into an existing `opencode.json` rather than copying the example fresh, add these the same way as step 4, same install mechanism:
 
 ```json
-"plugin": ["@kealthas-dev/opencode-system-prompt-tools", "@kealthas-dev/opencode-hook-logger", "@kealthas-dev/opencode-llm-review-gate"]
+"plugin": ["@kealthas-dev/opencode-hook-logger", "@kealthas-dev/opencode-llm-review-gate"]
 ```
 
-If step 2 merged into an existing `opencode.json` rather than copying the example fresh, add `hook-logger` the same way as step 4, same install mechanism. Each entry is independent: `opencode.json`'s `plugin` field accepts multiple entries.
+Merge into the same `plugin` array as step 4's entry rather than replacing it — `opencode.json`'s `plugin` field accepts multiple entries, and each entry here is independent: include just one by adding just its own array entry above.
 
 ## Steps 6-10: the shared MCP server pattern
 
