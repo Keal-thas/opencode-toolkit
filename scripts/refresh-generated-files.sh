@@ -40,7 +40,14 @@ check() {
     return
   fi
 
-  if git diff --quiet -- "$path" && [ -z "$(git status --porcelain -- "$path")" ]; then
+  # --ignored matters for docs/opencode-docs-reference/ and
+  # deploy/models-dev-snapshot.json: both are gitignored-but-tracked (see
+  # docs/generated-files.md), so a brand-new file a fetch script adds under
+  # them is invisible to plain `git status --porcelain` - it's untracked
+  # *and* ignored, so it's hidden by default, and `git diff` never sees
+  # untracked files either way. Without --ignored this silently reports
+  # "up to date" for new upstream pages that were never git-added at all.
+  if git diff --quiet -- "$path" && [ -z "$(git status --porcelain --ignored -- "$path")" ]; then
     echo "  up to date"
     return
   fi
