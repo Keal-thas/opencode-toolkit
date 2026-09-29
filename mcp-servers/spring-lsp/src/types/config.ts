@@ -6,5 +6,5 @@ export interface SpringLspConfig {
   SPRING_LSP_WORKSPACE_ROOT: string;
   // spring-boot-language-server itself needs JDK 21+ - see README's "JDK version".
   // Optional, defaults to whatever "java" resolves to on PATH.
-  JAVA_EXECUTABLE?: string;
+  KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE?: string;
 }

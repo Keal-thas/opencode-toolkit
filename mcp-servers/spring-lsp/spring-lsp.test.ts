@@ -1,4 +1,4 @@
-// Requires a JDK 21+ `java` on PATH (or JAVA_EXECUTABLE pointed at one) -
+// Requires a JDK 21+ `java` on PATH (or KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE pointed at one) -
 // spring-boot-language-server's MANIFEST.MF declares `Java-Version: 21`. Not
 // mockable, same reasoning as java-lsp.test.ts: the whole point is driving a
 // real spring-boot-language-server process.
@@ -35,7 +35,7 @@ const DIST_SERVER_PATH = join(here, "dist", "server.js");
 const READY_TIMEOUT_MS = 30_000; // spring-boot-language-server takes longer to boot than jdtls - a full Spring Boot app itself
 
 try {
-  const javaExecutable = process.env.JAVA_EXECUTABLE ?? "java";
+  const javaExecutable = process.env.KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE ?? "java";
   const versionOutput = execSync(`"${javaExecutable}" -version 2>&1`).toString();
   const major = /version "(\d+)/.exec(versionOutput)?.[1];
   if (!major || Number(major) < 21) {
@@ -43,7 +43,7 @@ try {
   }
 } catch (err) {
   throw new Error(
-    `No JDK 21+ java available (${(err as Error).message}) - this test needs one, either on PATH or via JAVA_EXECUTABLE, ` +
+    `No JDK 21+ java available (${(err as Error).message}) - this test needs one, either on PATH or via KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE, ` +
       "to launch spring-boot-language-server itself. See README.md's 'JDK version' section.",
   );
 }

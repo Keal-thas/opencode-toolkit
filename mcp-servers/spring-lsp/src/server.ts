@@ -19,7 +19,7 @@ const SERVER_CONFIG_PATH = path.join(CONFIG_DIR, "server.json");
 const SAMPLE_SERVER_CONFIG = { SPRING_LSP_MCP_PORT: DEFAULT_PORT };
 const SAMPLE_SPRING_LSP_CONFIG = {
   SPRING_LSP_WORKSPACE_ROOT: "/path/to/your/spring-boot/project",
-  JAVA_EXECUTABLE: "/path/to/jdk21/bin/java (optional, defaults to java on PATH)",
+  KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE: "/path/to/jdk21/bin/java (optional, defaults to java on PATH)",
 };
 
 function printSampleConfig(label: string, path_: string, sample: unknown): void {
@@ -73,7 +73,7 @@ function loadSpringLspConfig(): SpringLspConfig {
     if (!raw.SPRING_LSP_WORKSPACE_ROOT) {
       throw new Error("missing required key SPRING_LSP_WORKSPACE_ROOT (the Spring Boot project root to analyze)");
     }
-    return { SPRING_LSP_WORKSPACE_ROOT: raw.SPRING_LSP_WORKSPACE_ROOT, JAVA_EXECUTABLE: raw.JAVA_EXECUTABLE };
+    return { SPRING_LSP_WORKSPACE_ROOT: raw.SPRING_LSP_WORKSPACE_ROOT, KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE: raw.KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE };
   } catch (err) {
     console.error(`Failed to load spring-lsp config from ${resolvedPath}: ${(err as Error).message}`);
     // A raw Windows path like "C:\Users\x\project" typed into JSON without
@@ -91,7 +91,7 @@ function loadSpringLspConfig(): SpringLspConfig {
 const serverConfig = loadServerConfig();
 const springLspConfig = loadSpringLspConfig();
 const WORKSPACE_ROOT = springLspConfig.SPRING_LSP_WORKSPACE_ROOT;
-const JAVA_EXECUTABLE = springLspConfig.JAVA_EXECUTABLE ?? "java"; // spring-boot-language-server itself needs JDK 21+ - see README's "JDK version"
+const JAVA_EXECUTABLE = springLspConfig.KEALTHAS_SPRING_LSP_LAUNCHER_JAVA_EXECUTABLE ?? "java"; // spring-boot-language-server itself needs JDK 21+ - see README's "JDK version"
 
 // The vendored tarball was packed on macOS and carries "._*" AppleDouble
 // sidecar files (one per real file, including "._<name>-exec.jar"); GNU tar
