@@ -18,7 +18,7 @@ const SAMPLE_DATABASE_CONFIG = {
   ORACLE_CONNECT_STRING: "hostname:1521/service_name (Easy Connect or TNS, either works)",
   ORACLE_USER: "username",
   ORACLE_PASSWORD: "password",
-  ORACLE_DEFAULT_SCHEMA: "schema_name (optional)",
+  ORACLE_DEFAULT_SCHEMA: "SCHEMA_NAME (optional; exact case as Oracle stores it - normally UPPERCASE, e.g. HR not hr)",
 };
 
 function printSampleConfig(label: string, path: string, sample: unknown): void {

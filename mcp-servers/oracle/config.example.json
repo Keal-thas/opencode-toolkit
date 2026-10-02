@@ -2,5 +2,5 @@
   "ORACLE_CONNECT_STRING": "hostname:1521/service_name",
   "ORACLE_USER": "username",
   "ORACLE_PASSWORD": "password",
-  "ORACLE_DEFAULT_SCHEMA": "schema_name"
+  "ORACLE_DEFAULT_SCHEMA": "SCHEMA_NAME (optional; exact case as Oracle stores it - normally UPPERCASE, e.g. HR not hr)"
 }
