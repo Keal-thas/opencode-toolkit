@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Capability probe, not a pass/fail test - see tests/capability-probes/README.md.
 //
-// permissions.verify.mjs confirmed the two blanket tiers (deny, ask) work via
+// permissions.probe.mjs confirmed the two blanket tiers (deny, ask) work via
 // some real mechanism. This asks the sharper question: does opencode's
 // granular, pattern-based permission matching (permissions.mdx's "Granular
 // Rules (Object Syntax)") actually route different commands to the RIGHT
@@ -13,21 +13,21 @@
 //   1. matches the "allow-me" pattern  -> should run for real, no permission
 //      ask at all.
 //   2. matches the "deny-me" pattern   -> should be blocked, no permission
-//      ask at all (this is the interesting one: permissions.verify.mjs found
+//      ask at all (this is the interesting one: permissions.probe.mjs found
 //      that a *blanket* "deny" removes the tool from the model's tool list
 //      entirely - a *per-pattern* deny can't do that, since the same tool is
 //      allowed for other patterns, so this checks what it does instead).
 //   3. matches neither -> falls through to the "*": "ask" catch-all, and gets
 //      auto-approved via the same event.subscribe() + reply mechanism
-//      permissions.verify.mjs proved out - confirms a real command actually
+//      permissions.probe.mjs proved out - confirms a real command actually
 //      runs after approval.
-//   4. same as 3, but auto-REJECTED instead - permissions.verify.mjs only
+//   4. same as 3, but auto-REJECTED instead - permissions.probe.mjs only
 //      ever tried approving; this confirms the same round trip can also
 //      really say no.
 //
 // Run manually inside the docker/ sandbox:
 //   docker/dev.sh run --rm opencode-dev bash -c \
-//     'cd tests/capability-probes && npm install --no-audit --no-fund && node permission-rules.verify.mjs'
+//     'cd tests/capability-probes && npm install --no-audit --no-fund && node permission-rules.probe.mjs'
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setupProbeEnv, saveEvidence } from "./lib/harness.mjs";

@@ -7,7 +7,7 @@ set -e
 # the bind-mounted deploy/system-prompt.txt, so host edits show up
 # without a rebuild. The diagnostic plugin loads from the published npm
 # package by bare name - opencode installs it fresh each container
-# start (see docker-notes.md's "Plugin loading" section).
+# start (see notes.md's "Plugin loading" section).
 cat > /home/dev/.config/opencode/opencode.jsonc <<'EOF'
 {
   "$schema": "https://opencode.ai/config.json",

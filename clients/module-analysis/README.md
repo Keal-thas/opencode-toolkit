@@ -75,7 +75,7 @@ Structural choices beyond that core rule:
 ## Usage
 
 ```bash
-cd toolkits/module-analysis && npm install   # once, pulls in @opencode-ai/sdk + tsx
+cd clients/module-analysis && npm install   # once, pulls in @opencode-ai/sdk + tsx
 
 MODULES_DIR=/path/to/project/src/modules \
 OUT_DIR=/path/to/project/docs/module-analysis \
@@ -90,7 +90,7 @@ raising this costs no extra server-startup overhead), `LOG_DIR`
 denied by permission, so a prompt failure can't turn into an actual
 code edit; doesn't restrict bash, so it's not a hard sandbox against a
 model that deliberately shells out — see `analyze-modules.ts`'s own
-comment, and [docs/lessons-learned.md](../docs/lessons-learned.md), for
+comment, and [docs/lessons-learned.md](../../docs/lessons-learned.md), for
 why `plan` beats `explore` here despite `explore` fitting the
 read-only framing better by name).
 

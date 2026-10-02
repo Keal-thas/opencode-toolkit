@@ -24,6 +24,16 @@ Single-person project used across multiple machines — these preferences are gi
 - **Don't manually wrap long lines in code, comments, or docs.**
 - **Don't hedge a generic host/platform capability with "validated on model X" when nothing about it is model-specific.** Reserve that qualifier for things that genuinely vary by model/provider (tool-call parsing, context limits, thinking tokens).
 
+- **A list that follows the directory tree lives in exactly one place, and nothing else repeats it or counts it.** `plugins/README.md` and `mcp-servers/README.md` are those places (with each member's published/enabled state); every other doc links to them. `tests/unit/docs-consistency.test.mjs` checks them against the directories, `release.yml` and `deploy/opencode.json.example`, so add a check there when a doc is found out of step with its source.
+
+### Naming
+
+- **kebab-case everywhere, except the conventional entry files** (`README.md`, `CLAUDE.md`, `SETUP.md`, `TODO.md`).
+- **Don't repeat the directory's category in a file name** (`docker/notes.md`, not `docker/docker-notes.md`), and don't use ordinal prefixes unless the order is the point.
+- **One word, one meaning.** `clients/` (scripts that drive opencode through the SDK) is not `toolkit` (the repo and root package); `probe` is a black-box check of opencode itself (`tests/capability-probes/*.probe.mjs`), while `verify` is the `verify-session` plugin.
+- **`.zh` marks a Chinese file; a Chinese mirror of an English file shares its base name** (`SETUP.md` / `SETUP.zh.md`).
+- **npm packages are `@kealthas-dev/opencode-<plugin>` and `@kealthas-dev/opencode-mcp-<server>`; config lives in `~/.config/kealthas-dev/<package>/`; the env var is `<NAME>_CONFIG_ENV`.** The package name is part of the config path, so a rename is a deployment change, not just a repo change.
+
 ### Config hygiene
 
 - **Centralize a config value instead of repeating the literal across files** — drift risk, not tidiness. Dated "verified against version X" facts are exempt.
@@ -40,7 +50,7 @@ Single-person project used across multiple machines — these preferences are gi
 
 - **Once a branch's PR merges, start the next piece of work from a fresh branch off updated `master`**, not by continuing to commit on the merged one.
 - **When a branch falls behind `master`, rebase onto it and force-push — don't merge `master` in.** Landing a finished PR is the opposite: always a real merge commit, never squash/rebase. The no-rewrite caution only applies to `master`/other shared branches.
-- **`git fetch origin master` at two checkpoints — before creating a new branch, and again right before pushing/opening a PR — rather than continuously polling during a session.** This is a single-person repo, but "conflicts with others" in practice means other concurrent sessions/worktrees on this same repo (this repo is routinely worked from several git worktrees at once, see `docker/docker-notes.md`'s per-worktree isolation), not other humans. Plain `git fetch` has no built-in auto-trigger/cron in this repo — it's a habit at those two points, not a background mechanism — and if `master` did move, rebase onto it (never merge it in) per the rule above, at whichever of the two checkpoints catches it. No need to sync mid-task on a short-lived branch; the two-checkpoint habit is what keeps a long-lived one from drifting into a big conflict at the end.
+- **`git fetch origin master` at two checkpoints — before creating a new branch, and again right before pushing/opening a PR — rather than continuously polling during a session.** This is a single-person repo, but "conflicts with others" in practice means other concurrent sessions/worktrees on this same repo (this repo is routinely worked from several git worktrees at once, see `docker/notes.md`'s per-worktree isolation), not other humans. Plain `git fetch` has no built-in auto-trigger/cron in this repo — it's a habit at those two points, not a background mechanism — and if `master` did move, rebase onto it (never merge it in) per the rule above, at whichever of the two checkpoints catches it. No need to sync mid-task on a short-lived branch; the two-checkpoint habit is what keeps a long-lived one from drifting into a big conflict at the end.
 - **"Merged branch → start fresh" and "unmerged branch fell behind → rebase it in place" are two different rules for two different situations — don't conflate them into merging repeatedly mid-task.** Confirmed 2026-09-26 after over-applying the first rule: fixing a small bug found partway through one piece of work (a workflow YAML issue, in this case) doesn't mean that piece of work is "done" and needs a fresh branch — it means the *same*, still-open branch gets another commit (or a rebase, if master moved), and merges to `master` exactly once, when the whole thing is actually finished. The one legitimate exception is a GitHub-side capability that only activates once a file lands on the default branch (e.g. `workflow_dispatch` on a brand-new workflow file only becomes API-dispatchable after it's on `master` — verified the hard way, `gh workflow run` returns HTTP 422 "does not have workflow_dispatch trigger" against a branch-only copy no matter how correct the YAML is) — that forces an early, interim merge to unlock the capability, which is a workaround for that specific constraint, not a reason to treat every subsequent fixup as its own fresh-branch piece of work either.
 - **Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)**: `<type>(<scope>): <description>` (scope optional, e.g. `fix(loki): handle Grafana redirect-to-login`), enforced by `.husky/commit-msg` (`git commit --no-verify` bypasses it when needed). Generated/vendored files (see [docs/generated-files.md](docs/generated-files.md)) aren't checked on every commit/push — their downloads are too slow/network-dependent for that — run `./scripts/refresh-generated-files.sh` by hand occasionally instead; it auto-commits any drift under `sync-bot <sync-bot@localhost>`.
 
@@ -61,10 +71,10 @@ Historical debugging/verification lessons live in [docs/lessons-learned.md](docs
 | Dir | What |
 |---|---|
 | `deploy/` | opencode deployment payload for the target machine — see SETUP.md |
-| `docker/` | dev/test sandbox — `.env` is intentionally committed, not secret; see `docker/docker-notes.md` |
-| `plugins/` | opencode plugins, one npm package each: `system-prompt-tools` (dumps the sent prompt), `hook-logger` (logs every hook event), `llm-review-gate` (LLM safety-gates `bash` calls) — see `docs/feature-points/02-04` and `docker/docker-notes.md`'s Plugin loading section |
-| `toolkits/` | scripts that drive opencode as a client, not a plugin or MCP server — `module-analysis/` so far, see its own README |
-| `mcp-servers/` | MCP servers, one per subdir (`oracle`, `loki`, `java-lsp`, `spring-lsp`, `mysql`, `redis`, `playwright`) — see each one's own README, and `mcp-servers/TODO.md`. `redis/` and `playwright/` have no code of their own, just docs for wiring in the official upstream package |
+| `docker/` | dev/test sandbox — `.env` is intentionally committed, not secret; see `docker/notes.md` |
+| `plugins/` | opencode plugins, one npm package each — list in `plugins/README.md`; install mechanism in `docker/notes.md`'s Plugin loading section |
+| `clients/` | scripts that drive opencode as a client, not a plugin or MCP server — `module-analysis/` so far, see its own README |
+| `mcp-servers/` | MCP servers, one per subdir — list in `mcp-servers/README.md`, backlog in `mcp-servers/TODO.md` |
 | `docs/` | research notes, reference docs, the upstream opencode docs mirror |
 | `tests/` | test suite — `./tests/run-all.sh` is the entry point |
 | `memory/` | git-tracked project memory |

@@ -1,5 +1,5 @@
 // Requires a live Loki instance reachable via LOKI_BASE_URL - the docker/
-// sandbox's `loki` compose service (see docker-notes.md's "Loki test
+// sandbox's `loki` compose service (see notes.md's "Loki test
 // instance" section), a shared fixture started separately (see
 // tests/README.md for the current bring-up precondition). Not mockable:
 // exercises the real Loki HTTP query API round-trip. Lives here (not under
@@ -38,7 +38,7 @@ const READY_TIMEOUT_MS = 15_000;
 if (!process.env.LOKI_BASE_URL) {
   throw new Error(
     "LOKI_BASE_URL not set - this test needs a live Loki instance (the docker/ sandbox's " +
-      "loki service, see docker-notes.md) to build a config file from, not a bare `node --test` on the host",
+      "loki service, see notes.md) to build a config file from, not a bare `node --test` on the host",
   );
 }
 

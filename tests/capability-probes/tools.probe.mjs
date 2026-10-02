@@ -4,7 +4,7 @@
 // Drives opencode's own built-in tools (the ones a coding agent actually uses
 // day to day: write, read, edit, glob, grep, webfetch, todowrite) through a
 // real session, each via a fake-model tool_calls request (see lib/harness.mjs)
-// using the exact argument shapes discovered live by hooks.verify.mjs's
+// using the exact argument shapes discovered live by hooks.probe.mjs's
 // tool.definition dump (tool-definitions.json in its evidence dir) - not
 // guessed from memory. For each tool: what does its ToolPart end up looking
 // like (completed vs. error, output shape), and for the filesystem ones, does
@@ -12,7 +12,7 @@
 //
 // Run manually inside the docker/ sandbox:
 //   docker/dev.sh run --rm opencode-dev bash -c \
-//     'cd tests/capability-probes && npm install --no-audit --no-fund && node tools.verify.mjs'
+//     'cd tests/capability-probes && npm install --no-audit --no-fund && node tools.probe.mjs'
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";

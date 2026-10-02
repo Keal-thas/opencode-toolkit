@@ -70,14 +70,14 @@ Either way, this starts a persistent HTTP server on the configured port (default
 
 ## Testing against a real MySQL instance
 
-`docker/docker-compose.mysql.yml`'s `mysql` service (official `mysql` image — see `docker/docker-notes.md`'s "MySQL test instance" section) is a shared fixture started separately, not by `docker/dev.sh`:
+`docker/docker-compose.mysql.yml`'s `mysql` service (official `mysql` image — see `docker/notes.md`'s "MySQL test instance" section) is a shared fixture started separately, not by `docker/dev.sh`:
 
 ```sh
 docker compose -f docker/docker-compose.mysql.yml up -d --wait
 docker/dev.sh run --rm opencode-dev bash
 ```
 
-The default config file is already in place inside that shell — `docker-entrypoint.sh` builds `MYSQL_CONNECT_STRING` from the sandbox's `MYSQL_HOST`/`MYSQL_USER`/`MYSQL_PASSWORD`/`MYSQL_DATABASE` compose env vars (throwaway sandbox fixtures with no reserved URI characters, so no percent-encoding needed there) and writes `~/.config/kealthas-dev/opencode-mcp-mysql/config.json`. `cd mcp-servers/mysql && npm install && npm run build && npm start`, then hit `http://localhost:8094/mcp` from an MCP client or `curl`.
+The default config file is already in place inside that shell — `entrypoint.sh` builds `MYSQL_CONNECT_STRING` from the sandbox's `MYSQL_HOST`/`MYSQL_USER`/`MYSQL_PASSWORD`/`MYSQL_DATABASE` compose env vars (throwaway sandbox fixtures with no reserved URI characters, so no percent-encoding needed there) and writes `~/.config/kealthas-dev/opencode-mcp-mysql/config.json`. `cd mcp-servers/mysql && npm install && npm run build && npm start`, then hit `http://localhost:8094/mcp` from an MCP client or `curl`.
 
 `mysql.test.ts` (see `tests/README.md`) doesn't need this manual dance — it builds the same connect string from `process.env.MYSQL_HOST`/`MYSQL_USER`/`MYSQL_PASSWORD`/`MYSQL_DATABASE` to write its own config files into a fake `$HOME` per spawned server, and starts/stops its own `dist/server.js` process on its own port as part of the test run.
 

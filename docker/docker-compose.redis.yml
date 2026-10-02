@@ -11,7 +11,7 @@ services:
     volumes:
       - redis-data:/data
       # ACL users (default + readonlyuser) loaded at startup - see the
-      # file's own header comment and docker-notes.md's "Redis test
+      # file's own header comment and notes.md's "Redis test
       # instance" section for why this isn't a runtime ACL SETUSER call.
       - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]

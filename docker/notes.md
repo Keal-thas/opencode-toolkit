@@ -29,7 +29,7 @@ The image tag (`opencode-toolkit-dev:latest`) stays fixed and global on purpose,
 
 ## What actually persists, and where
 
-- **Nothing in `~/.config/opencode`/`~/.local/share/opencode` persists across containers** — no named volumes for these. They live entirely in the container's own writable layer and reset with it on every `--rm`. `docker-entrypoint.sh` (re)generates `opencode.jsonc` fresh on every start instead (see "Verifying the system-prompt override" below).
+- **Nothing in `~/.config/opencode`/`~/.local/share/opencode` persists across containers** — no named volumes for these. They live entirely in the container's own writable layer and reset with it on every `--rm`. `entrypoint.sh` (re)generates `opencode.jsonc` fresh on every start instead (see "Verifying the system-prompt override" below).
 - **The project directory persists via a live bind mount** — `docker-compose.yml` bind-mounts the repo root to `/home/dev/project`: edits to `deploy/system-prompt.txt` on the Mac host show up immediately, no rebuild. `plugins/system-prompt-tools/` isn't part of that mount, though — it loads as a published npm package by bare name and gets reinstalled fresh on every container start (see "Plugin loading" below), so a newly published version shows up with no rebuild either.
 - **`oracle`'s data persists in its own volume**, in its own compose project — see "Oracle test instance" below.
 - **Does NOT persist** — anything else written inside the container (files elsewhere in `/home/dev/`, an ad-hoc `apt-get install`, other scratch state) — lives in the writable layer, wiped the moment `--rm` destroys it.
@@ -51,9 +51,9 @@ A misspelled or not-yet-published package name fails silently: `opencode debug c
 
 ## Provider API keys — loaded from `~/.keys`, never in .zshrc or the repo
 
-`docker-compose.yml` bind-mounts `${HOME}/.keys` read-only to `/home/dev/.keys`. `docker-entrypoint.sh` reads specific files from there into env vars (e.g. `DEEPSEEK_API_KEY` from `~/.keys/.deepseek-key`) before dropping to the `dev` user — scoped to that container's process tree only, nothing persisted to the Mac's shell environment or written into this repo. An already-set `DEEPSEEK_API_KEY` in the invoking shell still wins, for a one-off override.
+`docker-compose.yml` bind-mounts `${HOME}/.keys` read-only to `/home/dev/.keys`. `entrypoint.sh` reads specific files from there into env vars (e.g. `DEEPSEEK_API_KEY` from `~/.keys/.deepseek-key`) before dropping to the `dev` user — scoped to that container's process tree only, nothing persisted to the Mac's shell environment or written into this repo. An already-set `DEEPSEEK_API_KEY` in the invoking shell still wins, for a one-off override.
 
-To add a key for another provider: drop a file in `~/.keys/` (`chmod 700` the directory itself — a plain no-exec directory silently blocks all access, including your own `ls`), then add one `if [ -f ... ]; then export ...; fi` block to `docker-entrypoint.sh` following the existing DeepSeek one.
+To add a key for another provider: drop a file in `~/.keys/` (`chmod 700` the directory itself — a plain no-exec directory silently blocks all access, including your own `ls`), then add one `if [ -f ... ]; then export ...; fi` block to `entrypoint.sh` following the existing DeepSeek one.
 
 Claude never reads these key files' contents directly (only checks filenames/lengths) and never writes a real key into any file — a hard rule, independent of how low-stakes the key is claimed to be.
 
@@ -77,7 +77,7 @@ docker compose -f docker/docker-compose.oracle.yml up -d --wait
 
 `--wait` blocks until its healthcheck passes. First-time init takes ~10 seconds (measured against `23.26.3-slim`) and only happens once — the `oracle-data` volume persists it; once warm, later starts are `healthy` within seconds. Stop it explicitly with `docker compose -f docker/docker-compose.oracle.yml down`.
 
-Reachable from `opencode-dev` as `oracle:1521/FREEPDB1` via Compose service-name DNS, even across the two separate compose projects — `docker-compose.yml` joins `docker-compose.oracle.yml`'s network as `external: true` (both declare the same fixed network name), and DNS resolution works per-network, not per-project. `opencode-dev`'s `environment` block pre-wires `ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD`; since the server itself is config-file-driven, not env-var-driven (see its README's Configuration section), `docker-entrypoint.sh` turns these into `~/.config/kealthas-dev/opencode-mcp-oracle/config.json` at container start, so `cd mcp-servers/oracle && npm install && npm run build && npm start` just works with zero setup. Credentials (`ORACLE_APP_USER`/`ORACLE_APP_USER_PASSWORD` in `docker/.env`) are throwaway sandbox fixtures, never exposed outside this docker network.
+Reachable from `opencode-dev` as `oracle:1521/FREEPDB1` via Compose service-name DNS, even across the two separate compose projects — `docker-compose.yml` joins `docker-compose.oracle.yml`'s network as `external: true` (both declare the same fixed network name), and DNS resolution works per-network, not per-project. `opencode-dev`'s `environment` block pre-wires `ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD`; since the server itself is config-file-driven, not env-var-driven (see its README's Configuration section), `entrypoint.sh` turns these into `~/.config/kealthas-dev/opencode-mcp-oracle/config.json` at container start, so `cd mcp-servers/oracle && npm install && npm run build && npm start` just works with zero setup. Credentials (`ORACLE_APP_USER`/`ORACLE_APP_USER_PASSWORD` in `docker/.env`) are throwaway sandbox fixtures, never exposed outside this docker network.
 
 ## Loki test instance, for exercising mcp-servers/loki/
 
@@ -93,7 +93,7 @@ No `--wait` here: `loki`'s official image is built `FROM gcr.io/distroless/stati
 
 First-time init is effectively instant (no schema/DB bootstrap) — the `loki-data` volume (in `docker-compose.loki.yml`'s own project) still persists ingested test data across container restarts, same pattern as `oracle-data`. `loki` keeps running after a `run --rm opencode-dev` session exits, and across every worktree — stop it explicitly with `docker compose -f docker/docker-compose.loki.yml down`.
 
-Reachable from `opencode-dev` as `loki:3100`, same `external: true` shared-network join as the Oracle fixture above. `opencode-dev`'s `environment` block pre-wires `LOKI_BASE_URL=http://loki:3100`; since the server is config-file-driven (see its README's Configuration section), `docker-entrypoint.sh` turns this into `~/.config/kealthas-dev/opencode-mcp-loki/config.json` at container start, so `cd mcp-servers/loki && npm install && npm run build && npm start` just works with zero setup. No credentials needed — the sandbox's `loki` runs unauthenticated, matching `mcp-servers/loki/README.md`'s "auth is optional" design.
+Reachable from `opencode-dev` as `loki:3100`, same `external: true` shared-network join as the Oracle fixture above. `opencode-dev`'s `environment` block pre-wires `LOKI_BASE_URL=http://loki:3100`; since the server is config-file-driven (see its README's Configuration section), `entrypoint.sh` turns this into `~/.config/kealthas-dev/opencode-mcp-loki/config.json` at container start, so `cd mcp-servers/loki && npm install && npm run build && npm start` just works with zero setup. No credentials needed — the sandbox's `loki` runs unauthenticated, matching `mcp-servers/loki/README.md`'s "auth is optional" design.
 
 ## MySQL test instance, for exercising mcp-servers/mysql/
 
@@ -107,7 +107,7 @@ docker compose -f docker/docker-compose.mysql.yml up -d --wait
 
 `--wait` blocks until `mysqladmin ping` passes. First-time init (creating the `testdb` database and `testuser` account) takes a few seconds and only happens once — the `mysql-data` volume persists it; once warm, later starts are healthy within seconds. Stop it explicitly with `docker compose -f docker/docker-compose.mysql.yml down`.
 
-Reachable from `opencode-dev` as `mysql:3306`, same `external: true` shared-network join as the Oracle/Loki fixtures. `opencode-dev`'s `environment` block pre-wires `MYSQL_HOST=mysql`/`MYSQL_USER`/`MYSQL_PASSWORD`/`MYSQL_DATABASE`; since the server itself reads a single `MYSQL_CONNECT_STRING` (see its README's Configuration section), `docker-entrypoint.sh` assembles one from those four at container start, so `cd mcp-servers/mysql && npm install && npm run build && npm start` just works with zero setup. Credentials (`MYSQL_APP_USER`/`MYSQL_APP_USER_PASSWORD`/`MYSQL_ROOT_PASSWORD` in `docker/.env`) are throwaway sandbox fixtures, never exposed outside this docker network.
+Reachable from `opencode-dev` as `mysql:3306`, same `external: true` shared-network join as the Oracle/Loki fixtures. `opencode-dev`'s `environment` block pre-wires `MYSQL_HOST=mysql`/`MYSQL_USER`/`MYSQL_PASSWORD`/`MYSQL_DATABASE`; since the server itself reads a single `MYSQL_CONNECT_STRING` (see its README's Configuration section), `entrypoint.sh` assembles one from those four at container start, so `cd mcp-servers/mysql && npm install && npm run build && npm start` just works with zero setup. Credentials (`MYSQL_APP_USER`/`MYSQL_APP_USER_PASSWORD`/`MYSQL_ROOT_PASSWORD` in `docker/.env`) are throwaway sandbox fixtures, never exposed outside this docker network.
 
 ## Redis test instance, for exercising mcp-servers/redis/
 
@@ -131,7 +131,7 @@ Installed in the `Dockerfile` via the official installer script (`curl -LsSf htt
 
 ## Verifying the system-prompt override actually works
 
-**Automatic now, not a manual step.** `docker-entrypoint.sh` (re)generates `~/.config/opencode/opencode.jsonc` fresh on every container start — `agent.build/plan/general.prompt` wired to `/home/dev/project/deploy/system-prompt.txt` (the bind-mounted, live file) and the diagnostic plugin loaded via the bare `@kealthas-dev/opencode-system-prompt-tools` (the published npm package — see "Plugin loading" above). There's no config volume to hand-edit anymore.
+**Automatic now, not a manual step.** `entrypoint.sh` (re)generates `~/.config/opencode/opencode.jsonc` fresh on every container start — `agent.build/plan/general.prompt` wired to `/home/dev/project/deploy/system-prompt.txt` (the bind-mounted, live file) and the diagnostic plugin loaded via the bare `@kealthas-dev/opencode-system-prompt-tools` (the published npm package — see "Plugin loading" above). There's no config volume to hand-edit anymore.
 
 Automated end-to-end in `../tests/integration/docker-prompt-override.test.sh` (run via `../tests/run-all.sh`) — launches its own disposable container (via plain `docker run`, not `docker/dev.sh`, since it's testing the container's own startup path directly) and asserts `opencode debug config` resolves `agent.*.prompt` to `system-prompt.txt`'s exact content.
 

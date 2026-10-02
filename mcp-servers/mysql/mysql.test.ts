@@ -1,5 +1,5 @@
 // Requires a live MySQL instance - the docker/ sandbox's `mysql` compose
-// service (see docker-notes.md's "MySQL test instance" section), started
+// service (see notes.md's "MySQL test instance" section), started
 // separately as a shared fixture. Not mockable: exercises the real mysql2
 // round-trip, including server.ts's per-request-connection/READ ONLY
 // transaction design.
@@ -33,7 +33,7 @@ for (const key of ["MYSQL_HOST", "MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_DATABASE
   if (!process.env[key]) {
     throw new Error(
       `${key} not set - this test needs a live MySQL instance (the docker/ sandbox's ` +
-        "mysql service, see docker-notes.md) to build a database config file from, not a bare `node --test` on the host",
+        "mysql service, see notes.md) to build a database config file from, not a bare `node --test` on the host",
     );
   }
 }

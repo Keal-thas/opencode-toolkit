@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "private": true,
-  "description": "Test-only harness for the official @modelcontextprotocol/server-memory package wired in by deploy/opencode.json.example (see docs/feature-points/15-opencode-memory-mcp.md) - no server code of our own here, this just verifies the upstream package behaves as documented.",
+  "description": "Test-only harness for the official @modelcontextprotocol/server-memory package wired in by deploy/opencode.json.example (see mcp-servers/memory/README.md) - no server code of our own here, this just verifies the upstream package behaves as documented.",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@modelcontextprotocol/server-memory": "^2026.8.31"

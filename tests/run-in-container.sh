@@ -7,10 +7,10 @@
 # instance), the loki MCP server test (needs a real Loki instance), and
 # the mysql MCP server test (needs a real MySQL instance) - all reachable
 # here because the shared `oracle`/`loki`/`mysql` services are started
-# separately first, see docker/docker-notes.md. Also the memory and redis
+# separately first, see docker/notes.md. Also the memory and redis
 # MCP server tests - the official upstream packages, not our own code;
 # memory needs only network access to install it, redis additionally needs
-# the real Redis instance (also started separately, see docker-notes.md)
+# the real Redis instance (also started separately, see notes.md)
 # and `uv`/`uvx` (see the Dockerfile). Also the playwright MCP server test -
 # the official @playwright/mcp package, not our own code (see
 # mcp-servers/playwright/README.md) - against a real headless Chromium,
@@ -25,12 +25,12 @@ echo "== unit tests (node --test) =="
 # runtime dependency (zod, for its review_verdict tool's argument schema -
 # every other plugin here is zero-runtime-dependency by design, see its
 # package.json) - install it before its unit test tries to import the
-# plugin module, same reasoning as toolkits/module-analysis below.
+# plugin module, same reasoning as clients/module-analysis below.
 (cd plugins/llm-review-gate && npm install --no-audit --no-fund)
 
 # Explicit glob, not a bare directory: Node 20 auto-detected "tests/unit"
 # as a directory to scan for test files, but Node 22 (this sandbox's
-# base image as of 2026-09-13, see docker/docker-notes.md) does not -
+# base image as of 2026-09-13, see docker/notes.md) does not -
 # it tries to resolve/require the path as a single module and fails
 # with ERR_MODULE_NOT_FOUND. Verified directly on real node-v20.18.1 and
 # node-v22.23.2 builds, not assumed. The glob form works on both.
@@ -38,14 +38,14 @@ node --test tests/unit/*.test.mjs
 
 echo
 echo "== analyze-modules.ts integration test =="
-# toolkits/module-analysis/ is its own npm package (see its package.json) -
+# clients/module-analysis/ is its own npm package (see its package.json) -
 # install @opencode-ai/sdk before driving it, same as mcp-servers/oracle below.
 # It's TypeScript run directly via its local tsx devDependency (no build
 # step, unlike the mcp-servers/*/ packages - see its package.json), so
 # `npm run typecheck` (tsc --noEmit) is the only thing that actually
 # type-checks it - tsx itself only strips types at runtime, it doesn't
 # verify them.
-(cd toolkits/module-analysis && npm install --no-audit --no-fund && npm run typecheck)
+(cd clients/module-analysis && npm install --no-audit --no-fund && npm run typecheck)
 node tests/integration/analyze-modules.test.mjs
 
 echo

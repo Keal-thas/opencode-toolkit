@@ -1,7 +1,7 @@
 // Verifies the official redis-mcp-server PyPI package (not our own code)
 // actually installs and behaves as documented, since deploy/opencode.json.example
 // + SETUP.md wire it in sight-unseen from its README - see
-// docs/feature-points/20-redis-mcp-server.md.
+// mcp-servers/redis/README.md.
 //
 // Spawns the real package via `uvx`, the same way opencode itself starts a
 // `type: "local"` MCP server (see docs/opencode-docs-reference/mcp-servers.mdx),

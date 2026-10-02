@@ -54,7 +54,7 @@ RUN (userdel -r node 2>/dev/null || true) \
 
 WORKDIR /home/${USERNAME}/project
 
-# Root at start: the entrypoint loads provider keys + regenerates opencode.jsonc as dev before exec'ing the real command (see docker-entrypoint.sh).
-COPY --chmod=755 docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+# Root at start: the entrypoint loads provider keys + regenerates opencode.jsonc as dev before exec'ing the real command (see entrypoint.sh).
+COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["bash"]

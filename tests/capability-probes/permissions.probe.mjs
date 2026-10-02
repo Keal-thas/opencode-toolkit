@@ -11,7 +11,7 @@
 //      event and replying via the client's `postSessionIdPermissionsPermissionId`
 //      method (the same mechanism a real TUI uses under the hood) - there's no
 //      documented higher-level wrapper for this, so it's driven directly
-//      against the generated client. hooks.verify.mjs deliberately avoids this
+//      against the generated client. hooks.probe.mjs deliberately avoids this
 //      tier entirely (risk of a headless run hanging forever with nothing to
 //      answer an interactive prompt); this script takes that risk on its own,
 //      bounded by a hard timeout so a failed race reports as a finding, not
@@ -22,7 +22,7 @@
 //
 // Run manually inside the docker/ sandbox:
 //   docker/dev.sh run --rm opencode-dev bash -c \
-//     'cd tests/capability-probes && npm install --no-audit --no-fund && node permissions.verify.mjs'
+//     'cd tests/capability-probes && npm install --no-audit --no-fund && node permissions.probe.mjs'
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setupProbeEnv, saveEvidence } from "./lib/harness.mjs";

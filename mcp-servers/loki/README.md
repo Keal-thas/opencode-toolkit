@@ -53,7 +53,7 @@ mkdir -p ~/.config/kealthas-dev/opencode-mcp-loki
 LOKI_CONFIG_ENV=prod opencode-mcp-loki
 ```
 
-For local dev/testing against this repo's own checkout (this directory, not the published package), same idea — drop a real config file at the default location, or a named `config-<name>.json` (see `config.example.json` for the shape — the sandbox's docker-entrypoint.sh generates the default one automatically, see Testing below):
+For local dev/testing against this repo's own checkout (this directory, not the published package), same idea — drop a real config file at the default location, or a named `config-<name>.json` (see `config.example.json` for the shape — the sandbox's entrypoint.sh generates the default one automatically, see Testing below):
 
 ```bash
 npm install
@@ -74,7 +74,7 @@ docker compose -f docker/docker-compose.loki.yml up -d
 docker/dev.sh run --rm opencode-dev bash
 ```
 
-The default config file is already in place inside that shell — `docker-entrypoint.sh` generates `~/.config/kealthas-dev/opencode-mcp-loki/config.json` from the sandbox's `LOKI_BASE_URL` compose env var. `cd mcp-servers/loki && npm install && npm run build && npm start`, then hit `http://localhost:8091/mcp` from an MCP client or `curl`.
+The default config file is already in place inside that shell — `entrypoint.sh` generates `~/.config/kealthas-dev/opencode-mcp-loki/config.json` from the sandbox's `LOKI_BASE_URL` compose env var. `cd mcp-servers/loki && npm install && npm run build && npm start`, then hit `http://localhost:8091/mcp` from an MCP client or `curl`.
 
 `loki.test.ts` (see `tests/README.md`) doesn't need this manual dance — it builds its own config files into a fake `$HOME` per spawned server (same pattern as `mcp-servers/oracle/oracle.test.ts`) and starts/stops its own `dist/server.js` process on its own port as part of the test run, seeding its own test log lines by pushing directly to Loki's push API (not through this MCP server, which is read-only by design).
 

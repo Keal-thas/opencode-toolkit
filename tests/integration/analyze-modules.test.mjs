@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Integration test for toolkits/module-analysis/analyze-modules.ts. Runs the real
+// Integration test for clients/module-analysis/analyze-modules.ts. Runs the real
 // driver (via its local tsx devDependency, same as the driver's own "npm
 // start" script - see its package.json) against a real opencode server (the
 // SDK's createOpencode() spawns the actual `opencode` binary), with a fake
@@ -120,7 +120,7 @@ try {
   const fail = [];
 
   try {
-    const moduleAnalysisDir = join(REPO_ROOT, "toolkits", "module-analysis");
+    const moduleAnalysisDir = join(REPO_ROOT, "clients", "module-analysis");
     // Local tsx devDependency, not a global install - run through its own
     // entry script with the current node rather than node_modules/.bin/tsx,
     // which on Windows is a tsx.cmd shim that execFile can't spawn directly.
