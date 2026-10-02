@@ -4,7 +4,7 @@ A manually-triggered checklist for auditing this repo's reader-facing docs again
 
 ## Scope
 
-The reader-facing doc set is the same one CLAUDE.md's Preferences bullet names: README.md, SETUP.md, CLAUDE.md itself, `docs/feature-points/*`, subpackage READMEs (`mcp-servers/*/README.md`, `plugins/*/README.md`, `toolkits/*/README.md`), and `memory/*` — plus the reference docs CLAUDE.md links out to (`docs/deployment-environment.md`, `docs/npm-publishing.md`), which carry the same "what's true now" contract despite living outside CLAUDE.md itself. Files whose whole purpose is historical or decision-oriented — `docs/lessons-learned.md`, `mcp-servers/TODO.md`, narrowly-scoped decision notes — are out of scope for this pass; dated history belongs there, not removed from there.
+The reader-facing doc set is the same one CLAUDE.md's Preferences bullet names: README.md, SETUP.md, CLAUDE.md itself, `plugins/README.md`, `mcp-servers/README.md`, subpackage READMEs (`mcp-servers/*/README.md`, `plugins/*/README.md`, `clients/*/README.md`), and `memory/*` — plus the reference docs CLAUDE.md links out to (`docs/deployment-environment.md`, `docs/npm-publishing.md`), which carry the same "what's true now" contract despite living outside CLAUDE.md itself. Files whose whole purpose is historical or decision-oriented — `docs/lessons-learned.md`, `mcp-servers/TODO.md`, narrowly-scoped decision notes — are out of scope for this pass; dated history belongs there, not removed from there.
 
 ## What counts as drift
 
@@ -27,7 +27,7 @@ The trap: a `History:`/dated paragraph usually bundles two different things toge
 
 Before deleting a `History:` paragraph or dated aside, reread it once specifically looking for rationale (signals: "because", "so that", "instead of", "tradeoff", "gives every X" — a consequence clause, not just a timestamp). Don't delete on the first pass just because it's wrapped in history-shaped prose.
 
-This checklist exists because that exact mistake happened once already — see the `docker/docker-notes.md` entry in [docs/lessons-learned.md](lessons-learned.md).
+This checklist exists because that exact mistake happened once already — see the `docker/notes.md` entry in [docs/lessons-learned.md](lessons-learned.md).
 
 ## Doing the pass
 

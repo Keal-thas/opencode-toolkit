@@ -74,7 +74,7 @@ mkdir -p ~/.config/kealthas-dev/opencode-mcp-oracle
 ORACLE_CONFIG_ENV=prod opencode-mcp-oracle
 ```
 
-For local dev/testing against this repo's own checkout (this directory, not the published package), same idea — drop a real config file at the default location, or a named `config-<name>.json` (see `config.example.json` for the shape — the sandbox's docker-entrypoint.sh generates the default one automatically, see Testing below):
+For local dev/testing against this repo's own checkout (this directory, not the published package), same idea — drop a real config file at the default location, or a named `config-<name>.json` (see `config.example.json` for the shape — the sandbox's entrypoint.sh generates the default one automatically, see Testing below):
 
 ```bash
 npm install
@@ -88,14 +88,14 @@ Either way, this starts a persistent HTTP server on the configured port (default
 
 ## Testing against a real Oracle instance
 
-`docker/docker-compose.oracle.yml`'s `oracle` service (`gvenzl/oracle-free` — see `docker/docker-notes.md`'s "Oracle test instance" section) is a shared fixture started separately, not by `docker/dev.sh`:
+`docker/docker-compose.oracle.yml`'s `oracle` service (`gvenzl/oracle-free` — see `docker/notes.md`'s "Oracle test instance" section) is a shared fixture started separately, not by `docker/dev.sh`:
 
 ```sh
 docker compose -f docker/docker-compose.oracle.yml up -d --wait
 docker/dev.sh run --rm opencode-dev bash
 ```
 
-The default config file is already in place inside that shell — `docker-entrypoint.sh` generates `~/.config/kealthas-dev/opencode-mcp-oracle/config.json` from the sandbox's `ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD` compose env vars, matching a real deployment's file-based config rather than passing those three straight through. `cd mcp-servers/oracle && npm install && npm run build && npm start`, then hit `http://localhost:8090/mcp` from an MCP client or `curl`.
+The default config file is already in place inside that shell — `entrypoint.sh` generates `~/.config/kealthas-dev/opencode-mcp-oracle/config.json` from the sandbox's `ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD` compose env vars, matching a real deployment's file-based config rather than passing those three straight through. `cd mcp-servers/oracle && npm install && npm run build && npm start`, then hit `http://localhost:8090/mcp` from an MCP client or `curl`.
 
 `oracle.test.ts` (see `tests/README.md`) doesn't need this manual dance — it builds against `process.env.ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD` (still plain env vars at the test level) to write its own config files into a fake `$HOME` per spawned server, and starts/stops its own `dist/server.js` process on its own port as part of the test run.
 

@@ -1,5 +1,5 @@
 // Requires a live Oracle instance - the docker/ sandbox's `oracle` compose
-// service (see docker-notes.md's "Oracle test instance" section), started
+// service (see notes.md's "Oracle test instance" section), started
 // separately as a shared fixture. Not mockable: exercises the real oracledb
 // round-trip, including server.ts's per-request-connection/autoCommit design.
 // Lives here (not under tests/) so Node's module resolution finds this
@@ -32,7 +32,7 @@ for (const key of ["ORACLE_CONNECT_STRING", "ORACLE_USER", "ORACLE_PASSWORD"]) {
   if (!process.env[key]) {
     throw new Error(
       `${key} not set - this test needs a live Oracle instance (the docker/ sandbox's ` +
-        "oracle service, see docker-notes.md) to build a database config file from, not a bare `node --test` on the host",
+        "oracle service, see notes.md) to build a database config file from, not a bare `node --test` on the host",
     );
   }
 }

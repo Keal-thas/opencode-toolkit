@@ -1,0 +1,9 @@
+# gitbash-edit-path-fix
+
+Works around an opencode bug on Windows + Git Bash: the built-in `edit` tool never re-resolves Git-Bash/MSYS/Cygwin/WSL-style absolute paths such as `/c/Users/x/file.ts`. Node's `path.win32.isAbsolute()` already calls that "absolute" (root-relative, no drive letter), so `edit` skips the branch that would resolve it and passes the literal string to `fs`, which Windows resolves against the *current* drive. `read` is unaffected because it runs its path through `FSUtil.normalizePath()` first; `edit` never does. Full investigation, including the closed-without-merge upstream fix (`anomalyco/opencode#22800`): `docs/lessons-learned.md`.
+
+- Package: `@kealthas-dev/opencode-gitbash-edit-path-fix`, source `gitbash-edit-path-fix.ts`.
+- Hooks `tool.execute.before` for `edit` only and rewrites `args.filePath` the way opencode's own `windowsPath()` does. It mutates the property in place rather than reassigning `output.args`, because the real tool reads the same `args` object right after the hook (source citation in the file's header comment). No-op off `win32`.
+- Not yet published and not in `deploy/opencode.json.example`. `write` has the identical bug and `apply_patch` an analogous one (the path is inside the patch text's `*** Update File:` headers); both are still to do, see `TODO.md`.
+
+Tests: `tests/unit/gitbash-edit-path-fix.test.mjs` covers the conversion for all four path forms plus negatives, the in-place rewrite, and an end-to-end reproduction of `edit.ts`'s branch via `path.win32`. It overrides `process.platform` because the sandbox is Linux, so it proves the plugin's logic, not that real Windows opencode honours the mutation. `tests/capability-probes/gitbash-edit-path-fix.probe.mjs` is the real check (Windows only) and `.github/workflows/probe-gitbash-path-bug.yml` runs it on a Windows runner.

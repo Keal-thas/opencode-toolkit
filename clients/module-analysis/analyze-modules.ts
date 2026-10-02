@@ -9,7 +9,7 @@
 // module with a non-empty output file is skipped.
 //
 // Usage:
-//   cd toolkits/module-analysis && npm install   # once, pulls in @opencode-ai/sdk
+//   cd clients/module-analysis && npm install   # once, pulls in @opencode-ai/sdk
 //   MODULES_DIR=/path/to/project/src/modules \
 //   OUT_DIR=/path/to/project/docs/module-analysis \
 //   npm start

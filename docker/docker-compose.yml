@@ -14,7 +14,7 @@ services:
     volumes:
       - ..:/home/dev/project
       - ${HOME}/.keys/.deepseek-key:/home/dev/.keys/.deepseek-key:ro
-    # No opencode config/data named volumes - they live in the container's writable layer and reset on every --rm; docker-entrypoint.sh regenerates opencode.jsonc each start.
+    # No opencode config/data named volumes - they live in the container's writable layer and reset on every --rm; entrypoint.sh regenerates opencode.jsonc each start.
     environment:
       - DEEPSEEK_API_KEY
       - ORACLE_CONNECT_STRING=oracle:1521/FREEPDB1
@@ -32,7 +32,7 @@ services:
       - loki-net
       - mysql-net
       - redis-net
-    # No depends_on oracle/loki/mysql/redis - it can't reach across compose projects; start them separately (see docker-notes.md).
+    # No depends_on oracle/loki/mysql/redis - it can't reach across compose projects; start them separately (see notes.md).
     stdin_open: true
     tty: true
     command: bash

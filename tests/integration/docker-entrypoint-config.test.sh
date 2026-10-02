@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exercises docker-entrypoint.sh's MCP config-file generation (oracle/loki/
+# Exercises entrypoint.sh's MCP config-file generation (oracle/loki/
 # mysql config.json) and its DEEPSEEK_API_KEY-from-file fallback - until now
 # only covered by a bare `bash -n` syntax check (unit/shell-syntax.test.mjs),
 # so a wrong env-var name or connect-string shape in one of its heredocs
@@ -87,7 +87,7 @@ else
 fi
 
 if [[ "$fail" -eq 0 ]]; then
-  echo "PASS: docker-entrypoint.sh generates correct MCP configs and DEEPSEEK_API_KEY fallback"
+  echo "PASS: entrypoint.sh generates correct MCP configs and DEEPSEEK_API_KEY fallback"
   exit 0
 else
   exit 1

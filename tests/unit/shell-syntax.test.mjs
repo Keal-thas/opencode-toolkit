@@ -1,6 +1,6 @@
 // Cheap regression net: every shipped shell script must at least parse.
 // Catches things like an unbalanced heredoc or quote slipping into
-// docker-entrypoint.sh or the docs-fetch script.
+// entrypoint.sh or the docs-fetch script.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";

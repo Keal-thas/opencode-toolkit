@@ -1,4 +1,4 @@
-name: verify-gitbash-path-bug
+name: probe-gitbash-path-bug
 
 # Manual-trigger-only diagnostic (workflow_dispatch, never runs on push/PR):
 # confirms on a real Windows kernel (not just Node's platform-independent

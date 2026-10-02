@@ -362,7 +362,7 @@ Before pointing this at a real database: `mysql_query` unconditionally wraps eve
 
 ## 11. Add the Memory MCP server
 
-Unlike steps 6-10, this isn't a server this repo wrote — it's the official upstream `@modelcontextprotocol/server-memory` package (a local knowledge-graph memory: entities/relations/observations in a JSONL file, keyword search only, no embeddings). See `docs/feature-points/15-opencode-memory-mcp.md` for why this one and not a vector/RAG approach. It's also wired as `type: "local"` (opencode spawns and owns the process itself), unlike steps 6-10's `type: "remote"` — no separate terminal or process supervisor to keep running.
+Unlike steps 6-10, this isn't a server this repo wrote — it's the official upstream `@modelcontextprotocol/server-memory` package (a local knowledge-graph memory: entities/relations/observations in a JSONL file, keyword search only, no embeddings). See `mcp-servers/memory/README.md` for why this one and not a vector/RAG approach. It's also wired as `type: "local"` (opencode spawns and owns the process itself), unlike steps 6-10's `type: "remote"` — no separate terminal or process supervisor to keep running.
 
 Install it globally via the internal npm registry (same registry steps 6-10 already confirmed works for third-party packages):
 
@@ -408,7 +408,7 @@ Also not a server this repo wrote — the official upstream `redis-mcp-server` P
 uv --version
 ```
 
-**Unlike steps 6-11, this needs PyPI reachable, not just the internal npm registry** — confirmed reachable too (see `docs/deployment-environment.md`), and the machine's Python is standard CPython, so no exotic-interpreter wheel-compatibility concern for `redis-mcp-server`'s C-extension dependencies. If `uv --version` fails anyway, install it — the official installer works the same way it did for this repo's own dev sandbox (see `docker/docker-notes.md`'s "uv/uvx" section):
+**Unlike steps 6-11, this needs PyPI reachable, not just the internal npm registry** — confirmed reachable too (see `docs/deployment-environment.md`), and the machine's Python is standard CPython, so no exotic-interpreter wheel-compatibility concern for `redis-mcp-server`'s C-extension dependencies. If `uv --version` fails anyway, install it — the official installer works the same way it did for this repo's own dev sandbox (see `docker/notes.md`'s "uv/uvx" section):
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh

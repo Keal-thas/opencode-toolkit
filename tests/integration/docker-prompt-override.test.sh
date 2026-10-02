@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # Automates the manual verification procedure documented in
-# docker/docker-notes.md ("Verifying the system-prompt override actually
+# docker/notes.md ("Verifying the system-prompt override actually
 # works") - until now that check was hand-run and undocumented as a test.
 #
 # NOTE on where this runs: unlike the rest of tests/, this script itself
 # must run on the host, because it's the thing invoking `docker run` -
 # nothing can launch a container from inside one without docker-in-docker,
-# which this repo's sandbox deliberately doesn't set up (see docker-notes.md).
+# which this repo's sandbox deliberately doesn't set up (see notes.md).
 # It still honors the "never run opencode/node against the host" rule: the
 # only thing docker itself does is start a throwaway container from the
 # already-built dev image; every actual opencode invocation happens inside
 # that container. There's no persistent config/data volume to touch either
-# way anymore (see docker/docker-notes.md) - the container's own writable
-# layer, including whatever opencode.jsonc docker-entrypoint.sh generates,
+# way anymore (see docker/notes.md) - the container's own writable
+# layer, including whatever opencode.jsonc entrypoint.sh generates,
 # is wiped with it on exit.
 #
 # Requires the dev image to already be built:
@@ -22,8 +22,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE="opencode-toolkit-dev:latest"
 
-# The container's real ENTRYPOINT (docker-entrypoint.sh) generates
-# opencode.jsonc from scratch on every start now (see docker-notes.md) -
+# The container's real ENTRYPOINT (entrypoint.sh) generates
+# opencode.jsonc from scratch on every start now (see notes.md) -
 # we ride that as-is rather than overriding --entrypoint or hand-writing
 # a config here, so this exercises the exact same startup path a real
 # `docker/dev.sh run` session does. The repo is bind-mounted read-only:

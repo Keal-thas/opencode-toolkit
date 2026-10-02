@@ -22,13 +22,13 @@
 //      output actually reach the model, or is it silently ignored too?
 //
 // Also dumps every tool's real description/parameters schema as observed via
-// tool.definition, into evidence - tools.verify.mjs relies on this inventory
+// tool.definition, into evidence - tools.probe.mjs relies on this inventory
 // having been eyeballed once for the tools it drives.
 //
 // Run manually inside the docker/ sandbox (never against the host node/opencode
 // install, see CLAUDE.md):
 //   docker/dev.sh run --rm opencode-dev bash -c \
-//     'cd tests/capability-probes && npm install --no-audit --no-fund && node hooks.verify.mjs'
+//     'cd tests/capability-probes && npm install --no-audit --no-fund && node hooks.probe.mjs'
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -103,7 +103,7 @@ try {
     "the interesting one: this run uses bash:\"allow\" (needed so Q3a isn't gated behind an interactive prompt " +
     "this headless probe can't answer), so its absence here is necessary but not sufficient proof it's dead - " +
     "see llm-review-gate.ts's header comment for the stronger claim (verified against opencode's own server " +
-    "source directly), and permissions.verify.mjs for the \"ask\" tier attempt.",
+    "source directly), and permissions.probe.mjs for the \"ask\" tier attempt.",
   );
 
   const toolDefs = (await env.readHookLog("tool.definition")).map((e) => ({
