@@ -1,0 +1,20 @@
+{
+  "name": "@kealthas-dev/opencode-loop-guard",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "loop-guard.ts opencode plugin: stops a model from calling the same tool with the same arguments over and over - warns after 3 identical calls with identical results and refuses a 6th identical read/grep/glob call. Written in TypeScript against @opencode-ai/plugin's Plugin type (type-only). Independently installable - not bundled with the other plugins.",
+  "main": "loop-guard.ts",
+  "files": ["loop-guard.ts"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Keal-thas/opencode-toolkit.git",
+    "directory": "plugins/loop-guard"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.0.0",
+    "@types/node": "^22.0.0"
+  }
+}

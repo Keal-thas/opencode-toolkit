@@ -30,6 +30,10 @@ Every external component this repo's sandbox depends on — the opencode CLI its
 
 Where a tool exposes a genuinely open-ended capability (arbitrary SQL, arbitrary log-query syntax), the tool itself does no filtering or allow-listing — the account or credentials it's configured with are the actual safety boundary. This pushes the safety decision to configuration time (which account you point the tool at) instead of baking a necessarily-incomplete blocklist into the tool's own code.
 
+## Guard a small model's habits in tool hooks, not in the prompt
+
+The deployed model is a local Qwen, and the failures it repeats (re-issuing the same call, guessing an absolute path) are predictable. A prompt line against them is advisory and costs context on every turn; a `tool.execute.before`/`after` hook is deterministic and costs nothing until the failure happens. So each such habit gets a small hook that repairs or refuses the call, and the prompt stays free for things only a prompt can say. A repair is applied only when there is a single unambiguous candidate, and a refusal only after the failure is confirmed, so a guard never blocks legitimate work. The prior art these come from is in [multi-agent-prior-art.md](multi-agent-prior-art.md).
+
 ## Documentation states what's true now, not how it got there
 
 Reader-facing docs answer "what is this and why does it work this way," not "what changed since the last version." History, dates, and "previously X, now Y" phrasing are deliberately excluded from those docs — they'd go stale the moment the described state changes again, and every dated fact is a future correctness bug. Where the history genuinely matters (a design rationale for choosing X over Y, a debugging incident), it lives in one dedicated place, not scattered across whichever doc happened to be edited when the decision was made.

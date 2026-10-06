@@ -27,6 +27,8 @@ echo "== unit tests (node --test) =="
 # package.json) - install it before its unit test tries to import the
 # plugin module, same reasoning as clients/module-analysis below.
 (cd plugins/llm-review-gate && npm install --no-audit --no-fund)
+# plugins/council/ likewise needs zod, for its tool's argument schema.
+(cd plugins/council && npm install --no-audit --no-fund)
 
 # Explicit glob, not a bare directory: Node 20 auto-detected "tests/unit"
 # as a directory to scan for test files, but Node 22 (this sandbox's
@@ -47,6 +49,10 @@ echo "== analyze-modules.ts integration test =="
 # verify them.
 (cd clients/module-analysis && npm install --no-audit --no-fund && npm run typecheck)
 node tests/integration/analyze-modules.test.mjs
+
+echo
+echo "== guard plugins integration test (loop-guard, path-guard, council in a real opencode) =="
+node tests/integration/guard-plugins.test.mjs
 
 echo
 echo "== oracle MCP server integration test (real Oracle instance) =="

@@ -11,5 +11,8 @@ This table is the one list of plugins; other docs link here instead of repeating
 | [`llm-review-gate`](llm-review-gate/README.md) | LLM safety review before each `bash` call | commented out (opt-in) | yes |
 | [`gitbash-edit-path-fix`](gitbash-edit-path-fix/README.md) | fixes Git-Bash paths in the `edit` tool on Windows | no | not yet |
 | [`verify-session`](verify-session/README.md) | `/verify` starts an independent review session | no | not yet |
+| [`loop-guard`](loop-guard/README.md) | warns on, then refuses, a model repeating the same tool call | no | not yet |
+| [`path-guard`](path-guard/README.md) | repairs a guessed absolute path, clear error for a missing `grep`/`glob` path | no | not yet |
+| [`council`](council/README.md) | `council` tool and `/council`: several independent advisors, then a tool-less synthesis | no | not yet |
 
 "Published" means included in `release.yml`'s package loop ([docs/npm-publishing.md](../docs/npm-publishing.md)).
