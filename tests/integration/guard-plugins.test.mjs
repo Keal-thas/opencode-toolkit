@@ -92,7 +92,7 @@ async function runOpencode(name, script, files = {}) {
       await mkdir(dirname(join(project, rel)), { recursive: true });
       await writeFile(join(project, rel), content);
     }
-    // Symlinked, so the plugin's own node_modules (council's zod) still resolves from its real location.
+    // Symlinked, so the plugin's own node_modules (council's zod) still resolves from its real location. Needs permission to create symlinks (on Windows, developer mode or an elevated shell).
     for (const plugin of ["loop-guard", "path-guard", "council"]) {
       await symlink(join(REPO_ROOT, "plugins", plugin, `${plugin}.ts`), join(project, ".opencode", "plugins", `${plugin}.ts`));
     }
