@@ -28,9 +28,9 @@ omo and slim both run their agent loop inside opencode and both ship a lot that 
 
 | Mechanism | Source | Decision |
 |---|---|---|
-| Repeated identical tool call guard | slim `tool-loop-guard` | taken: `plugins/loop-guard` |
-| Guessed absolute path repair, and a clear error for a missing search path | slim `absolute-path-rescue`, `search-path-guard` | taken: `plugins/path-guard` |
-| Ask several seats in parallel, then synthesize with a tool-less agent | slim `council` | taken: `plugins/council` |
+| Repeated identical tool call guard | slim `tool-loop-guard` | taken: [`plugins/loop-guard`](../plugins/loop-guard/README.md) |
+| Guessed absolute path repair, and a clear error for a missing search path | slim `absolute-path-rescue`, `search-path-guard` | taken: [`plugins/path-guard`](../plugins/path-guard/README.md) |
+| Ask several seats in parallel, then synthesize with a tool-less agent | slim `council` | taken: [`plugins/council`](../plugins/council/README.md) |
 | Typed submission as the only way model output enters a state machine | `opencode-rgr-loop` | later, see below |
 | Write receipts plus a completion gate | slim `deepwork-guard` | later |
 | Hash-anchored edits that reject stale lines | omo `hashline-core` | later |
@@ -49,23 +49,24 @@ A small model's commonest failure is calling the same tool with the same argumen
 
 - Fingerprint a call as the tool name plus its arguments serialized with sorted keys. Per session, track the last fingerprint and a run counter that advances only when the next call has the same fingerprint and byte-identical output. Anything different resets the counter, so a legitimate re-read after the file changed is never counted.
 - At 3 identical runs, append a notice to the tool output telling the model to stop and change approach.
-- At 5, refuse the next identical call by throwing from `tool.execute.before`, only for the read-only search and read tools (`read`, `grep`, `glob`, `list`). A refusal can only follow a run already confirmed identical, so overlapping parallel calls cannot trip it early.
+- At 5, refuse the next identical call by throwing from `tool.execute.before`, only for the read-only search and read tools (`read`, `grep`, `glob`). A refusal can only follow a run already confirmed identical, so overlapping parallel calls cannot trip it early.
+- A failing call never reaches `tool.execute.after`, so runs are counted in `tool.execute.before` and a failing read repeated forever is refused too.
 - A new user message resets the session; `task` is exempt.
 
 ### path-guard
 
 Small models drop segments from absolute paths (`/home/u/Work/Project` for `/home/u/Work/Parent/Child/Project`) and the call then fails before the tool runs.
 
-- For `read`, `list`, `glob` and `grep`, on `filePath` or `path`: if the argument is an absolute path that does not exist, is not already inside the workspace, and contains no `.` or `..` segment, find the longest contiguous suffix of the workspace path that occurs in it. If it occurs exactly once and workspace plus the full remaining tail exists, rewrite the argument to that path. Otherwise leave the call alone. It never invents a path and never trims the tail.
+- For `read` (`filePath`), `glob` and `grep` (`path`): if the argument is an absolute path that does not exist, is not already inside the workspace, and contains no `.` or `..` segment, find the longest contiguous suffix of the workspace path that occurs in it. If it occurs exactly once and workspace plus the full remaining tail exists, rewrite the argument to that path. Otherwise leave the call alone. It never invents a path and never trims the tail.
 - The repair logic takes the `path` module as a parameter so the Windows flavor, the deployment target, is tested on Linux.
-- A clear error for a missing `grep`/`glob` search path is added only if the real opencode error is unclear; that is checked against a real opencode before the code is written.
+- `grep` with a search path that does not exist silently searches the whole workspace and `glob` fails with a bare `ripgrep execution failed`, so both get an error naming the path. `read` already says `File not found`.
 
 ### council
 
 For decisions where one answer from one model is not enough.
 
 - A `council` tool takes a question and optional context, runs each seat in its own child session in parallel with its own steering prompt, then gives all answers to a synthesizer that has no tools.
-- Seats use a read-only agent (read, glob, grep, list; everything else denied, including `council` itself). The synthesizer's agent denies every tool. Both agents are registered through the `config` hook so deployment needs no extra config.
+- Seats use a read-only agent (read, glob, grep; everything else denied, including `council` itself). The synthesizer's agent denies every tool. Both agents are registered through the `config` hook so deployment needs no extra config.
 - A seat that fails or times out is reported as missing. One surviving seat is returned as-is with a note; no survivors is an error.
 - The report carries the consensus rating (`unanimous`, `majority`, `split`), the synthesized answer, the disagreements and every seat's own answer verbatim, so the model cannot present a split as agreement.
 - Seats differ by prompt, not necessarily by model, so diversity is weaker than with several models; each seat may name a `provider/model` to change that. Seats and prompts come from an optional JSON file, with built-in defaults.

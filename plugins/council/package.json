@@ -1,0 +1,23 @@
+{
+  "name": "@kealthas-dev/opencode-council",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "council.ts opencode plugin: a council tool and /council command that put a question to several independent advisors in parallel and have a tool-less synthesizer rate the consensus (unanimous, majority, split). Written in TypeScript against @opencode-ai/plugin's Plugin type (type-only) plus a real zod runtime dependency for the tool's argument schema. Independently installable - not bundled with the other plugins.",
+  "main": "council.ts",
+  "files": ["council.ts"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Keal-thas/opencode-toolkit.git",
+    "directory": "plugins/council"
+  },
+  "dependencies": {
+    "zod": "^4.1.8"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.0.0",
+    "@types/node": "^22.0.0"
+  }
+}
