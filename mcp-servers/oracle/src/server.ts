@@ -98,6 +98,20 @@ async function auditQuery(sql: string): Promise<{ allow: boolean; reason?: strin
 const CONNECT_TIMEOUT_SECONDS = 10;
 const CALL_TIMEOUT_MS = 30_000;
 
+// LOB columns otherwise come back as streaming Lob objects, which hold a
+// reference to the connection and can't be JSON-serialized (the tool result
+// fails with a circular-structure error). Fetch CLOB/NCLOB inline as strings
+// and BLOB as base64 instead.
+oracledb.fetchTypeHandler = (meta) => {
+  if (meta.dbType === oracledb.DB_TYPE_CLOB || meta.dbType === oracledb.DB_TYPE_NCLOB) {
+    return { type: oracledb.STRING };
+  }
+  if (meta.dbType === oracledb.DB_TYPE_BLOB) {
+    return { type: oracledb.BUFFER, converter: (val) => (val as Buffer | null)?.toString("base64") ?? null };
+  }
+  return undefined;
+};
+
 // One connection per request, not pooled - deliberate:
 // - a stray DML statement can't outlive the request (closing rolls it back)
 // - concurrent calls never race on the same session
@@ -131,19 +145,6 @@ async function executeQuery(sql: string, schema?: string) {
 
     const result = await connection.execute(sql, [], {
       outFormat: oracledb.OUT_FORMAT_OBJECT,
-      // LOB columns otherwise come back as streaming Lob objects, which hold
-      // a reference to the connection and can't be JSON-serialized (the
-      // tool result fails with a circular-structure error). Fetch CLOB/NCLOB
-      // inline as strings and BLOB as base64 instead.
-      fetchTypeHandler: (meta) => {
-        if (meta.dbType === oracledb.DB_TYPE_CLOB || meta.dbType === oracledb.DB_TYPE_NCLOB) {
-          return { type: oracledb.STRING };
-        }
-        if (meta.dbType === oracledb.DB_TYPE_BLOB) {
-          return { type: oracledb.BUFFER, converter: (val: Buffer | null) => val?.toString("base64") ?? null };
-        }
-        return undefined;
-      },
       // Without this, a successful UPDATE/INSERT would silently roll back the
       // moment its connection closes - immediate, since each request gets its own.
       autoCommit: true,
