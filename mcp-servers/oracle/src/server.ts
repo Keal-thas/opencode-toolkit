@@ -131,6 +131,19 @@ async function executeQuery(sql: string, schema?: string) {
 
     const result = await connection.execute(sql, [], {
       outFormat: oracledb.OUT_FORMAT_OBJECT,
+      // LOB columns otherwise come back as streaming Lob objects, which hold
+      // a reference to the connection and can't be JSON-serialized (the
+      // tool result fails with a circular-structure error). Fetch CLOB/NCLOB
+      // inline as strings and BLOB as base64 instead.
+      fetchTypeHandler: (meta) => {
+        if (meta.dbType === oracledb.DB_TYPE_CLOB || meta.dbType === oracledb.DB_TYPE_NCLOB) {
+          return { type: oracledb.STRING };
+        }
+        if (meta.dbType === oracledb.DB_TYPE_BLOB) {
+          return { type: oracledb.BUFFER, converter: (val: Buffer | null) => val?.toString("base64") ?? null };
+        }
+        return undefined;
+      },
       // Without this, a successful UPDATE/INSERT would silently roll back the
       // moment its connection closes - immediate, since each request gets its own.
       autoCommit: true,

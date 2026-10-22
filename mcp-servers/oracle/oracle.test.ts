@@ -151,6 +151,19 @@ test("a write survives the per-request connection closing (autoCommit)", async (
   }
 });
 
+test("CLOB, NCLOB and BLOB columns come back serialized, not as Lob objects", async () => {
+  const table = `lob_test_${Date.now()}`;
+  try {
+    await callOracleQuery(`CREATE TABLE ${table} (c CLOB, nc NCLOB, b BLOB)`);
+    await callOracleQuery(`INSERT INTO ${table} VALUES ('clob text', 'nclob text', UTL_RAW.CAST_TO_RAW('hi'))`);
+    const result = await callOracleQuery(`SELECT c, nc, b FROM ${table}`);
+    assert.equal(result.success, true);
+    assert.deepEqual(result.rows, [{ C: "clob text", NC: "nclob text", B: Buffer.from("hi").toString("base64") }]);
+  } finally {
+    await callOracleQuery(`DROP TABLE ${table}`);
+  }
+});
+
 test("a query against a nonexistent table returns a clean error, not a crash", async () => {
   const result = await callOracleQuery("SELECT * FROM this_table_does_not_exist_12345");
   assert.equal(result.success, false);
