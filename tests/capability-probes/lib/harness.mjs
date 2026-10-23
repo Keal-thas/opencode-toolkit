@@ -14,6 +14,9 @@ import { createOpencode } from "@opencode-ai/sdk";
 //   { toolCall: { id, name, args } } -> stream a tool_calls delta requesting
 //     that tool, so the real opencode server actually invokes it for real.
 //   { text: "..." }                  -> stream plain text, ending the turn.
+// Either form may also carry `usage: { prompt_tokens, completion_tokens }`,
+// reported in a trailing usage chunk - opencode's overflow/compaction check
+// runs on the provider-reported token counts, not on its own estimate.
 // Once the plan runs out, later requests (e.g. the continuation after a tool
 // result) get a generic closing text so the turn always terminates instead of
 // hanging.
@@ -53,6 +56,19 @@ export function startFakeProvider() {
         send({ role: "assistant", content: round.text });
         send({}, "stop");
       }
+      if (round.usage) {
+        const { prompt_tokens, completion_tokens = 10 } = round.usage;
+        res.write(
+          `data: ${JSON.stringify({
+            id: "chatcmpl-fake",
+            object: "chat.completion.chunk",
+            created: now,
+            model: parsed.model,
+            choices: [],
+            usage: { prompt_tokens, completion_tokens, total_tokens: prompt_tokens + completion_tokens },
+          })}\n\n`,
+        );
+      }
       res.write("data: [DONE]\n\n");
       res.end();
     });
@@ -79,8 +95,9 @@ export function startFakeProvider() {
 // config: merged into the opencode Config passed straight through via
 // createOpencode()'s OPENCODE_CONFIG_CONTENT mechanism (model/provider are
 // pre-filled to point at the fake provider; pass e.g. `permission` to override
-// per-probe).
-export async function setupProbeEnv({ pluginFiles = {}, config = {} } = {}) {
+// per-probe). modelLimit: { context, output } declared on the fake model,
+// for probes that need a small window to reach compaction quickly.
+export async function setupProbeEnv({ pluginFiles = {}, config = {}, modelLimit } = {}) {
   const workDir = await mkdtemp(join(tmpdir(), "capability-probe-"));
   const fakeHome = join(workDir, "home");
   const logDir = join(workDir, "hook-logs");
@@ -108,7 +125,7 @@ export async function setupProbeEnv({ pluginFiles = {}, config = {} } = {}) {
           npm: "@ai-sdk/openai-compatible",
           name: "Fake Test Provider",
           options: { baseURL: `http://127.0.0.1:${provider.port}/v1` },
-          models: { "fake-model": { name: "Fake Model" } },
+          models: { "fake-model": { name: "Fake Model", ...(modelLimit ? { limit: modelLimit } : {}) } },
         },
       },
       ...config,
