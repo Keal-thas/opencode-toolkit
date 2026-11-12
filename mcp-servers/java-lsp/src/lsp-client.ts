@@ -290,13 +290,20 @@ export class LspClient {
   }
 
   async shutdown(): Promise<void> {
-    if (this.#dead) return;
+    const child = this.#child;
+    if (!child || this.#dead) return;
+    const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
     try {
       await this.request("shutdown", null, { timeoutMs: 5_000 });
       this.notify("exit", null);
     } catch {
       // best-effort - fall through to kill() regardless
     }
-    this.#child?.kill();
+    child.kill();
+    // Wait for the server to really be gone, so the caller can safely delete its data dir
+    // (jdtls is still flushing .metadata when kill() returns); SIGKILL if it won't go.
+    const killTimer = setTimeout(() => child.kill("SIGKILL"), 5_000);
+    await exited;
+    clearTimeout(killTimer);
   }
 }
