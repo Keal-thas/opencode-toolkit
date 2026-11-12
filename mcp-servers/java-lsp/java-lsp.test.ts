@@ -135,6 +135,7 @@ function startServer(port: number): Promise<ChildProcess> {
     let stderr = "";
     child.stderr!.on("data", (chunk) => {
       stderr += chunk;
+      serverStderr += chunk;
       if (stderr.includes("listening on")) {
         clearTimeout(timeout);
         resolve(child);
@@ -153,6 +154,7 @@ async function stopServer(child: ChildProcess): Promise<void> {
   await new Promise((resolve) => child.once("exit", resolve));
 }
 
+let serverStderr = ""; // everything the server logged, to explain a failing assertion
 let serverProcess: ChildProcess;
 let client: Client;
 
@@ -253,7 +255,8 @@ test("java_diagnostics returns the real compile errors for a broken file and not
   const broken = await callTool("java_diagnostics", { file: fixtureFile("Broken"), waitMs: 8000 });
   assert.equal(broken.success, true);
   const errors = real(broken.data).filter((d: any) => d.severity === 1);
-  assert.ok(errors.length >= 2, `expected the type mismatch and the undefined method, got ${JSON.stringify(broken.data)}`);
+  const diagnosticsLog = serverStderr.split("\n").filter((l) => l.includes("[jdtls:diagnostics]")).join("\n");
+  assert.ok(errors.length >= 2, `expected the type mismatch and the undefined method, got ${JSON.stringify(broken.data)}\n${diagnosticsLog}`);
 
   const clean = await callTool("java_diagnostics", { file: fixtureFile("Greeter"), waitMs: 8000 });
   assert.equal(clean.success, true);

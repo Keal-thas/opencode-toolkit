@@ -11,7 +11,7 @@
 
 import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 
 const CONTENT_LENGTH_RE = /Content-Length: (\d+)/i;
 
@@ -49,6 +49,17 @@ function defaultClientCapabilities(): ClientCapabilities {
     },
     window: { workDoneProgress: false },
   };
+}
+
+// jdtls may write the same file's URI differently from pathToFileURL (e.g. `file:///c%3A/...` vs `file:///C:/...` on
+// Windows), so diagnostics are keyed by the decoded path - case-insensitive on Windows - not by the raw URI string.
+function uriKey(uri: string): string {
+  try {
+    const path = fileURLToPath(uri);
+    return process.platform === "win32" ? path.toLowerCase() : path;
+  } catch {
+    return uri;
+  }
 }
 
 export class LspClientError extends Error {}
@@ -236,7 +247,8 @@ export class LspClient {
       return;
     }
     if (msg.method === "textDocument/publishDiagnostics") {
-      this.#diagnostics.set(msg.params.uri, msg.params.diagnostics ?? []);
+      this.#log("diagnostics", `published ${msg.params.uri} (${msg.params.diagnostics?.length ?? 0})`);
+      this.#diagnostics.set(uriKey(msg.params.uri), msg.params.diagnostics ?? []);
       return;
     }
     // Requests *from* the server (registerCapability, workspace/configuration, etc.)
@@ -281,12 +293,13 @@ export class LspClient {
 
   closeDocument(uri: string): void {
     this.#openDocs.delete(uri);
-    this.#diagnostics.delete(uri);
+    this.#diagnostics.delete(uriKey(uri));
     this.notify("textDocument/didClose", { textDocument: { uri } });
   }
 
   getDiagnostics(uri: string): unknown[] {
-    return this.#diagnostics.get(uri) ?? [];
+    this.#log("diagnostics", `requested ${uri}`);
+    return this.#diagnostics.get(uriKey(uri)) ?? [];
   }
 
   async shutdown(): Promise<void> {
