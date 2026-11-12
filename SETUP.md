@@ -267,6 +267,18 @@ cat > ~/.config/kealthas-dev/opencode-mcp-java-lsp/config.json <<'EOF'
 EOF
 ```
 
+When the `java` on `PATH` is older than 21 (say JDK 8) and a JDK 21 is unzipped elsewhere, put it in the config file instead of changing `PATH`. Write Windows paths with forward slashes:
+
+```json
+{
+  "JAVA_LSP_WORKSPACE_ROOT": "C:/work/my-project",
+  "JDTLS_DATA_DIR": "C:/work/jdtls-data",
+  "KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE": "C:/tools/jdk-21/bin/java.exe"
+}
+```
+
+That key only chooses the JDK that runs jdtls. To have jdtls analyze the project against the JDK it really builds with (e.g. JDK 8), also add `KEALTHAS_JAVA_LSP_ANALYZED_PROJECT_JDK_RUNTIMES` ([README](mcp-servers/java-lsp/README.md#jdk-version)). If the launcher key is missing or wrong, the first tool call fails with `LSP server unavailable: process exited (code=1 ...)`; run `java -version` against the path you configured to check it.
+
 ```bash
 opencode-mcp-java-lsp
 ```

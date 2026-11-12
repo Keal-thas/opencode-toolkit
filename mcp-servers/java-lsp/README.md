@@ -24,6 +24,8 @@ Two different JDKs are involved, configured by two different keys:
 - **The JDK that launches jdtls itself** must be 21+ (jdtls refuses to start on anything older). By default it's whatever `JAVA_HOME`/`PATH` provides; set `KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE` (passed to jdtls's own `--java-executable` flag) to a `java` binary only when no 21+ JDK is on the machine's `PATH`.
 - **The JDK(s) your analyzed project builds against** — e.g. a JDK 8 project — go in `KEALTHAS_JAVA_LSP_ANALYZED_PROJECT_JDK_RUNTIMES`, a list of `{ "name", "path", "default" }` entries handed to jdtls as its `java.configuration.runtimes` setting. `name` must be jdtls's own execution-environment name (`JavaSE-1.8`, `JavaSE-11`, `JavaSE-17`, ...), `path` a JDK home directory (not `bin/java`), and `default: true` marks the one used when the project doesn't say. Pointing `KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE` at an old JDK does not do this — jdtls rejects it at startup with `jdtls requires at least Java 21`.
 
+`java-lsp-launcher.test.ts` covers the case where `PATH`'s `java` is 8 and a JDK 21 lives elsewhere: with `KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE` set, jdtls is started through that executable and the tools work; without it, jdtls refuses to start.
+
 This package is verified against the vendored `jdtls` 1.61.0 above (see Vendoring). Vendoring the jdtls distribution itself doesn't remove the JDK-21+-to-launch-it requirement — a system `java` still needs to be on `PATH` (or however the process supervisor provides one); see SETUP.md step 8.
 
 ## Configuration
