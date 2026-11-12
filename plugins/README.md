@@ -9,7 +9,7 @@ This table is the one list of plugins; other docs link here instead of repeating
 | [`system-prompt-tools`](system-prompt-tools/README.md) | dumps the system prompt actually sent, to confirm the override took effect | enabled | yes |
 | [`hook-logger`](hook-logger/README.md) | logs every hook event as JSONL | enabled | yes |
 | [`llm-review-gate`](llm-review-gate/README.md) | LLM safety review before each `bash` call | commented out (opt-in) | yes |
-| [`gitbash-edit-path-fix`](gitbash-edit-path-fix/README.md) | fixes Git-Bash paths in the `edit` tool on Windows | no | not yet |
+| [`gitbash-edit-path-fix`](gitbash-edit-path-fix/README.md) | fixes Git-Bash paths in the `edit`/`write`/`apply_patch` tools on Windows | no | not yet |
 | [`verify-session`](verify-session/README.md) | `/verify` starts an independent review session | no | not yet |
 | [`loop-guard`](loop-guard/README.md) | warns on, then refuses, a model repeating the same tool call | no | not yet |
 | [`path-guard`](path-guard/README.md) | repairs a guessed absolute path, clear error for a missing `grep`/`glob` path | no | not yet |

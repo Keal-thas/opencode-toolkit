@@ -16,8 +16,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 
-const { GitBashEditPathFix, toWindowsPath } = await import(
+const { GitBashEditPathFix } = await import(
   "../../plugins/gitbash-edit-path-fix/gitbash-edit-path-fix.ts"
+);
+const { rewritePatchText, toWindowsPath } = await import(
+  "../../plugins/gitbash-edit-path-fix/path-convert.ts"
 );
 
 async function withPlatform(platform, fn) {
@@ -72,13 +75,24 @@ test("hook: leaves an already-correct Windows path untouched", async () => {
   });
 });
 
-test("hook: ignores tools other than edit (e.g. write, bash)", async () => {
+test("hook: rewrites the write tool's filePath in place", async () => {
   await withPlatform("win32", async () => {
     const hooks = await GitBashEditPathFix();
-    for (const tool of ["write", "bash", "apply_patch", "read"]) {
+    const output = { args: { filePath: "/c/Users/franco/file.ts", content: "x" } };
+    const args = output.args;
+    await hooks["tool.execute.before"]({ tool: "write", sessionID: "s", callID: "c1" }, output);
+    assert.equal(args.filePath, "C:/Users/franco/file.ts");
+    assert.equal(args.content, "x", "unrelated args must be untouched");
+  });
+});
+
+test("hook: ignores tools outside edit/write/apply_patch (e.g. bash, read)", async () => {
+  await withPlatform("win32", async () => {
+    const hooks = await GitBashEditPathFix();
+    for (const tool of ["bash", "read"]) {
       const output = { args: { filePath: "/c/Users/franco/file.ts", command: "/c/Users/franco/file.ts" } };
       await hooks["tool.execute.before"]({ tool, sessionID: "s", callID: "c1" }, output);
-      assert.equal(output.args.filePath, "/c/Users/franco/file.ts", `${tool} must be left alone (not in scope yet)`);
+      assert.equal(output.args.filePath, "/c/Users/franco/file.ts", `${tool} must be left alone (not in scope)`);
     }
   });
 });
@@ -98,6 +112,61 @@ test("hook: tolerates a missing or non-string filePath without throwing", async 
     await assert.doesNotReject(() => hooks["tool.execute.before"]({ tool: "edit", sessionID: "s", callID: "c1" }, { args: {} }));
     await assert.doesNotReject(() =>
       hooks["tool.execute.before"]({ tool: "edit", sessionID: "s", callID: "c1" }, { args: { filePath: 123 } }),
+    );
+  });
+});
+
+test("rewritePatchText: converts add/delete/update/move header paths, leaves the rest alone", () => {
+  const patch = [
+    "*** Begin Patch",
+    "*** Update File: /c/Users/franco/a.ts",
+    "*** Move to: /d/work/b.ts",
+    "@@",
+    "-old /c/Users/franco/a.ts",
+    "+new",
+    "*** Add File: /mnt/e/new.ts",
+    "+hello",
+    "*** Delete File: /cygdrive/f/old.ts",
+    "*** End Patch",
+  ].join("\n");
+  const expected = [
+    "*** Begin Patch",
+    "*** Update File: C:/Users/franco/a.ts",
+    "*** Move to: D:/work/b.ts",
+    "@@",
+    "-old /c/Users/franco/a.ts",
+    "+new",
+    "*** Add File: E:/new.ts",
+    "+hello",
+    "*** Delete File: F:/old.ts",
+    "*** End Patch",
+  ].join("\n");
+  assert.equal(rewritePatchText(patch), expected);
+});
+
+test("rewritePatchText: leaves already-Windows header paths untouched", () => {
+  const patch = "*** Update File: C:/Users/franco/a.ts\n@@\n-a\n+b";
+  assert.equal(rewritePatchText(patch), patch);
+});
+
+test("hook: rewrites apply_patch's patchText in place", async () => {
+  await withPlatform("win32", async () => {
+    const hooks = await GitBashEditPathFix();
+    const output = { args: { patchText: "*** Add File: /c/Users/franco/new.ts\n+hi" } };
+    const args = output.args;
+    await hooks["tool.execute.before"]({ tool: "apply_patch", sessionID: "s", callID: "c1" }, output);
+    assert.equal(args.patchText, "*** Add File: C:/Users/franco/new.ts\n+hi");
+  });
+});
+
+test("hook: tolerates a missing or non-string patchText without throwing", async () => {
+  await withPlatform("win32", async () => {
+    const hooks = await GitBashEditPathFix();
+    await assert.doesNotReject(() =>
+      hooks["tool.execute.before"]({ tool: "apply_patch", sessionID: "s", callID: "c1" }, { args: {} }),
+    );
+    await assert.doesNotReject(() =>
+      hooks["tool.execute.before"]({ tool: "apply_patch", sessionID: "s", callID: "c1" }, { args: { patchText: 123 } }),
     );
   });
 });
