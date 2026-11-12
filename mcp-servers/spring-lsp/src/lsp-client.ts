@@ -11,7 +11,7 @@
 // 2.5.0-SNAPSHOT) - see each package's README Status section.
 
 import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { pathToFileURL, fileURLToPath } from "node:url";
 
 const CONTENT_LENGTH_RE = /Content-Length: (\d+)/i;
@@ -254,7 +254,6 @@ export class LspClient {
       return;
     }
     if (msg.method === "textDocument/publishDiagnostics") {
-      this.#log("diagnostics", `published ${msg.params.uri} (${msg.params.diagnostics?.length ?? 0})`);
       this.#diagnostics.set(uriKey(msg.params.uri), msg.params.diagnostics ?? []);
       return;
     }
@@ -278,8 +277,11 @@ export class LspClient {
   }
 
   async openFile(absolutePath: string, languageId: string): Promise<string> {
-    const uri = pathToFileURL(absolutePath).href;
-    const text = await readFile(absolutePath, "utf8");
+    // The language server names a file by its canonical path (a Windows 8.3 short name like RUNNER~1 is expanded, symlinks
+    // resolved), and publishes diagnostics under that name, so use it for our own URI too or the two never match.
+    const canonicalPath = await realpath(absolutePath);
+    const uri = pathToFileURL(canonicalPath).href;
+    const text = await readFile(canonicalPath, "utf8");
     await this.openDocument(uri, languageId, text);
     return uri;
   }
@@ -289,8 +291,11 @@ export class LspClient {
   // on an already-open document is invalid per LSP, so this sends didChange
   // instead once a uri is already tracked, didOpen only the first time.
   async syncFile(absolutePath: string, languageId: string): Promise<string> {
-    const uri = pathToFileURL(absolutePath).href;
-    const text = await readFile(absolutePath, "utf8");
+    // The language server names a file by its canonical path (a Windows 8.3 short name like RUNNER~1 is expanded, symlinks
+    // resolved), and publishes diagnostics under that name, so use it for our own URI too or the two never match.
+    const canonicalPath = await realpath(absolutePath);
+    const uri = pathToFileURL(canonicalPath).href;
+    const text = await readFile(canonicalPath, "utf8");
     if (this.#openDocs.has(uri)) {
       const version = this.#openDocs.get(uri)! + 1;
       this.#openDocs.set(uri, version);
@@ -311,8 +316,9 @@ export class LspClient {
   }
 
   getDiagnostics(uri: string): unknown[] {
-    this.#log("diagnostics", `requested ${uri}`);
-    return this.#diagnostics.get(uriKey(uri)) ?? [];
+    const found = this.#diagnostics.get(uriKey(uri));
+    if (!found) this.#log("diagnostics", `none published for ${uri}; published for ${this.#diagnostics.size} files: ${[...this.#diagnostics.keys()].slice(0, 5).join(", ")}`);
+    return found ?? [];
   }
 
   async shutdown(): Promise<void> {
