@@ -2,11 +2,14 @@
 // KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE in config.json points at it (README's "JDK version").
 //
 // The JDK 21 is stood in for by the machine's real `java` (which must be 21+, same requirement as
-// java-lsp.test.ts), wrapped in a script that records each invocation so the test can prove jdtls was
-// launched through the configured executable and not through PATH. The control case puts a fake JDK 8
-// `java` first on PATH and leaves the setting out: that must fail, which shows the fake really wins on
-// PATH and the positive case isn't passing by accident. The control needs a POSIX shell to write a
-// `java` shim, so it is skipped on Windows; the positive case runs everywhere.
+// java-lsp.test.ts). Three cases show the setting is what decides which java launches jdtls:
+//   1. set to a working java: the tools work. On POSIX the executable is a wrapper that records each
+//      invocation, so the test can prove jdtls went through it and not through PATH. Windows uses the
+//      real java.exe directly, because a .cmd wrapper in the middle of the stdio pipe hangs jdtls there.
+//   2. set to a path that doesn't exist, while PATH has a perfectly good java: jdtls must fail. If the
+//      setting were ignored, PATH's java would be used and this would pass.
+//   3. (POSIX only) not set, with a fake JDK 8 `java` first on PATH: jdtls must refuse to start. Needs a
+//      POSIX shell to write the `java` shim.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { delimiter, dirname, join } from "node:path";
@@ -22,6 +25,7 @@ const DIST_SERVER_PATH = join(here, "dist", "server.js");
 const isWindows = process.platform === "win32";
 const PORT_WITH_LAUNCHER = 8299;
 const PORT_WITHOUT_LAUNCHER = 8300;
+const PORT_BAD_LAUNCHER = 8301;
 
 // Forward slashes everywhere: they go into JSON config and onto a jdtls command line (see README, Configuration).
 const slash = (p: string) => p.replaceAll("\\", "/");
@@ -36,16 +40,15 @@ const srcDir = join(workspaceRoot, "src/main/java/com/example");
 mkdirSync(srcDir, { recursive: true });
 writeFileSync(join(srcDir, "Hello.java"), "package com.example;\n\npublic class Hello {\n    public String greet() { return \"hi\"; }\n}\n");
 
-// Records every call, then hands over to the real java.
+// POSIX only: records every call, then hands over to the real java.
 const marker = slash(join(scratch, "launcher-calls.log"));
-const wrapperDir = join(scratch, "jdk21-stand-in", "bin");
-mkdirSync(wrapperDir, { recursive: true });
-const wrapper = slash(join(wrapperDir, isWindows ? "java.cmd" : "java"));
-if (isWindows) {
-  writeFileSync(wrapper, `@echo off\r\necho %* >> "${marker}"\r\n"${realJava}" %*\r\n`);
-} else {
-  writeFileSync(wrapper, `#!/bin/sh\necho "$@" >> "${marker}"\nexec "${realJava}" "$@"\n`);
-  chmodSync(wrapper, 0o755);
+let launcher = realJava;
+if (!isWindows) {
+  const wrapperDir = join(scratch, "jdk21-stand-in", "bin");
+  mkdirSync(wrapperDir, { recursive: true });
+  launcher = slash(join(wrapperDir, "java"));
+  writeFileSync(launcher, `#!/bin/sh\necho "$@" >> "${marker}"\nexec "${realJava}" "$@"\n`);
+  chmodSync(launcher, 0o755);
 }
 
 // A `java` that claims to be JDK 8 and refuses to do anything else.
@@ -114,16 +117,24 @@ after(async () => {
 });
 
 test("with the launcher JDK set in config.json, jdtls is started through it", async () => {
-  // Windows has no way to fake a JDK 8 `java` here, so there PATH stays as is; the marker file still shows who launched jdtls.
+  // On Windows PATH stays as is; there the bad-path case below is what shows the setting is consulted.
   const path = isWindows ? process.env.PATH! : `${jdk8ShimDir}${delimiter}${process.env.PATH}`;
-  await startServer(PORT_WITH_LAUNCHER, { KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE: wrapper }, path);
+  await startServer(PORT_WITH_LAUNCHER, { KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE: launcher }, path);
   const result = await documentSymbols(await connect(PORT_WITH_LAUNCHER));
   assert.equal(result.success, true, JSON.stringify(result));
   assert.ok(result.data.some((s: any) => s.name === "Hello"), JSON.stringify(result.data));
 
-  assert.ok(existsSync(marker), "the configured java was never invoked - jdtls was launched some other way");
-  const calls = readFileSync(marker, "utf8");
-  assert.ok(/-version/.test(calls) && /equinox/i.test(calls), `expected the version probe and the jdtls launch in:\n${calls}`);
+  if (!isWindows) {
+    assert.ok(existsSync(marker), "the configured java was never invoked - jdtls was launched some other way");
+    const calls = readFileSync(marker, "utf8");
+    assert.ok(/-version/.test(calls) && /equinox/i.test(calls), `expected the version probe and the jdtls launch in:\n${calls}`);
+  }
+});
+
+test("a launcher path that doesn't exist makes jdtls fail even though PATH has a working java", async () => {
+  await startServer(PORT_BAD_LAUNCHER, { KEALTHAS_JAVA_LSP_JDTLS_LAUNCHER_JAVA_EXECUTABLE: slash(join(scratch, "no-such-jdk", "bin", "java")) }, process.env.PATH!);
+  const result = await documentSymbols(await connect(PORT_BAD_LAUNCHER));
+  assert.equal(result.success, false, `the setting looks ignored - got ${JSON.stringify(result).slice(0, 300)}`);
 });
 
 test(
