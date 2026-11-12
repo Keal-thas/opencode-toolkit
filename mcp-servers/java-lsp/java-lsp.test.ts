@@ -61,6 +61,51 @@ writeFileSync(
 );
 const relativeFile = "src/main/java/com/example/Hello.java";
 
+// A small multi-file fixture for the cross-file tools: an interface, two
+// implementations, a caller, and a file that doesn't compile.
+const fixtures: Record<string, string[]> = {
+  Greeter: ["package com.example;", "", "public interface Greeter {", "    String greet(String name);", "}", ""],
+  EnglishGreeter: [
+    "package com.example;",
+    "",
+    "public class EnglishGreeter implements Greeter {",
+    "    public String greet(String name) { return \"Hello, \" + name; }",
+    "}",
+    "",
+  ],
+  SpanishGreeter: [
+    "package com.example;",
+    "",
+    "public class SpanishGreeter implements Greeter {",
+    "    public String greet(String name) { return \"Hola, \" + name; }",
+    "}",
+    "",
+  ],
+  Caller: [
+    "package com.example;",
+    "",
+    "public class Caller {",
+    "    public String run(Greeter g) {",
+    '        return g.greet("x");',
+    "    }",
+    "}",
+    "",
+  ],
+  Broken: [
+    "package com.example;",
+    "",
+    "public class Broken {",
+    "    public int f() {",
+    '        return "not an int";',
+    "    }",
+    "    void g() { undefinedCall(); }",
+    "}",
+    "",
+  ],
+};
+for (const [name, lines] of Object.entries(fixtures)) writeFileSync(join(srcDir, `${name}.java`), lines.join("\n"));
+const fixtureFile = (name: string) => `src/main/java/com/example/${name}.java`;
+
 function startServer(port: number): Promise<ChildProcess> {
   const home = mkdtempSync(join(tmpdir(), "java-lsp-mcp-test-home-"));
   const configDir = join(home, ".config", "kealthas-dev", "opencode-mcp-java-lsp");
@@ -90,6 +135,7 @@ function startServer(port: number): Promise<ChildProcess> {
     let stderr = "";
     child.stderr!.on("data", (chunk) => {
       stderr += chunk;
+      serverStderr += chunk;
       if (stderr.includes("listening on")) {
         clearTimeout(timeout);
         resolve(child);
@@ -108,6 +154,7 @@ async function stopServer(child: ChildProcess): Promise<void> {
   await new Promise((resolve) => child.once("exit", resolve));
 }
 
+let serverStderr = ""; // everything the server logged, to explain a failing assertion
 let serverProcess: ChildProcess;
 let client: Client;
 
@@ -122,8 +169,10 @@ before(async () => {
 after(async () => {
   await client?.close();
   if (serverProcess) await stopServer(serverProcess);
-  rmSync(workspaceRoot, { recursive: true, force: true });
-  rmSync(dataDir, { recursive: true, force: true });
+  // Retries: on Windows a just-exited process can hold its files for a moment (EBUSY).
+  const rmOptions = { recursive: true, force: true, maxRetries: 10, retryDelay: 200 };
+  rmSync(workspaceRoot, rmOptions);
+  rmSync(dataDir, rmOptions);
 });
 
 async function callTool(name: string, args: Record<string, unknown>): Promise<any> {
@@ -178,4 +227,38 @@ test("an out-of-range file path outside the workspace root is rejected", async (
   const result = await callTool("java_document_symbols", { file: "../../etc/passwd" });
   assert.equal(result.success, false);
   assert.ok(/outside the configured workspace root/.test(result.error), result.error);
+});
+
+test("java_definition jumps from a call site to the interface method in another file", async () => {
+  // Caller.java line 4: `        return g.greet("x");` - character 18 is inside `greet`.
+  const result = await callTool("java_definition", { file: fixtureFile("Caller"), line: 4, character: 18 });
+  assert.equal(result.success, true);
+  const text = JSON.stringify(result.data);
+  assert.ok(text.includes("Greeter.java"), `expected a location in Greeter.java, got ${text}`);
+  assert.ok(!text.includes("Caller.java"), `definition should not point back at the call site, got ${text}`);
+});
+
+test("java_implementation finds both concrete implementations of an interface method", async () => {
+  // Greeter.java line 3: `    String greet(String name);` - character 13 is inside `greet`.
+  const result = await callTool("java_implementation", { file: fixtureFile("Greeter"), line: 3, character: 13 });
+  assert.equal(result.success, true);
+  const text = JSON.stringify(result.data);
+  assert.equal(result.data.length, 2, `expected two implementations, got ${text}`);
+  assert.ok(text.includes("EnglishGreeter.java") && text.includes("SpanishGreeter.java"), text);
+});
+
+test("java_diagnostics returns the real compile errors for a broken file and nothing for a clean one", async () => {
+  // Without a Maven/Gradle file jdtls can't tell src/main/java is a source root, so it flags every
+  // file with a package-mismatch diagnostic. That's a fixture artifact, not what's under test here.
+  const real = (data: any[]) => data.filter((d) => !/declared package/.test(d.message));
+
+  const broken = await callTool("java_diagnostics", { file: fixtureFile("Broken"), waitMs: 8000 });
+  assert.equal(broken.success, true);
+  const errors = real(broken.data).filter((d: any) => d.severity === 1);
+  const diagnosticsLog = serverStderr.split("\n").filter((l) => l.includes("[jdtls:diagnostics]")).join("\n");
+  assert.ok(errors.length >= 2, `expected the type mismatch and the undefined method, got ${JSON.stringify(broken.data)}\n${diagnosticsLog}`);
+
+  const clean = await callTool("java_diagnostics", { file: fixtureFile("Greeter"), waitMs: 8000 });
+  assert.equal(clean.success, true);
+  assert.deepEqual(real(clean.data), []);
 });

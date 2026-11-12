@@ -11,8 +11,8 @@
 // 2.5.0-SNAPSHOT) - see each package's README Status section.
 
 import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
-import { readFile } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
+import { readFile, realpath } from "node:fs/promises";
+import { pathToFileURL, fileURLToPath } from "node:url";
 
 const CONTENT_LENGTH_RE = /Content-Length: (\d+)/i;
 
@@ -50,6 +50,17 @@ function defaultClientCapabilities(): ClientCapabilities {
     },
     window: { workDoneProgress: false },
   };
+}
+
+// jdtls may write the same file's URI differently from pathToFileURL (e.g. `file:///c%3A/...` vs `file:///C:/...` on
+// Windows), so diagnostics are keyed by the decoded path - case-insensitive on Windows - not by the raw URI string.
+function uriKey(uri: string): string {
+  try {
+    const path = fileURLToPath(uri);
+    return process.platform === "win32" ? path.toLowerCase() : path;
+  } catch {
+    return uri;
+  }
 }
 
 export class LspClientError extends Error {}
@@ -243,7 +254,7 @@ export class LspClient {
       return;
     }
     if (msg.method === "textDocument/publishDiagnostics") {
-      this.#diagnostics.set(msg.params.uri, msg.params.diagnostics ?? []);
+      this.#diagnostics.set(uriKey(msg.params.uri), msg.params.diagnostics ?? []);
       return;
     }
     // Requests *from* the server (registerCapability, workspace/configuration, etc.)
@@ -266,8 +277,11 @@ export class LspClient {
   }
 
   async openFile(absolutePath: string, languageId: string): Promise<string> {
-    const uri = pathToFileURL(absolutePath).href;
-    const text = await readFile(absolutePath, "utf8");
+    // The language server names a file by its canonical path (a Windows 8.3 short name like RUNNER~1 is expanded, symlinks
+    // resolved), and publishes diagnostics under that name, so use it for our own URI too or the two never match.
+    const canonicalPath = await realpath(absolutePath);
+    const uri = pathToFileURL(canonicalPath).href;
+    const text = await readFile(canonicalPath, "utf8");
     await this.openDocument(uri, languageId, text);
     return uri;
   }
@@ -277,8 +291,11 @@ export class LspClient {
   // on an already-open document is invalid per LSP, so this sends didChange
   // instead once a uri is already tracked, didOpen only the first time.
   async syncFile(absolutePath: string, languageId: string): Promise<string> {
-    const uri = pathToFileURL(absolutePath).href;
-    const text = await readFile(absolutePath, "utf8");
+    // The language server names a file by its canonical path (a Windows 8.3 short name like RUNNER~1 is expanded, symlinks
+    // resolved), and publishes diagnostics under that name, so use it for our own URI too or the two never match.
+    const canonicalPath = await realpath(absolutePath);
+    const uri = pathToFileURL(canonicalPath).href;
+    const text = await readFile(canonicalPath, "utf8");
     if (this.#openDocs.has(uri)) {
       const version = this.#openDocs.get(uri)! + 1;
       this.#openDocs.set(uri, version);
@@ -294,22 +311,31 @@ export class LspClient {
 
   closeDocument(uri: string): void {
     this.#openDocs.delete(uri);
-    this.#diagnostics.delete(uri);
+    this.#diagnostics.delete(uriKey(uri));
     this.notify("textDocument/didClose", { textDocument: { uri } });
   }
 
   getDiagnostics(uri: string): unknown[] {
-    return this.#diagnostics.get(uri) ?? [];
+    const found = this.#diagnostics.get(uriKey(uri));
+    if (!found) this.#log("diagnostics", `none published for ${uri}; published for ${this.#diagnostics.size} files: ${[...this.#diagnostics.keys()].slice(0, 5).join(", ")}`);
+    return found ?? [];
   }
 
   async shutdown(): Promise<void> {
-    if (this.#dead) return;
+    const child = this.#child;
+    if (!child || this.#dead) return;
+    const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
     try {
       await this.request("shutdown", null, { timeoutMs: 5_000 });
       this.notify("exit", null);
     } catch {
       // best-effort - fall through to kill() regardless
     }
-    this.#child?.kill();
+    child.kill();
+    // Wait for the server to really be gone, so the caller can safely delete its data dir
+    // (the server is still flushing its workspace state when kill() returns); SIGKILL if it won't go.
+    const killTimer = setTimeout(() => child.kill("SIGKILL"), 5_000);
+    await exited;
+    clearTimeout(killTimer);
   }
 }
