@@ -2,8 +2,7 @@
 
 Two guards on the path arguments of opencode's `read`, `grep` and `glob` tools. Why these are hooks and not prompt lines: [docs/design-philosophy.md](../../docs/design-philosophy.md). Where the ideas come from: [docs/multi-agent-prior-art.md](../../docs/multi-agent-prior-art.md).
 
-- Package: `@kealthas-dev/opencode-path-guard`, source `path-guard.ts`.
-- Not yet published and not in `deploy/opencode.json.example`; see `TODO.md`. Until then it works as a hand-copied file in a plugins directory.
+- Package: `@kealthas-dev/opencode-path-guard`, source `path-guard.ts`. Published; commented out in `deploy/opencode.json.example` as opt-in (see `SETUP.md` step 5).
 
 ## Guessed absolute paths
 

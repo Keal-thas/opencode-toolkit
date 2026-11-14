@@ -10,7 +10,7 @@ The root `package.json` packages the entire git-tracked tree as `@kealthas-dev/o
 
 ## One shared version number for every package
 
-**Pushing a `v*` tag is the single release trigger for every published npm package in this repo** — the root package plus every entry marked published in [plugins/README.md](../plugins/README.md) and every server we wrote in [mcp-servers/README.md](../mcp-servers/README.md); the exact set is the `for dir in …` list in `release.yml`. Plugins and servers not in that list are not published yet (see `TODO.md`). `mcp-servers/redis`, `memory` and `playwright` wrap official upstream packages unmodified, so there is nothing of ours to publish. `release.yml` loops over all of them:
+**Pushing a `v*` tag is the single release trigger for every published npm package in this repo** — the root package plus every plugin in [plugins/README.md](../plugins/README.md) and every server we wrote in [mcp-servers/README.md](../mcp-servers/README.md); the exact set is the `for dir in …` list in `release.yml`. `mcp-servers/redis`, `memory` and `playwright` wrap official upstream packages unmodified, so there is nothing of ours to publish. `release.yml` loops over all of them:
 
 - sets each one's version from the tag (`npm pkg set version=...`), skipping any already published at that exact version so a workflow re-run is safe
 - builds it first if its `package.json` has a `build` script (every `mcp-servers/*` package in the loop — `npm ci && npm run build` before `npm publish`, since the published tarball is `dist/` [+ `vendor/*.tar.gz` for `java-lsp`/`spring-lsp`], not source)

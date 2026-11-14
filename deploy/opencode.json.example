@@ -36,9 +36,14 @@
   "plugin": [
     "@kealthas-dev/opencode-system-prompt-tools",
     "@kealthas-dev/opencode-hook-logger",
-    "@kealthas-dev/opencode-gitbash-edit-path-fix"
+    "@kealthas-dev/opencode-gitbash-edit-path-fix",
+    "@kealthas-dev/opencode-verify-session"
     // Opt-in: adds a hidden model call before every bash command and blocks it when the review fails. Uncomment (and add a comma after the entry above) to enable, see SETUP.md step 5.
     // "@kealthas-dev/opencode-llm-review-gate"
+    // Opt-in guard plugins: enable after validating against this machine's model, see SETUP.md step 5.
+    // "@kealthas-dev/opencode-loop-guard"
+    // "@kealthas-dev/opencode-path-guard"
+    // "@kealthas-dev/opencode-council"
   ],
   "mcp": {
     "oracle": {

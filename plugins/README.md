@@ -10,9 +10,9 @@ This table is the one list of plugins; other docs link here instead of repeating
 | [`hook-logger`](hook-logger/README.md) | logs every hook event as JSONL | enabled | yes |
 | [`llm-review-gate`](llm-review-gate/README.md) | LLM safety review before each `bash` call | commented out (opt-in) | yes |
 | [`gitbash-edit-path-fix`](gitbash-edit-path-fix/README.md) | fixes Git-Bash paths in the `edit`/`write`/`apply_patch` tools on Windows | enabled | yes |
-| [`verify-session`](verify-session/README.md) | `/verify` starts an independent review session | no | not yet |
-| [`loop-guard`](loop-guard/README.md) | warns on, then refuses, a model repeating the same tool call | no | not yet |
-| [`path-guard`](path-guard/README.md) | repairs a guessed absolute path, clear error for a missing `grep`/`glob` path | no | not yet |
-| [`council`](council/README.md) | `council` tool and `/council`: several independent advisors, then a tool-less synthesis | no | not yet |
+| [`verify-session`](verify-session/README.md) | `/verify` starts an independent review session | enabled | yes |
+| [`loop-guard`](loop-guard/README.md) | warns on, then refuses, a model repeating the same tool call | commented out (opt-in) | yes |
+| [`path-guard`](path-guard/README.md) | repairs a guessed absolute path, clear error for a missing `grep`/`glob` path | commented out (opt-in) | yes |
+| [`council`](council/README.md) | `council` tool and `/council`: several independent advisors, then a tool-less synthesis | commented out (opt-in) | yes |
 
 "Published" means included in `release.yml`'s package loop ([docs/npm-publishing.md](../docs/npm-publishing.md)).
