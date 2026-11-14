@@ -2,8 +2,7 @@
 
 `/verify <what the change should do>` starts a brand-new top-level opencode session that independently reviews the working tree, then switches the TUI to it. It is a plugin and not a `subtask: true` command because a subtask is a child session with restricted permissions; a top-level session runs as the normal agent with full tool permissions and can run tests itself. It answers `VERDICT: PASS | FAIL | UNVERIFIABLE` with evidence per requirement.
 
-- Package: `@kealthas-dev/opencode-verify-session`, source `verify-session.ts`.
-- Not yet published and not in `deploy/opencode.json.example`; see `TODO.md`. Until then it works as a hand-copied file in a plugins directory.
+- Package: `@kealthas-dev/opencode-verify-session`, source `verify-session.ts`. Published; enabled in `deploy/opencode.json.example`.
 
 ## What the new session is given
 
