@@ -1,6 +1,6 @@
 {
   "name": "@kealthas-dev/opencode-mcp-mysql",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "type": "module",
   "description": "MCP server exposing a single mysql_query tool, guarded by a READ ONLY transaction - see README.md for the connection/audit design and the config.json-driven config",
   "main": "dist/server.js",

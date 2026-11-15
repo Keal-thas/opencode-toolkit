@@ -16,8 +16,9 @@
 # actually needs.
 #
 # Requires you to already be logged in (`npm login`) with publish rights on
-# the @kealthas-dev scope. Bump the version in package.json and commit that
-# before running this.
+# the @kealthas-dev scope, and HEAD to be tagged: the v* tag is the version
+# source (`release.yml` derives it the same way), not package.json's 0.0.0
+# sentinel.
 #
 # Usage: ./scripts/publish-npm.sh [extra npm publish flags, e.g. --otp=123456 --dry-run]
 
@@ -29,10 +30,17 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
+VERSION="$(git describe --tags --exact-match 2>/dev/null || true)"
+if [[ -z "$VERSION" ]]; then
+  echo "error: HEAD is not tagged - the v* tag is the version source" >&2
+  exit 1
+fi
+VERSION="${VERSION#v}"
+
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
 git archive HEAD | tar -x -C "$tmp_dir"
 
-echo "Publishing $(node -p "require('./package.json').name")@$(node -p "require('./package.json').version") from clean snapshot at $tmp_dir"
-(cd "$tmp_dir" && npm publish --access public "$@")
+echo "Publishing $(node -p "require('./package.json').name")@$VERSION from clean snapshot at $tmp_dir"
+(cd "$tmp_dir" && npm pkg set version="$VERSION" && npm publish --access public "$@")

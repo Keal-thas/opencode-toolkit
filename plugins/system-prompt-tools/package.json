@@ -1,6 +1,6 @@
 {
   "name": "@kealthas-dev/opencode-system-prompt-tools",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "type": "module",
   "description": "system-prompt-tools.ts opencode plugin (dumps the fully-assembled system prompt actually sent to the model, on every request, to ~/.local/share/opencode/last-system-prompt.txt), published to npm so opencode's own npm-plugin loader can install it directly from a bare package name in opencode.json's plugin array - see CLAUDE.md. Written in TypeScript against @opencode-ai/plugin's Plugin type.",
   "main": "system-prompt-tools.ts",

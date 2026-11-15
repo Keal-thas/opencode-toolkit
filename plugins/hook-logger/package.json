@@ -1,6 +1,6 @@
 {
   "name": "@kealthas-dev/opencode-hook-logger",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "type": "module",
   "description": "hook-logger.ts opencode plugin (logs essentially every opencode hook event as JSONL under ~/opencode-hook-output/, for debugging/observability), published to npm so opencode's own npm-plugin loader can install it directly from a bare package name in opencode.json's plugin array - see CLAUDE.md. Written in TypeScript against @opencode-ai/plugin's Plugin type. Independently installable from llm-review-gate.ts - not bundled together.",
   "main": "hook-logger.ts",

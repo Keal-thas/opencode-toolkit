@@ -1,6 +1,6 @@
 {
   "name": "@kealthas-dev/opencode-path-guard",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "type": "module",
   "description": "path-guard.ts opencode plugin: repairs an absolute path a model guessed with directory segments dropped, and gives grep/glob a clear error for a search path that does not exist. Written in TypeScript against @opencode-ai/plugin's Plugin type (type-only). Independently installable - not bundled with the other plugins.",
   "main": "path-guard.ts",

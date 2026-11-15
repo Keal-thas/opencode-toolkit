@@ -18,8 +18,12 @@ The root `package.json` packages the entire git-tracked tree as `@kealthas-dev/o
 
 None of the individual `package.json` `version` fields are meaningful on their own — Franco decided against independent per-package versioning (bumping only the packages that actually changed) specifically to avoid tracking N different version numbers across N files. A release bumps every package together, even ones with no code change, which is the accepted tradeoff.
 
+Since there is no variable or substitution mechanism in `package.json`, every package carries the literal `"version": "0.0.0"` as a sentinel meaning "set from the tag at publish time" — keeping the real version in 14 files would just be 14 copies to drift. `release.yml` overwrites it in its throwaway checkout (`npm pkg set version="$VERSION"`), and `tests/unit/release-versions.test.mjs` fails if any of them is set to anything else. The consequence: a local `npm publish`/`npm pack` in a package directory produces `0.0.0`, so a hand-published bootstrap build needs its real version set back by hand first (see below), then restored to `0.0.0`.
+
 The workflow must publish before building the GitHub Release zip, so the zip artifact can't get swept into the npm tarball.
 
 ## Bootstrapping a brand-new package
 
 A package's *first-ever* publish can't go through this workflow — npm Trusted Publishing is configured on an existing package's Settings page on npmjs.com, so the package has to exist first via a real account login (`npm login` + `npm publish` by hand) before that binding can even be created. Every package listed above has already been through that bootstrap once.
+
+A bootstrap publish is also the one place the `0.0.0` sentinel can't stay: bump that package's `version` to the intended real number, publish, then set it back to `0.0.0` (the next tag would otherwise overwrite it with the shared version anyway). Binding the new package's Trusted Publisher to `release.yml` in the same Settings page is a separate, also-manual step — until it exists, every workflow run fails at that package with `E404` on `PUT`, and the GitHub Release isn't created because the publish step aborts first.

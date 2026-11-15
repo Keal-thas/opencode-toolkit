@@ -1,6 +1,6 @@
 {
   "name": "@kealthas-dev/opencode-mcp-oracle",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "type": "module",
   "description": "MCP server exposing a single passthrough oracle_query tool - see README.md for the connection/audit design and the config.json-driven config",
   "main": "dist/server.js",

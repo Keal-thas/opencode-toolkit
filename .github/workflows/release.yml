@@ -31,12 +31,11 @@ jobs:
           # so no separate `npm install -g npm@latest` upgrade step is needed.
           npm --version
           VERSION="${GITHUB_REF_NAME#v}"
-          # Every npm package in this repo shares this one version number -
-          # none of their committed package.json version fields are the
-          # source of truth, this tag is (see CLAUDE.md's "Whole-repo npm
-          # publish" entry). The "already published?" check makes a
-          # workflow re-run for the same tag safe (e.g. after the release
-          # step below fails transiently).
+          # Every npm package in this repo shares this one version number.
+          # Their committed `version` is the 0.0.0 sentinel; this tag is the
+          # only source of truth (see docs/npm-publishing.md). The "already
+          # published?" check makes a workflow re-run for the same tag safe
+          # (e.g. after the release step below fails transiently).
           for dir in . plugins/hook-logger plugins/gitbash-edit-path-fix plugins/llm-review-gate plugins/system-prompt-tools plugins/verify-session plugins/loop-guard plugins/path-guard plugins/council mcp-servers/oracle mcp-servers/loki mcp-servers/java-lsp mcp-servers/spring-lsp mcp-servers/mysql; do
             name=$(node -p "require('./$dir/package.json').name")
             if npm view "$name@$VERSION" version >/dev/null 2>&1; then
