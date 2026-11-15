@@ -57,22 +57,7 @@ jobs:
             # husky`), which fail here since node_modules/husky was never
             # installed for this package - none of these packages need
             # lifecycle scripts to run for a publish anyway.
-            #
-            # E409 means the version is already uploaded but still being
-            # finalized by the registry, so `npm view` above (and dist-tags)
-            # can't see it yet - it is not a failure, just not done cooking.
-            # Large tarballs (the root package is ~130MB) stay in that state
-            # for minutes; a re-run must not fail on them.
-            publish_log=$(mktemp)
-            if (cd "$dir" && npm pkg set version="$VERSION" && npm publish --access public --ignore-scripts) >"$publish_log" 2>&1; then
-              cat "$publish_log"
-            elif grep -q "E409" "$publish_log"; then
-              echo "$name@$VERSION is already staged (E409), skipping"
-            else
-              cat "$publish_log"
-              exit 1
-            fi
-            rm -f "$publish_log"
+            (cd "$dir" && npm pkg set version="$VERSION" && npm publish --access public --ignore-scripts)
           done
 
       - name: Build zip with .git included
