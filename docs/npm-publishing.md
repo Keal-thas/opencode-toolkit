@@ -12,7 +12,7 @@ The root `package.json` packages the entire git-tracked tree as `@kealthas-dev/o
 
 **Pushing a `v*` tag is the single release trigger for every published npm package in this repo** — the root package plus every plugin in [plugins/README.md](../plugins/README.md) and every server we wrote in [mcp-servers/README.md](../mcp-servers/README.md); the exact set is the `for dir in …` list in `release.yml`. `mcp-servers/redis`, `memory` and `playwright` wrap official upstream packages unmodified, so there is nothing of ours to publish. `release.yml` loops over all of them:
 
-- sets each one's version from the tag (`npm pkg set version=...`), skipping any already published at that exact version so a workflow re-run is safe
+- sets each one's version from the tag (`npm pkg set version=...`), skipping any already published at that exact version so an accidental workflow re-run can't fail on packages that already went out
 - builds it first if its `package.json` has a `build` script (every `mcp-servers/*` package in the loop — `npm ci && npm run build` before `npm publish`, since the published tarball is `dist/` [+ `vendor/*.tar.gz` for `java-lsp`/`spring-lsp`], not source)
 - publishes via npm Trusted Publishing (OIDC, `id-token: write`, no stored token)
 
@@ -28,4 +28,4 @@ A package's *first-ever* publish can't go through this workflow — npm Trusted 
 
 A bootstrap publish is also the one place the `0.0.0` sentinel can't stay: bump that package's `version` to the intended real number, publish, then set it back to `0.0.0` (the next tag would otherwise overwrite it with the shared version anyway). Binding the new package's Trusted Publisher to `release.yml` in the same Settings page is a separate, also-manual step — until it exists, every workflow run fails at that package with `E404` on `PUT`, and the GitHub Release isn't created because the publish step aborts first.
 
-A failed run is retried by re-running that same tag's workflow (`gh run rerun <id>`), not by pushing a new tag: the already-published check skips whatever went out before the failure, so the release finishes where it stopped. A new tag is only for new code.
+**A failed or partial release is never repaired; it is superseded.** This repo only ever looks at `latest`, so when a tag's publish aborts partway (a missing Trusted Publisher binding, a registry hiccup), the fix is a new tag with the next version — not a re-run of the old one, which is what runs into a half-finalized registry state. The already-published check is only there so an accidental re-run is harmless; it is not the recovery path.
