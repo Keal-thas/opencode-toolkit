@@ -30,6 +30,8 @@ docker/dev.sh run --rm opencode-dev bash -c 'cd tests/capability-probes && node 
 
 - **`gitbash-edit-path-fix.probe.mjs`** - Windows only (skips elsewhere): drives the real `edit` tool with a Git-Bash-style path (`/c/Users/...`) against the real filesystem, once without and once with `plugins/gitbash-edit-path-fix` loaded. Confirms the upstream bug exists on the machine and that the plugin makes the edit land on the intended file.
 
+- **`compaction.probe.mjs`** - how opencode manages context, results in [docs/context-management.md](../../docs/context-management.md): truncation of big `bash`/`read`/MCP outputs (using `lib/big-output-mcp.mjs`, a tiny stdio MCP server), the auto-compaction threshold under different `limit`/`reserved`/`auto` settings, what the compaction request and the following request look like, and `prune` on/off. Token counts come from the fake provider's `usage` chunk, so a 20K window is enough.
+
 ## Design notes
 
 - **The fake provider is scripted, not a real model** (`lib/harness.mjs`'s `setPlan()`): each probe hands it an exact sequence of tool-calls/text to emit, so which tool gets called and with what arguments is fully controlled and deterministic - the point is observing opencode's own dispatch/hook behavior in response to a known input, not evaluating a model's judgment.
