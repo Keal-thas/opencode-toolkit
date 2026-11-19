@@ -68,7 +68,7 @@ test("routes the review prompt through the dedicated review-gate agent, not the 
   assert.equal(seenAgent, "review-gate");
 });
 
-test("registers the review_verdict tool under the exact name deploy/opencode.json.example grants permission for", async () => {
+test("registers the review_verdict tool under the exact name deploy/opencode.jsonc.example grants permission for", async () => {
   const hooks = await makeGate(async () => textResponse("ALLOW"));
   assert.ok(hooks.tool?.review_verdict, "expected hooks.tool.review_verdict to be registered");
 });

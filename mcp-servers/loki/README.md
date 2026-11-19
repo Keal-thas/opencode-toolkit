@@ -4,7 +4,7 @@ A minimal MCP server exposing three read-only tools — `loki_query_range`, `lok
 
 ## Design, and why it looks the way it does
 
-- **Remote, not local**, for the same reason as `mcp-servers/oracle/`: a persistent HTTP server, started independently (`npm start` under a process supervisor — see `deploy/opencode.json.example`/SETUP.md) and reachable at a fixed URL, so its uptime isn't tied to opencode's own restarts.
+- **Remote, not local**, for the same reason as `mcp-servers/oracle/`: a persistent HTTP server, started independently (`npm start` under a process supervisor — see `deploy/opencode.jsonc.example`/SETUP.md) and reachable at a fixed URL, so its uptime isn't tied to opencode's own restarts.
 - **Stateless HTTP, one `Server`/transport pair per request** (`sessionIdGenerator: undefined`, matching the SDK's own reference example and `mcp-servers/oracle/src/server.ts`'s shell). No session state worth keeping between calls.
 - **Three tools, not one.** `loki_query_range` is the actual log query (arbitrary LogQL, full passthrough — no filtering, mirroring `oracle_query`'s "safety lives elsewhere" stance, except there's no write side here to guard against in the first place). `loki_labels`/`loki_label_values` exist because LogQL selectors need real label names/values to be useful — without a way to discover them, an agent (or a human) querying unfamiliar logs would have to guess. All three are read-only GETs; adding the two discovery tools costs nothing beyond `oracle_query`'s single-tool baseline.
 - **`start`/`end` accept relative and naive-local forms, not just Loki's own RFC3339/epoch.** Handing a caller (model or human) the burden of computing an exact RFC3339 offset or a 19-digit nanosecond epoch by hand is real friction, so `resolveTimeParam()` in `src/server.ts` accepts `"now"`/`"now-1h"`/`"now-30m"`/`"now-1d"` (Grafana's own relative-time syntax for Loki/Prometheus, not invented here) and a bare `"YYYY-MM-DDTHH:MM:SS"`/`"YYYY-MM-DD HH:MM:SS"` with no timezone (assumed to be `LOKI_DEFAULT_TZ_OFFSET`, default `+08:00`), converting either into what Loki actually expects before the request goes out. An already-qualified RFC3339 offset or bare epoch still passes straight through unchanged - purely additive, not a breaking change to the original format.
@@ -63,7 +63,7 @@ npm start   # reads ~/.config/kealthas-dev/opencode-mcp-loki/config.json
 
 `npm run dev` runs `src/server.ts` directly via `tsx watch` instead, for a compile-on-save loop.
 
-Either way, this starts a persistent HTTP server on the configured port (default `8091`), serving MCP over Streamable HTTP at `/mcp`. Point opencode at it with a `type: "remote"` entry (see `deploy/opencode.json.example`) — it needs to already be running and stay running, since opencode connects rather than spawns it (either command alone exits when its terminal closes; see `mcp-servers/oracle/README.md`'s Design section for real supervisor options — the same reasoning applies here).
+Either way, this starts a persistent HTTP server on the configured port (default `8091`), serving MCP over Streamable HTTP at `/mcp`. Point opencode at it with a `type: "remote"` entry (see `deploy/opencode.jsonc.example`) — it needs to already be running and stay running, since opencode connects rather than spawns it (either command alone exits when its terminal closes; see `mcp-servers/oracle/README.md`'s Design section for real supervisor options — the same reasoning applies here).
 
 ## Testing against a real Loki instance
 
@@ -80,6 +80,6 @@ The default config file is already in place inside that shell — `entrypoint.sh
 
 ## Status
 
-**Direct-to-Loki path verified end-to-end and automated.** `loki.test.ts` covers tool listing, `loki_labels`/`loki_label_values` finding pushed test data, `loki_query_range` finding a pushed log line by content, an empty-result query returning cleanly (not an error), and a malformed LogQL query returning a clean error — driven over the real Streamable HTTP transport against the sandbox's `loki` service. Wired into `deploy/opencode.json.example` (`mcp.loki`, `type: "remote"`, `enabled: true`).
+**Direct-to-Loki path verified end-to-end and automated.** `loki.test.ts` covers tool listing, `loki_labels`/`loki_label_values` finding pushed test data, `loki_query_range` finding a pushed log line by content, an empty-result query returning cleanly (not an error), and a malformed LogQL query returning a clean error — driven over the real Streamable HTTP transport against the sandbox's `loki` service. Wired into `deploy/opencode.jsonc.example` (`mcp.loki`, `type: "remote"`, `enabled: true`).
 
 **`LOKI_VIA_GRAFANA` verified against a fake stand-in HTTP server, now automated in `loki.test.ts`** (confirms the request lands on `/api/datasources/proxy/<id>/...` with the right Basic Auth header, and that a redirect-to-login response — real Grafana's actual failure mode for rejected auth, a 302, not a 401 — surfaces as a clean `{success: false}` diagnostic instead of an opaque JSON-parse error) — still not against a real Grafana instance. See `mcp-servers/TODO.md` for adding a real Grafana fixture to the sandbox.

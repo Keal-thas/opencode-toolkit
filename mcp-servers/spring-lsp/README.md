@@ -55,7 +55,7 @@ npm start   # reads ~/.config/kealthas-dev/opencode-mcp-spring-lsp/config.json
 
 `npm run dev` runs `src/server.ts` directly via `tsx watch` instead, for a compile-on-save loop.
 
-Either way, point opencode at it with a `type: "remote"` entry (see `deploy/opencode.json.example`).
+Either way, point opencode at it with a `type: "remote"` entry (see `deploy/opencode.jsonc.example`).
 
 ## Classpath
 

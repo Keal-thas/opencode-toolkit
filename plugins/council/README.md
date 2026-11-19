@@ -2,7 +2,7 @@
 
 A `council` tool and a `/council <question>` command: put one question to several independent advisors in parallel, then have an advisor with no tools compare their answers and rate the consensus. For a decision where one model's single answer is not enough. Where the idea comes from: [docs/multi-agent-prior-art.md](../../docs/multi-agent-prior-art.md).
 
-- Package: `@kealthas-dev/opencode-council`, source `council.ts`. It has a real `zod` dependency for the tool's argument schema, like [`llm-review-gate`](../llm-review-gate/README.md). Published; commented out in `deploy/opencode.json.example` as opt-in (see `SETUP.md` step 5).
+- Package: `@kealthas-dev/opencode-council`, source `council.ts`. It has a real `zod` dependency for the tool's argument schema, like [`llm-review-gate`](../llm-review-gate/README.md). Published; commented out in `deploy/opencode.jsonc.example` as opt-in (see `SETUP.md` step 5).
 
 ## What happens on a call
 

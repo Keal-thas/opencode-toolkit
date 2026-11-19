@@ -2,7 +2,7 @@
 
 Stops a model calling the same tool with the same arguments over and over, which is the commonest way a small local model gets stuck. Why this is a hook and not a prompt line: [docs/design-philosophy.md](../../docs/design-philosophy.md). Where the idea comes from: [docs/multi-agent-prior-art.md](../../docs/multi-agent-prior-art.md).
 
-- Package: `@kealthas-dev/opencode-loop-guard`, source `loop-guard.ts`. Published; commented out in `deploy/opencode.json.example` until its thresholds are validated against the deployment model (see `SETUP.md` step 5).
+- Package: `@kealthas-dev/opencode-loop-guard`, source `loop-guard.ts`. Published; commented out in `deploy/opencode.jsonc.example` until its thresholds are validated against the deployment model (see `SETUP.md` step 5).
 
 ## Behavior
 

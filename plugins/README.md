@@ -4,7 +4,7 @@ opencode plugins, one npm package each (`@kealthas-dev/opencode-<name>`). To use
 
 This table is the one list of plugins; other docs link here instead of repeating it.
 
-| Plugin | What it does | In `deploy/opencode.json.example` | Published |
+| Plugin | What it does | In `deploy/opencode.jsonc.example` | Published |
 |---|---|---|---|
 | [`system-prompt-tools`](system-prompt-tools/README.md) | dumps the system prompt actually sent, to confirm the override took effect | enabled | yes |
 | [`hook-logger`](hook-logger/README.md) | logs every hook event as JSONL | enabled | yes |
