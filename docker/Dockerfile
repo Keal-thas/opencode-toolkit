@@ -1,8 +1,8 @@
 # Isolated dev/test sandbox running a real opencode install - safe to do anything inside.
 FROM node:22-bookworm
 
-ARG OPENCODE_VERSION
-RUN npm install -g "opencode-ai@${OPENCODE_VERSION}"
+# Always the newest opencode; the compose file builds this image with no_cache so a rebuild picks up a new release.
+RUN npm install -g opencode-ai@latest
 
 # uv/uvx - self-contained (Rust binary, no python dependency for the
 # installer itself; uvx manages its own Python toolchain on demand).
