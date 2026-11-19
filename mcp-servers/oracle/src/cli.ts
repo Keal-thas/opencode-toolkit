@@ -4,11 +4,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import oracledb from "oracledb";
 
-// Exit codes: 0 ok, 1 the SQL failed, 2 usage error, 3 the query could not run
-// at all (cannot connect, bad credentials, unreadable config, timed out).
-const EXIT_SQL = 1;
-const EXIT_USAGE = 2;
-const EXIT_UNAVAILABLE = 3;
+// Exit codes: 0 ok, 1 anything went wrong (stderr says what).
+const EXIT_FAILURE = 1;
 
 const NAME = "opencode-oracle-query";
 const CONFIG_DIR = join(homedir(), ".config", "kealthas-dev", "opencode-mcp-oracle");
@@ -21,23 +18,21 @@ const CONFIG_DIR = join(homedir(), ".config", "kealthas-dev", "opencode-mcp-orac
 const CONNECT_TIMEOUT_SECONDS = 10;
 const CALL_TIMEOUT_MS = 30_000;
 
-const HELP = `Usage: ${NAME} "<sql>"
-       ${NAME} <<'SQL'
+const HELP = `Usage: ${NAME} <<'SQL'
        <sql, any number of lines>
        SQL
 
-Runs one read-only SQL statement against the configured Oracle database and prints every row to stdout as CSV.
-Nothing is cut off, and errors from the database are printed exactly as the database gave them.
+Runs one read-only SQL statement, read from stdin, against the configured Oracle database and prints every row to
+stdout as CSV. Nothing is cut off, and errors from the database are printed exactly as the database gave them.
 
-Give the statement as one quoted argument, or on stdin. Prefer stdin with a quoted heredoc delimiter (<<'SQL', as above)
-when the SQL contains $, backticks, quotes or backslashes: inside double quotes the shell expands $, so v$session would
-reach Oracle as v.
+There are no arguments and no options. The statement goes in a heredoc with a quoted delimiter (<<'SQL', as above),
+so the shell leaves it alone: a $ (as in v$session), a backtick, a quote or a backslash all reach Oracle as written.
 
-Exit codes: 0 ok, 1 SQL error, 2 usage error, 3 could not run (cannot connect, bad credentials, bad config, timeout).`;
+Exit codes: 0 ok, 1 failed; stderr says why.`;
 
 function usageError(message: string): never {
   console.error(`${NAME}: ${message}\n\n${HELP}`);
-  process.exit(EXIT_USAGE);
+  process.exit(EXIT_FAILURE);
 }
 
 async function readStdin(): Promise<string> {
@@ -46,15 +41,17 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-// One quoted argument, or the whole of stdin when there is no argument and stdin is not a terminal.
+// The whole of stdin is the statement. There is deliberately no argument form: SQL is full of single quotes and
+// sometimes $, so any shell quoting of it is a way to get it wrong.
 async function readSql(argv: string[]): Promise<string> {
   if (argv.includes("--help") || argv.includes("-h")) {
     console.log(HELP);
     process.exit(0);
   }
-  if (argv.length > 1) usageError("give exactly one SQL statement, quoted");
-  const sql = argv.length === 1 ? argv[0] : process.stdin.isTTY ? "" : await readStdin();
-  if (sql.trim() === "") usageError("give a SQL statement, as one quoted argument or on stdin");
+  if (argv.length > 0) usageError("the statement is read from stdin, not given as an argument");
+  if (process.stdin.isTTY) usageError("no statement: give it on stdin, with a heredoc");
+  const sql = await readStdin();
+  if (sql.trim() === "") usageError("the statement on stdin is empty");
   return sql;
 }
 
@@ -136,7 +133,7 @@ async function main(): Promise<number> {
     config = loadDatabaseConfig();
   } catch (err) {
     console.error(`${NAME}: ${(err as Error).message}`);
-    return EXIT_UNAVAILABLE;
+    return EXIT_FAILURE;
   }
 
   // One connection per run: nothing a statement leaves open outlives it (closing rolls back).
@@ -150,7 +147,7 @@ async function main(): Promise<number> {
     });
   } catch (err) {
     console.error((err as Error).message); // the database's own words
-    return EXIT_UNAVAILABLE;
+    return EXIT_FAILURE;
   }
   connection.callTimeout = CALL_TIMEOUT_MS;
 
@@ -179,7 +176,7 @@ async function main(): Promise<number> {
   } catch (err) {
     const message = (err as Error).message;
     console.error(message); // the database's own words, nothing added
-    return /DPI-1067|call timeout/i.test(message) ? EXIT_UNAVAILABLE : EXIT_SQL;
+    return EXIT_FAILURE;
   } finally {
     await connection.close().catch(() => {});
   }
@@ -197,6 +194,6 @@ main().then(
   },
   (err) => {
     console.error(`${NAME}: ${(err as Error).message}`);
-    process.exitCode = EXIT_UNAVAILABLE;
+    process.exitCode = EXIT_FAILURE;
   },
 );

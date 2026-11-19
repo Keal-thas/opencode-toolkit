@@ -184,7 +184,7 @@ Per-server specifics:
 
 ## 6. Add the Oracle command
 
-Oracle is reached with a command, `opencode-oracle-query "<sql>"`, not an MCP tool: the agent runs it with `bash`, so it can pipe, cut and redirect the output instead of taking every row into its context. The command connects straight to Oracle, so there is nothing to start and leave running.
+Oracle is reached with a command, `opencode-oracle-query`, which reads the SQL from stdin, not an MCP tool: the agent runs it with `bash`, so it can pipe, cut and redirect the output instead of taking every row into its context. The command connects straight to Oracle, so there is nothing to start and leave running.
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-oracle
@@ -206,7 +206,9 @@ EOF
 Check it:
 
 ```bash
-opencode-oracle-query "SELECT 1 AS one FROM dual"
+opencode-oracle-query <<'SQL'
+SELECT 1 AS one FROM dual
+SQL
 ```
 
 It should print `ONE` and `1`. Nothing goes into `opencode.json` for Oracle: there is no `mcp` entry, and `deploy/system-prompt.txt`'s `# Databases` section already tells the model about the command.
