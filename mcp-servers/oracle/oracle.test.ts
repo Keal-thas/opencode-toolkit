@@ -58,8 +58,8 @@ interface CliResult {
 }
 
 // os.homedir() reads USERPROFILE on Windows, HOME elsewhere.
-function run(home: string, ...args: string[]): Promise<CliResult> {
-  return runWithStdin(home, undefined, ...args);
+function run(home: string, sql: string): Promise<CliResult> {
+  return runWithStdin(home, sql);
 }
 
 // stdin is closed at once when there is nothing to send, so a run that would read it does not wait.
@@ -73,7 +73,7 @@ function runWithStdin(home: string, stdin: string | undefined, ...args: string[]
     child.stdin!.end(stdin ?? "");
   });
 }
-const cli = (...args: string[]) => run(good.home, ...args);
+const cli = (sql: string) => run(good.home, sql);
 
 // DDL and writes for fixtures go straight through the driver: the command is read-only by design.
 async function direct<T>(fn: (c: oracledb.Connection) => Promise<T>): Promise<T> {
@@ -119,7 +119,7 @@ test("nothing is cut off: every row of a large result comes back", async () => {
 test("a pipe closed early (| head) is not an error", async () => {
   const env = { ...process.env, HOME: good.home, USERPROFILE: good.home };
   const out = await new Promise<{ stdout: string; stderr: string }>((resolve) =>
-    execFile("bash", ["-c", `node "${CLI}" "SELECT level AS n FROM dual CONNECT BY level <= 200000" | head -n 3`], { env }, (_e, stdout, stderr) => resolve({ stdout, stderr })),
+    execFile("bash", ["-c", `node "${CLI}" <<'SQL' | head -n 3\nSELECT level AS n FROM dual CONNECT BY level <= 200000\nSQL`], { env }, (_e, stdout, stderr) => resolve({ stdout, stderr })),
   );
   assert.equal(out.stdout, "N\n1\n2\n");
   assert.equal(out.stderr, "", "no EPIPE stack trace");
@@ -180,41 +180,44 @@ test("a statement with no result set says so instead of printing an empty line",
   assert.equal(r.stdout, "statement executed, no result set\n");
 });
 
-test("usage errors exit 2, and --help prints the usage", async () => {
-  assert.equal((await cli()).code, 2, "no argument and nothing on stdin");
-  assert.equal((await cli("SELECT 1 FROM dual", "--limit", "5")).code, 2, "there are no options");
-  assert.equal((await cli("SELECT 1 FROM dual", "SELECT 2 FROM dual")).code, 2, "one statement only");
-  const help = await cli("--help");
+test("usage errors exit 1, and --help prints the usage", async () => {
+  assert.equal((await cli("")).code, 1, "an empty statement");
+  assert.equal((await cli("  \n ")).code, 1, "only whitespace");
+  const withArg = await runWithStdin(good.home, "SELECT 1 FROM dual", "SELECT 2 FROM dual");
+  assert.equal(withArg.code, 1, "there is no argument form");
+  assert.match(withArg.stderr, /read from stdin, not given as an argument/);
+  assert.equal((await runWithStdin(good.home, "SELECT 1 FROM dual", "--limit", "5")).code, 1, "there are no options");
+  const help = await runWithStdin(good.home, undefined, "--help");
   assert.equal(help.code, 0);
-  assert.match(help.stdout, /Usage: opencode-oracle-query/);
+  assert.match(help.stdout, /Usage: opencode-oracle-query <<'SQL'/);
 });
 
-test("bad credentials exit 3 with the database's own message", async () => {
+test("bad credentials exit 1 with the database's own message", async () => {
   const bad = createFakeHome({ ORACLE_PASSWORD: "definitely-wrong-password" });
   const r = await run(bad.home, "SELECT 1 FROM dual");
-  assert.equal(r.code, 3);
+  assert.equal(r.code, 1);
   assert.ok(r.stderr.startsWith("ORA-01017"), JSON.stringify(r.stderr));
 });
 
-test("a missing or broken config file exits 3 and says where it looked", async () => {
+test("a missing or broken config file exits 1 and says where it looked", async () => {
   const empty = mkdtempSync(join(tmpdir(), "oracle-nohome-"));
   const missing = await run(empty, "SELECT 1 FROM dual");
-  assert.equal(missing.code, 3);
+  assert.equal(missing.code, 1);
   assert.match(missing.stderr, /Database config file not found[\s\S]*config\.json/);
 
   const broken = createFakeHome();
   writeFileSync(broken.configPath, "{ this is not json");
   const r = await run(broken.home, "SELECT 1 FROM dual");
-  assert.equal(r.code, 3);
+  assert.equal(r.code, 1);
   assert.match(r.stderr, /Failed to load database config/);
 
   writeFileSync(broken.configPath, JSON.stringify({ ORACLE_USER: "only-a-user" }));
   const partial = await run(broken.home, "SELECT 1 FROM dual");
-  assert.equal(partial.code, 3);
+  assert.equal(partial.code, 1);
   assert.match(partial.stderr, /missing one of ORACLE_CONNECT_STRING/);
 });
 
-test("the statement can come on stdin, so the shell never touches $, quotes or backticks", async () => {
+test("the shell never touches $, quotes or backslashes in the statement", async () => {
   // In double quotes bash would turn $b into nothing; on stdin it arrives as written.
   const sql = `SELECT 'a$b' AS "My Col", 'back\\slash' AS bs, 1 AS n
 FROM dual
@@ -233,9 +236,4 @@ test("a V$ view can be queried through a quoted heredoc", async () => {
   );
   assert.equal(out.code, 0, out.stderr);
   assert.match(out.stdout, /^N\n\d+\n$/);
-});
-
-test("an argument and stdin together: the argument wins, stdin is ignored", async () => {
-  const r = await runWithStdin(good.home, "SELECT 2 AS two FROM dual", "SELECT 1 AS one FROM dual");
-  assert.equal(r.stdout, "ONE\n1\n");
 });

@@ -30,13 +30,13 @@ Use `file_path:line_number` when pointing at code so it's directly navigable.
 If a `memory` MCP tool is available, use it for facts that outlive the current task: the user's durable preferences and working style, stable facts about this machine/project setup, and decisions the user explicitly asked you to remember. At the start of a session, or when starting work you don't have context for, check memory first (`search_nodes`/`read_graph`) instead of asking the user to repeat what they've already told you. Don't store ephemeral task state, file contents, or anything you can re-derive by reading the codebase — that's what re-reading is for. Keep entries atomic; update or delete a stale one instead of leaving duplicates next to it.
 
 # Databases
-For Oracle, use the `opencode-oracle-query` command with bash if it exists. It is read-only and prints every row of the result as CSV, nothing cut off, so cut the result in the SQL (a WHERE clause, an aggregate, `FETCH FIRST n ROWS ONLY`) or pipe it through head, and redirect a large result to a file and look at it there with head, grep or awk. Pass the SQL on stdin with a quoted heredoc, which keeps the shell away from it, and always do so when it contains `$` (as in `v$session`), backticks, double quotes or backslashes:
+For Oracle, use the `opencode-oracle-query` command with bash if it exists. It is read-only and prints every row of the result as CSV, nothing cut off, so cut the result in the SQL (a WHERE clause, an aggregate, `FETCH FIRST n ROWS ONLY`) or pipe it through head, and redirect a large result to a file and look at it there with head, grep or awk. It takes no arguments and no options: the SQL goes on stdin, in a heredoc with a quoted delimiter, which keeps the shell away from `$`, quotes, backticks and backslashes:
 
 opencode-oracle-query <<'SQL'
 SELECT sid, serial# FROM v$session WHERE username = 'SCOTT'
 SQL
 
-A short statement with none of those characters can be one single-quoted argument. Database errors come back exactly as Oracle printed them. Exit 1 is a SQL error, 3 means the query could not run at all. To learn a table's shape, query the data dictionary (`all_tab_columns`) before writing the real query.
+Database errors come back exactly as Oracle printed them. A non-zero exit means it failed, and stderr says why. To learn a table's shape, query the data dictionary (`all_tab_columns`) before writing the real query.
 
 # Windows paths
 Bash commands accept Unix-style paths (`/c/Users/...`). The `read`, `edit`, `write`, and `apply_patch` tools all accept either style on Windows: `read` normalizes it natively, and `gitbash-edit-path-fix` rewrites `/c/...` for the other three.
