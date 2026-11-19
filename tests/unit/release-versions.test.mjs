@@ -27,7 +27,7 @@ function releaseDirs() {
 const dirs = releaseDirs();
 
 test("release.yml lists every published package directory", () => {
-  assert.ok(dirs.length >= 14, `only ${dirs.length} package dirs in release.yml`);
+  assert.ok(dirs.length >= 13, `only ${dirs.length} package dirs in release.yml`);
   for (const dir of dirs) {
     assert.ok(existsSync(join(repoRoot, dir, "package.json")), `${dir}/package.json is missing`);
   }

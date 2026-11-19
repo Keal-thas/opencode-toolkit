@@ -15,8 +15,7 @@ cat > /home/dev/.config/opencode/opencode.jsonc <<'EOF'
     "build": { "prompt": "{file:/home/dev/project/deploy/system-prompt.txt}" },
     "plan": { "prompt": "{file:/home/dev/project/deploy/system-prompt.txt}" },
     "general": { "prompt": "{file:/home/dev/project/deploy/system-prompt.txt}" }
-  },
-  "plugin": ["@kealthas-dev/opencode-system-prompt-tools"]
+  }
 }
 EOF
 chown dev:dev /home/dev/.config/opencode/opencode.jsonc

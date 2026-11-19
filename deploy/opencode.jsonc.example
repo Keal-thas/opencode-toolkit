@@ -34,7 +34,6 @@
     }
   },
   "plugin": [
-    "@kealthas-dev/opencode-system-prompt-tools",
     "@kealthas-dev/opencode-hook-logger",
     "@kealthas-dev/opencode-gitbash-edit-path-fix",
     "@kealthas-dev/opencode-verify-session"
