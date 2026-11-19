@@ -6,7 +6,7 @@ This table is the one list of servers; other docs link here instead of repeating
 
 | Server | What it does | Code | Transport | In `deploy/opencode.jsonc.example` |
 |---|---|---|---|---|
-| [`oracle`](oracle/README.md) | `oracle q "<sql>"` command, read-only SQL through a local query server | ours | CLI | not wired |
+| [`oracle`](oracle/README.md) | `opencode-oracle-query "<sql>"` command, read-only SQL through a local query server | ours | CLI | not wired |
 | [`loki`](loki/README.md) | read-only LogQL queries | ours | remote | enabled |
 | [`mysql`](mysql/README.md) | `mysql_query` inside a read-only transaction | ours | remote | enabled |
 | [`java-lsp`](java-lsp/README.md) | Java code intelligence via jdtls | ours | remote | enabled |

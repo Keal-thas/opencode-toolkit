@@ -2,10 +2,10 @@
   "name": "@kealthas-dev/opencode-mcp-oracle",
   "version": "0.0.0",
   "type": "module",
-  "description": "Read-only SQL query server for Oracle (a local HTTP /query route) and its `oracle q` command-line client - see README.md for the connection design and the config.json-driven config",
+  "description": "Read-only SQL query server for Oracle (a local HTTP /query route) and its `opencode-oracle-query` command-line client - see README.md for the connection design and the config.json-driven config",
   "main": "dist/server.js",
   "bin": {
-    "oracle": "dist/cli.js",
+    "opencode-oracle-query": "dist/cli.js",
     "opencode-mcp-oracle": "dist/server.js"
   },
   "files": [

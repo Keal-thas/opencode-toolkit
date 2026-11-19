@@ -8,10 +8,10 @@
 // compiled since a test file isn't published.
 //
 // The package is a persistent HTTP server (dist/server.js, POST /query) plus a
-// command-line client (dist/cli.js, `oracle q`). This test spawns the built
+// command-line client (dist/cli.js, `opencode-oracle-query`). This test spawns the built
 // server with its own fake $HOME (createFakeHome() below) so concurrent test
 // servers never share config, waits for it to log "listening", then drives it
-// through the CLI the way an agent would.
+// through the opencode-oracle-query command the way an agent would.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
@@ -109,7 +109,7 @@ interface CliResult {
   stderr: string;
 }
 
-// Runs `oracle <args>` against an instance's fake $HOME, so it finds that server's port.
+// Runs `opencode-oracle-query <args>` against an instance's fake $HOME, so it finds that server's port.
 function cli(instance: Pick<Instance, "home">, ...args: string[]): Promise<CliResult> {
   return new Promise((resolve) => {
     execFile("node", [DIST_CLI_PATH, ...args], { env: envFor(instance.home) }, (err, stdout, stderr) => {
@@ -144,36 +144,36 @@ after(async () => {
 });
 
 test("prints a plain SELECT as CSV", async () => {
-  const r = await cli(main, "q", "SELECT 1 AS one, 'hello' AS greeting FROM dual");
+  const r = await cli(main, "SELECT 1 AS one, 'hello' AS greeting FROM dual");
   assert.equal(r.code, 0, r.stderr);
   assert.equal(r.stdout, "ONE,GREETING\n1,hello\n");
 });
 
 test("a trailing semicolon is accepted for a SELECT", async () => {
-  const r = await cli(main, "q", "SELECT 1 AS one FROM dual;");
+  const r = await cli(main, "SELECT 1 AS one FROM dual;");
   assert.equal(r.code, 0, r.stderr);
   assert.equal(r.stdout, "ONE\n1\n");
 });
 
 test("--json prints one JSON object per row", async () => {
-  const r = await cli(main, "q", "SELECT level AS n FROM dual CONNECT BY level <= 2", "--json");
+  const r = await cli(main, "SELECT level AS n FROM dual CONNECT BY level <= 2", "--json");
   assert.equal(r.code, 0, r.stderr);
   assert.deepEqual(r.stdout.trim().split("\n").map((l) => JSON.parse(l)), [{ N: 1 }, { N: 2 }]);
 });
 
 test("--format tsv separates by tabs", async () => {
-  const r = await cli(main, "q", "SELECT 1 AS a, 2 AS b FROM dual", "--format", "tsv");
+  const r = await cli(main, "SELECT 1 AS a, 2 AS b FROM dual", "--format", "tsv");
   assert.equal(r.stdout, "A\tB\n1\t2\n");
 });
 
 test("CSV quotes commas, quotes and newlines", async () => {
-  const r = await cli(main, "q", `SELECT 'a,b' AS x, 'say "hi"' AS y, 'one'||CHR(10)||'two' AS z FROM dual`);
+  const r = await cli(main, `SELECT 'a,b' AS x, 'say "hi"' AS y, 'one'||CHR(10)||'two' AS z FROM dual`);
   assert.equal(r.code, 0, r.stderr);
   assert.equal(r.stdout, 'X,Y,Z\n"a,b","say ""hi""","one\ntwo"\n');
 });
 
 test("output stops at 100 rows by default and says so on stderr", async () => {
-  const r = await cli(main, "q", "SELECT level AS n FROM dual CONNECT BY level <= 250");
+  const r = await cli(main, "SELECT level AS n FROM dual CONNECT BY level <= 250");
   assert.equal(r.code, 0, r.stderr);
   assert.equal(r.stdout.trim().split("\n").length, 1 + 100, "header plus 100 rows");
   assert.match(r.stderr, /first 100 rows, more exist/);
@@ -181,16 +181,16 @@ test("output stops at 100 rows by default and says so on stderr", async () => {
 
 test("--limit, --all and --out change how many rows come back", async () => {
   const sql = "SELECT level AS n FROM dual CONNECT BY level <= 250";
-  const limited = await cli(main, "q", sql, "--limit", "5");
+  const limited = await cli(main, sql, "--limit", "5");
   assert.equal(limited.stdout.trim().split("\n").length, 1 + 5);
   assert.match(limited.stderr, /first 5 rows/);
 
-  const all = await cli(main, "q", sql, "--all");
+  const all = await cli(main, sql, "--all");
   assert.equal(all.stdout.trim().split("\n").length, 1 + 250);
   assert.equal(all.stderr, "");
 
   const file = join(mkdtempSync(join(tmpdir(), "oracle-out-")), "rows.csv");
-  const out = await cli(main, "q", sql, "--out", file);
+  const out = await cli(main, sql, "--out", file);
   assert.equal(out.code, 0, out.stderr);
   assert.match(out.stdout, /wrote 250 rows to /);
   assert.equal(readFileSync(file, "utf8").trim().split("\n").length, 1 + 250);
@@ -199,7 +199,7 @@ test("--limit, --all and --out change how many rows come back", async () => {
 test("the server's own cap (ORACLE_MAX_ROWS) holds even for --all", async () => {
   const capped = await startServer(BASE_PORT + 2, { ORACLE_MAX_ROWS: 7 });
   try {
-    const r = await cli(capped, "q", "SELECT level AS n FROM dual CONNECT BY level <= 50", "--all");
+    const r = await cli(capped, "SELECT level AS n FROM dual CONNECT BY level <= 50", "--all");
     assert.equal(r.stdout.trim().split("\n").length, 1 + 7);
     assert.match(r.stderr, /first 7 rows, more exist/);
   } finally {
@@ -209,16 +209,15 @@ test("the server's own cap (ORACLE_MAX_ROWS) holds even for --all", async () => 
 
 test("a join with duplicate column names keeps both values", async () => {
   // The driver renames the second one (ID_1), so no value is lost to a key collision.
-  const csv = await cli(main, "q", "SELECT 1 AS id, 2 AS id FROM dual");
+  const csv = await cli(main, "SELECT 1 AS id, 2 AS id FROM dual");
   assert.equal(csv.stdout, "ID,ID_1\n1,2\n");
-  const json = await cli(main, "q", "SELECT 1 AS id, 2 AS id FROM dual", "--json");
+  const json = await cli(main, "SELECT 1 AS id, 2 AS id FROM dual", "--json");
   assert.deepEqual(JSON.parse(json.stdout), { ID: 1, ID_1: 2 });
 });
 
 test("dates, CLOB, BLOB and RAW come back as plain text", async () => {
   const r = await cli(
     main,
-    "q",
     `SELECT DATE '2024-01-02' AS d, TO_TIMESTAMP('2024-01-02 03:04:05.5','YYYY-MM-DD HH24:MI:SS.FF') AS ts, TO_CLOB('clob text') AS c, TO_BLOB(UTL_RAW.CAST_TO_RAW('hi')) AS b, UTL_RAW.CAST_TO_RAW('hi') AS r FROM dual`,
     "--json",
   );
@@ -242,39 +241,39 @@ test("INSERT, UPDATE and DELETE are refused inside the read-only transaction, an
   await new Promise((resolve) => setTimeout(resolve, 4000));
   try {
     for (const sql of [`INSERT INTO ${table} VALUES (2)`, `UPDATE ${table} SET id = 9`, `DELETE FROM ${table}`]) {
-      const r = await cli(main, "q", sql);
+      const r = await cli(main, sql);
       assert.equal(r.code, 1, `${sql} should fail`);
-      assert.match(r.stderr, /ORA-01456/, sql);
+      assert.ok(r.stderr.startsWith("ORA-01456"), `${sql}: ${JSON.stringify(r.stderr)}`);
     }
-    const after = await cli(main, "q", `SELECT id FROM ${table}`);
+    const after = await cli(main, `SELECT id FROM ${table}`);
     assert.equal(after.stdout, "ID\n1\n", `the table is unchanged (exit ${after.code}: ${after.stderr})`);
   } finally {
     await direct((c) => c.execute(`DROP TABLE ${table}`));
   }
 });
 
-test("a query against a nonexistent table exits 1 with the Oracle error", async () => {
-  const r = await cli(main, "q", "SELECT * FROM this_table_does_not_exist_12345");
+test("a SQL error exits 1 with the database's own message, not wrapped", async () => {
+  const r = await cli(main, "SELECT * FROM this_table_does_not_exist_12345");
   assert.equal(r.code, 1);
-  assert.match(r.stderr, /ORA-00942/);
+  assert.ok(r.stderr.startsWith("ORA-00942"), `nothing in front of the message: ${JSON.stringify(r.stderr)}`);
 });
 
 test("usage errors exit 2", async () => {
-  assert.equal((await cli(main, "q")).code, 2);
-  assert.equal((await cli(main, "q", "SELECT 1 FROM dual", "--limit", "abc")).code, 2);
-  assert.equal((await cli(main, "q", "SELECT 1 FROM dual", "--bogus")).code, 2);
-  assert.equal((await cli(main, "nope")).code, 2);
+  assert.equal((await cli(main)).code, 2);
+  assert.equal((await cli(main, "SELECT 1 FROM dual", "--limit", "abc")).code, 2);
+  assert.equal((await cli(main, "SELECT 1 FROM dual", "--bogus")).code, 2);
+  assert.equal((await cli(main, "SELECT 1 FROM dual", "SELECT 2 FROM dual")).code, 2, "one statement only");
   const help = await cli(main, "--help");
   assert.equal(help.code, 0);
-  assert.match(help.stdout, /Usage: oracle q/);
+  assert.match(help.stdout, /Usage: opencode-oracle-query/);
 });
 
 test("bad credentials exit 3 with a clean message, not a crash", async () => {
   const bad = await startServer(BASE_PORT + 1, { ORACLE_PASSWORD: "definitely-wrong-password" });
   try {
-    const r = await cli(bad, "q", "SELECT 1 FROM dual");
+    const r = await cli(bad, "SELECT 1 FROM dual");
     assert.equal(r.code, 3);
-    assert.match(r.stderr, /ORA-01017|invalid|password/i);
+    assert.ok(r.stderr.startsWith("ORA-01017"), `the database's message, untouched: ${JSON.stringify(r.stderr)}`);
   } finally {
     await stopServer(bad);
   }
@@ -282,7 +281,7 @@ test("bad credentials exit 3 with a clean message, not a crash", async () => {
 
 test("no server running exits 3 and says how to fix it", async () => {
   const { home } = createFakeHome(BASE_PORT + 9); // nothing listens there
-  const r = await cli({ home }, "q", "SELECT 1 FROM dual");
+  const r = await cli({ home }, "SELECT 1 FROM dual");
   assert.equal(r.code, 3);
   assert.match(r.stderr, /cannot reach the oracle query server on port 8144/);
 });
@@ -292,12 +291,12 @@ test("a broken config file fails that query only, and the server recovers when i
   try {
     const good = readFileSync(instance.configPath, "utf8");
     writeFileSync(instance.configPath, "{ this is not json");
-    const broken = await cli(instance, "q", "SELECT 1 FROM dual");
+    const broken = await cli(instance, "SELECT 1 FROM dual");
     assert.equal(broken.code, 3);
     assert.match(broken.stderr, /Failed to load database config/);
 
     writeFileSync(instance.configPath, good);
-    const fixed = await cli(instance, "q", "SELECT 1 AS one FROM dual");
+    const fixed = await cli(instance, "SELECT 1 AS one FROM dual");
     assert.equal(fixed.code, 0, `the server survived the bad file: ${fixed.stderr}`);
   } finally {
     await stopServer(instance);
@@ -306,7 +305,7 @@ test("a broken config file fails that query only, and the server recovers when i
 
 test("a statement with no result set says so instead of printing an empty line", async () => {
   // DDL is not stopped by the read-only transaction (it commits first), so this uses a harmless statement.
-  const r = await cli(main, "q", "ALTER SESSION SET NLS_LANGUAGE = 'AMERICAN'");
+  const r = await cli(main, "ALTER SESSION SET NLS_LANGUAGE = 'AMERICAN'");
   assert.equal(r.code, 0, r.stderr);
   assert.equal(r.stdout, "statement executed, no result set\n");
 });
