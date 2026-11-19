@@ -11,9 +11,10 @@ const EXIT_UNAVAILABLE = 3;
 
 const DEFAULT_LIMIT = 100;
 
-const HELP = `Usage: oracle q "<sql>" [options]
+const HELP = `Usage: opencode-oracle-query "<sql>" [options]
 
-Runs one read-only SQL statement through the local oracle query server and prints the rows to stdout.
+Runs one read-only SQL statement through the local oracle query server and prints the rows to stdout. Errors from the
+database are printed exactly as the database gave them.
 
 Options:
   --limit N        most rows to print (default ${DEFAULT_LIMIT}; the server has its own hard cap)
@@ -30,7 +31,7 @@ or write it to a file with --out and look at it there.
 Exit codes: 0 ok, 1 SQL error, 2 usage error, 3 could not run (server unreachable, bad credentials, blocked, timeout).`;
 
 function usageError(message: string): never {
-  console.error(`oracle: ${message}\n\n${HELP}`);
+  console.error(`opencode-oracle-query: ${message}\n\n${HELP}`);
   process.exit(EXIT_USAGE);
 }
 
@@ -48,18 +49,16 @@ function parseArgs(argv: string[]): Options {
     console.log(HELP);
     process.exit(argv.length === 0 ? EXIT_USAGE : 0);
   }
-  const [command, ...rest] = argv;
-  if (command !== "q") usageError(`unknown command "${command}" (the only command is q)`);
 
   const opts: Options = { sql: "", limit: undefined, all: false, format: "csv", schema: undefined, out: undefined };
   const positional: string[] = [];
   const valueOf = (i: number, flag: string): string => {
-    const v = rest[i + 1];
+    const v = argv[i + 1];
     if (v === undefined) usageError(`${flag} needs a value`);
     return v;
   };
-  for (let i = 0; i < rest.length; i++) {
-    const arg = rest[i];
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
     if (arg === "--all") opts.all = true;
     else if (arg === "--json") opts.format = "json";
     else if (arg === "--limit") {
@@ -103,7 +102,7 @@ async function main(): Promise<void> {
   try {
     port = loadServerConfig().ORACLE_MCP_PORT;
   } catch (err) {
-    console.error(`oracle: ${(err as Error).message}`);
+    console.error(`opencode-oracle-query: ${(err as Error).message}`);
     process.exit(EXIT_UNAVAILABLE);
   }
 
@@ -119,13 +118,16 @@ async function main(): Promise<void> {
     });
     result = (await res.json()) as typeof result;
   } catch {
-    console.error(`oracle: cannot reach the oracle query server on port ${port}. It must be running (see mcp-servers/oracle/README.md).`);
+    console.error(`opencode-oracle-query: cannot reach the oracle query server on port ${port}. It must be running (see mcp-servers/oracle/README.md).`);
     process.exit(EXIT_UNAVAILABLE);
   }
 
   if (!result.success) {
-    console.error(`oracle: ${result.error}`);
-    process.exit("kind" in result && result.kind !== "sql" ? EXIT_UNAVAILABLE : EXIT_SQL);
+    // What the database said is handed over untouched, no prefix; only a problem that is opencode-oracle-query's own gets "opencode-oracle-query:".
+    const kind = "kind" in result ? result.kind : undefined;
+    const fromDatabase = kind === "sql" || kind === "connection" || kind === "timeout";
+    console.error(fromDatabase ? result.error : `opencode-oracle-query: ${result.error}`);
+    process.exit(kind === undefined || kind === "sql" ? EXIT_SQL : EXIT_UNAVAILABLE);
   }
 
   if (result.columns.length === 0) {
@@ -144,12 +146,12 @@ async function main(): Promise<void> {
   }
   if (result.truncated) {
     console.error(
-      `oracle: showing the first ${result.rows.length} rows, more exist. Narrow the query, raise --limit, or use --out FILE (the server caps one query at ORACLE_MAX_ROWS).`,
+      `opencode-oracle-query: showing the first ${result.rows.length} rows, more exist. Narrow the query, raise --limit, or use --out FILE (the server caps one query at ORACLE_MAX_ROWS).`,
     );
   }
 }
 
 main().catch((err) => {
-  console.error(`oracle: ${(err as Error).message}`);
+  console.error(`opencode-oracle-query: ${(err as Error).message}`);
   process.exit(EXIT_UNAVAILABLE);
 });

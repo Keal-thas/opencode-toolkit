@@ -1,12 +1,12 @@
 # oracle
 
-Read-only SQL for the agent as a command, `oracle q "<sql>"`, backed by a small local HTTP query server. Written in TypeScript (`src/server.ts`, `src/cli.ts`), compiled to `dist/`.
+Read-only SQL for the agent as a command, `opencode-oracle-query "<sql>"`, backed by a small local HTTP query server. Written in TypeScript (`src/server.ts`, `src/cli.ts`), compiled to `dist/`.
 
 It is a command, not an MCP tool, because an MCP tool result goes into the model's context whole: the agent cannot `head`, `grep` or `awk` it first, and a broad `SELECT` costs all of its rows. The command's stdout can be cut, piped or written to a file.
 
 ## Design
 
-- **Two parts.** `dist/server.js` is a persistent HTTP server with one route, `POST /query`; `dist/cli.js` is the `oracle` command that calls it. The server holds the credentials, the config and the Oracle connection logic; the command only formats. Started independently and left running (`npm start`, a process supervisor or a container), so its uptime is not tied to opencode's restarts.
+- **Two parts.** `dist/server.js` is a persistent HTTP server with one route, `POST /query`; `dist/cli.js` is the `opencode-oracle-query` command that calls it. The server holds the credentials, the config and the Oracle connection logic; the command only formats. Started independently and left running (`npm start`, a process supervisor or a container), so its uptime is not tied to opencode's restarts.
 - **Per-request connection, not pooled.** A stray statement cannot outlive its request (closing rolls back), concurrent calls never share a session, and a session dropped on the database side fails only that call. The price is connection-setup latency per call, fine for low-QPS internal use.
 - **Read-only by two layers.** Every query runs after `SET TRANSACTION READ ONLY`, so Oracle itself refuses `INSERT`, `UPDATE` and `DELETE` (`ORA-01456`) even for an account that holds write grants. **DDL is not covered:** it commits first and then runs, so `CREATE TABLE` or `DROP TABLE` goes through. The connecting account's own grants are the real boundary, see below.
 - **Capped output.** The command prints 100 rows by default, `--limit N` or `--all` raises that, and the server refuses to return more than `ORACLE_MAX_ROWS` (default 10000) whatever is asked. A notice on stderr says when rows were left out.
@@ -17,12 +17,12 @@ It is a command, not an MCP tool, because an MCP tool result goes into the model
 ## Usage
 
 ```bash
-oracle q "SELECT * FROM employees WHERE dept = 10"          # CSV, first 100 rows
-oracle q "SELECT ..." --json                                 # one JSON object per row
-oracle q "SELECT ..." --format tsv --limit 20
-oracle q "SELECT ..." --out /tmp/result.csv                  # whole result to a file, a summary on stdout
-oracle q "SELECT ..." --schema HR                            # ALTER SESSION SET CURRENT_SCHEMA
-oracle --help
+opencode-oracle-query "SELECT * FROM employees WHERE dept = 10"          # CSV, first 100 rows
+opencode-oracle-query "SELECT ..." --json                                 # one JSON object per row
+opencode-oracle-query "SELECT ..." --format tsv --limit 20
+opencode-oracle-query "SELECT ..." --out /tmp/result.csv                  # whole result to a file, a summary on stdout
+opencode-oracle-query "SELECT ..." --schema HR                            # ALTER SESSION SET CURRENT_SCHEMA
+opencode-oracle-query --help
 ```
 
 Exit codes: `0` ok, `1` the SQL failed, `2` usage error, `3` the query could not run (server unreachable, bad credentials or config, timeout).
@@ -73,17 +73,17 @@ Config is read from files, not environment variables, and the files' location is
 
 ## Running it
 
-Published as `@kealthas-dev/opencode-mcp-oracle`. Install it globally, which puts two commands on `PATH`: `oracle` (the client the agent runs) and `opencode-mcp-oracle` (the server, which stays running). See SETUP.md step 6.
+Published as `@kealthas-dev/opencode-mcp-oracle`. Install it globally, which puts two commands on `PATH`: `opencode-oracle-query` (the client the agent runs) and `opencode-mcp-oracle` (the server, which stays running). See SETUP.md step 6.
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-oracle
 ORACLE_CONFIG_ENV=prod opencode-mcp-oracle     # reads config-prod.json; leave it running
 ```
 
-For the repo's own checkout, `npm install && npm run build && npm start` in this directory does the same with the default `config.json`. The `oracle` command must run with the same `ORACLE_CONFIG_ENV`/`ORACLE_MCP_PORT` as the server it should reach, or find the same `server.json`.
+For the repo's own checkout, `npm install && npm run build && npm start` in this directory does the same with the default `config.json`. The `opencode-oracle-query` command must run with the same `ORACLE_CONFIG_ENV`/`ORACLE_MCP_PORT` as the server it should reach, or find the same `server.json`.
 
 ## Status
 
-`oracle.test.ts` runs against a real Oracle instance in the docker sandbox (see `docker/notes.md`, "Oracle test instance"), through the `oracle` command: CSV, TSV and JSON output, CSV quoting, the 100-row default and `--limit`/`--all`/`--out`, the server-side cap, duplicate column names, dates, CLOB, BLOB and RAW, `INSERT`/`UPDATE`/`DELETE` refused with nothing changed, an Oracle error, usage errors, bad credentials, no server running, and a broken config file that fails one query without taking the server down.
+`oracle.test.ts` runs against a real Oracle instance in the docker sandbox (see `docker/notes.md`, "Oracle test instance"), through the `opencode-oracle-query` command: CSV, TSV and JSON output, CSV quoting, the 100-row default and `--limit`/`--all`/`--out`, the server-side cap, duplicate column names, dates, CLOB, BLOB and RAW, `INSERT`/`UPDATE`/`DELETE` refused with nothing changed, an Oracle error, usage errors, bad credentials, no server running, and a broken config file that fails one query without taking the server down.
 
 Known, not covered: DDL goes through (see Design), and a TIMESTAMP loses anything finer than milliseconds.
