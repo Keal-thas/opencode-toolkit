@@ -41,6 +41,10 @@ echo "== guard plugins integration test (loop-guard and path-guard in a real ope
 node tests/integration/guard-plugins.test.mjs
 
 echo
+echo "== verifier agent and /verify integration test (real opencode, fake model) =="
+node tests/integration/verifier-agent.test.mjs
+
+echo
 echo "== oracle MCP server integration test (real Oracle instance) =="
 # mcp-servers/oracle/ is its own npm package - its test lives alongside it (not
 # under tests/) so Node's module resolution finds its node_modules. It's

@@ -62,4 +62,5 @@ test("SETUP.md's documented agent/permission merge JSON snippet matches deploy/o
   const documented = JSON.parse(`{${mergeFence}}`);
   assert.deepEqual(documented.agent, example.agent);
   assert.deepEqual(documented.permission, example.permission);
+  assert.deepEqual(documented.command, example.command);
 });

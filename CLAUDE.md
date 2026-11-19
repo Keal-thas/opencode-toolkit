@@ -30,7 +30,7 @@ Single-person project used across multiple machines — these preferences are gi
 
 - **kebab-case everywhere, except the conventional entry files** (`README.md`, `CLAUDE.md`, `SETUP.md`, `TODO.md`).
 - **Don't repeat the directory's category in a file name** (`docker/notes.md`, not `docker/docker-notes.md`), and don't use ordinal prefixes unless the order is the point.
-- **One word, one meaning.** `probe` is a black-box check of opencode itself (`tests/capability-probes/*.probe.mjs`), while `verify` is the `verify-session` plugin.
+- **One word, one meaning.** `probe` is a black-box check of opencode itself (`tests/capability-probes/*.probe.mjs`), while `verify` is the `/verify` command and the `verifier` agent in `deploy/opencode.jsonc.example`.
 - **`.zh` marks a Chinese file; a Chinese mirror of an English file shares its base name** (`SETUP.md` / `SETUP.zh.md`).
 - **npm packages are `@kealthas-dev/opencode-<plugin>` and `@kealthas-dev/opencode-mcp-<server>`; config lives in `~/.config/kealthas-dev/<package>/`; the env var is `<NAME>_CONFIG_ENV`.** The package name is part of the config path, so a rename is a deployment change, not just a repo change.
 

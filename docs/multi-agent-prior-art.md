@@ -35,7 +35,7 @@ omo and slim both run their agent loop inside opencode and both ship a lot that 
 | Write receipts plus a completion gate | slim `deepwork-guard` | later |
 | Hash-anchored edits that reject stale lines | omo `hashline-core` | later |
 | Event-sourced node state with a fingerprinted definition | omo `mass-ulw` | later |
-| Binding a verifier's verdict to a state change | omo ulw-execute (the reviewer flips the checkbox) | later; `plugins/verify-session` already produces the independent verdict |
+| Binding a verifier's verdict to a state change | omo ulw-execute (the reviewer flips the checkbox) | later; the `verifier` agent in `deploy/opencode.jsonc.example` already produces the independent verdict |
 | Tool-call JSON error reminder | slim `json-error-recovery` | not taken: whether opencode surfaces malformed arguments through `tool.execute.after` was not verified, and it already returns an error for them |
 | Frontend agent, observer, panes, marketplace, update checker, model fallback chain, team mode, memory sidecar | both | not needed |
 
