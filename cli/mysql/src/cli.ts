@@ -8,7 +8,7 @@ import mysql from "mysql2/promise";
 const EXIT_FAILURE = 1;
 
 const NAME = "opencode-mysql-query";
-const CONFIG_DIR = join(homedir(), ".config", "kealthas-dev", "opencode-mcp-mysql");
+const CONFIG_DIR = join(homedir(), ".config", "kealthas-dev", "opencode-mysql-query");
 
 // mysql2 has no timeout of any kind by default (createConnection() can hang
 // forever against a host that accepts the TCP connection but never responds,

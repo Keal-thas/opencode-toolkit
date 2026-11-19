@@ -24,7 +24,7 @@ Single-person project used across multiple machines — these preferences are gi
 - **Don't manually wrap long lines in code, comments, or docs.**
 - **Don't hedge a generic host/platform capability with "validated on model X" when nothing about it is model-specific.** Reserve that qualifier for things that genuinely vary by model/provider (tool-call parsing, context limits, thinking tokens).
 
-- **A list that follows the directory tree lives in exactly one place, and nothing else repeats it or counts it.** `plugins/README.md` and `mcp-servers/README.md` are those places (with each member's published/enabled state); every other doc links to them. `tests/unit/docs-consistency.test.mjs` checks them against the directories, `release.yml` and `deploy/opencode.jsonc.example`, so add a check there when a doc is found out of step with its source.
+- **A list that follows the directory tree lives in exactly one place, and nothing else repeats it or counts it.** `plugins/README.md`, `mcp-servers/README.md` and `cli/README.md` are those places (with each member's published/enabled state); every other doc links to them. `tests/unit/docs-consistency.test.mjs` checks them against the directories, `release.yml` and `deploy/opencode.jsonc.example`, so add a check there when a doc is found out of step with its source.
 
 ### Naming
 
@@ -32,7 +32,7 @@ Single-person project used across multiple machines — these preferences are gi
 - **Don't repeat the directory's category in a file name** (`docker/notes.md`, not `docker/docker-notes.md`), and don't use ordinal prefixes unless the order is the point.
 - **One word, one meaning.** `probe` is a black-box check of opencode itself (`tests/capability-probes/*.probe.mjs`), while `verifier` is the read-only reviewer subagent in `deploy/opencode.jsonc.example`.
 - **`.zh` marks a Chinese file; a Chinese mirror of an English file shares its base name** (`SETUP.md` / `SETUP.zh.md`).
-- **npm packages are `@kealthas-dev/opencode-<plugin>` and `@kealthas-dev/opencode-mcp-<server>`; config lives in `~/.config/kealthas-dev/<package>/`; the env var is `<NAME>_CONFIG_ENV`.** The package name is part of the config path, so a rename is a deployment change, not just a repo change.
+- **npm packages are `@kealthas-dev/opencode-<plugin>`, `@kealthas-dev/opencode-mcp-<server>` and `@kealthas-dev/opencode-<name>-query` (the commands in `cli/`); config lives in `~/.config/kealthas-dev/<package>/`; the env var is `<NAME>_CONFIG_ENV`.** The package name is part of the config path, so a rename is a deployment change, not just a repo change.
 
 ### Config hygiene
 
@@ -40,7 +40,7 @@ Single-person project used across multiple machines — these preferences are gi
 
 ### Code structure
 
-- **Don't extract shared code across independently-published packages (`plugins/`, `mcp-servers/`), even for byte-identical duplication.** This is the opposite instinct from "Config hygiene" above on purpose: that's about one literal value drifting across files, this is about a whole package's independence.
+- **Don't extract shared code across independently-published packages (`plugins/`, `mcp-servers/`, `cli/`), even for byte-identical duplication.** This is the opposite instinct from "Config hygiene" above on purpose: that's about one literal value drifting across files, this is about a whole package's independence.
 
 ### Testing
 
@@ -75,6 +75,7 @@ Historical debugging/verification lessons live in [docs/lessons-learned.md](docs
 | `docker/` | dev/test sandbox — `.env` is intentionally committed, not secret; see `docker/notes.md` |
 | `plugins/` | opencode plugins, one npm package each — list in `plugins/README.md`; install mechanism in `docker/notes.md`'s Plugin loading section |
 | `mcp-servers/` | MCP servers, one per subdir — list in `mcp-servers/README.md`, backlog in `mcp-servers/TODO.md` |
+| `cli/` | commands the agent runs with `bash` to reach a database or log store (oracle, loki, mysql, redis), one per subdir — list in `cli/README.md` |
 | `docs/` | research notes, reference docs, the upstream opencode docs mirror |
 | `tests/` | test suite — `./tests/run-all.sh` is the entry point |
 | `memory/` | git-tracked project memory |

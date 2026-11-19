@@ -8,7 +8,7 @@ import { createClient } from "redis";
 const EXIT_FAILURE = 1;
 
 const NAME = "opencode-redis-query";
-const CONFIG_DIR = join(homedir(), ".config", "kealthas-dev", "opencode-mcp-redis");
+const CONFIG_DIR = join(homedir(), ".config", "kealthas-dev", "opencode-redis-query");
 
 // Without these a host that accepts the TCP connection but never answers, or a blocking command with no
 // timeout (BLPOP key 0, SUBSCRIBE), would leave the run waiting forever.

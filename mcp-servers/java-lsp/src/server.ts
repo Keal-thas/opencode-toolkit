@@ -12,7 +12,7 @@ import { LspClient, LspClientError } from "./lsp-client.js";
 import type { JavaLspConfig, ServerConfig } from "./types/config.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_PORT = 8092; // the next free port after mcp-servers/loki's 8091
+const DEFAULT_PORT = 8092; // the next free port after cli/loki's 8091
 const CONFIG_DIR = path.join(homedir(), ".config", "kealthas-dev", "opencode-mcp-java-lsp");
 const SERVER_CONFIG_PATH = path.join(CONFIG_DIR, "server.json");
 

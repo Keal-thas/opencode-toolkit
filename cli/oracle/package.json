@@ -1,11 +1,11 @@
 {
-  "name": "@kealthas-dev/opencode-mcp-mysql",
+  "name": "@kealthas-dev/opencode-oracle-query",
   "version": "0.0.0",
   "type": "module",
-  "description": "Read-only SQL for the agent as a command, `opencode-mysql-query`, reading the statement from stdin and connecting straight to MySQL - see README.md for the design and the config.json-driven config",
+  "description": "Read-only SQL for the agent as a command, `opencode-oracle-query`, reading the statement from stdin and connecting straight to Oracle - see README.md for the design and the config.json-driven config",
   "main": "dist/cli.js",
   "bin": {
-    "opencode-mysql-query": "dist/cli.js"
+    "opencode-oracle-query": "dist/cli.js"
   },
   "files": [
     "dist"
@@ -16,17 +16,18 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Keal-thas/opencode-toolkit.git",
-    "directory": "mcp-servers/mysql"
+    "directory": "cli/oracle"
   },
   "scripts": {
     "build": "tsc",
-    "test": "tsx --test mysql.test.ts"
+    "test": "tsx --test oracle.test.ts"
   },
   "dependencies": {
-    "mysql2": "^3.11.0"
+    "oracledb": "^6.5.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/oracledb": "^6.5.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   }

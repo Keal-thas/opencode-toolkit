@@ -32,7 +32,7 @@ A query prints **one line of JSON per stream**, `{"stream":{...labels},"values":
 
 ## Configuration
 
-Read from a file, not environment variables, at a fixed location under `$HOME/.config/kealthas-dev/opencode-mcp-loki/`: `config.json` by default, or `config-<name>.json` with `LOKI_CONFIG_ENV=<name>`. Only a short name is taken from the environment, never a path. The file is read on every run, so editing it needs nothing restarted.
+Read from a file, not environment variables, at a fixed location under `$HOME/.config/kealthas-dev/opencode-loki-query/`: `config.json` by default, or `config-<name>.json` with `LOKI_CONFIG_ENV=<name>`. Only a short name is taken from the environment, never a path. The file is read on every run, so editing it needs nothing restarted.
 
 ```json
 {
@@ -51,7 +51,7 @@ Only `LOKI_BASE_URL` (no trailing path) is required: Loki is commonly reachable 
 
 ## Installing it
 
-Published as `@kealthas-dev/opencode-mcp-loki` (the name is part of the config path, so it keeps the `mcp` although there is no MCP any more). `npm install -g @kealthas-dev/opencode-mcp-loki` puts `opencode-loki-query` on `PATH`; then write the config file. See SETUP.md step 7.
+Published as `@kealthas-dev/opencode-loki-query`. `npm install -g @kealthas-dev/opencode-loki-query` puts `opencode-loki-query` on `PATH`; then write the config file. See SETUP.md step 7.
 
 ## Status
 

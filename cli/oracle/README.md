@@ -53,7 +53,7 @@ TO readonly;
 
 ## Configuration
 
-The connection settings are read from a file, not environment variables, at a fixed location under `$HOME/.config/kealthas-dev/opencode-mcp-oracle/`: `config.json` by default, or `config-<name>.json` with `ORACLE_CONFIG_ENV=<name>`. Only a short name is taken from the environment, never a path, so a shell that did not expand `~` cannot point the command at a wrong location. The file is read on every run, so editing it needs nothing restarted.
+The connection settings are read from a file, not environment variables, at a fixed location under `$HOME/.config/kealthas-dev/opencode-oracle-query/`: `config.json` by default, or `config-<name>.json` with `ORACLE_CONFIG_ENV=<name>`. Only a short name is taken from the environment, never a path, so a shell that did not expand `~` cannot point the command at a wrong location. The file is read on every run, so editing it needs nothing restarted.
 
 ```json
 {
@@ -67,7 +67,7 @@ The connection settings are read from a file, not environment variables, at a fi
 `ORACLE_CONNECT_STRING` is an Easy Connect string (`host:port/service_name`) or a full TNS descriptor. `ORACLE_DEFAULT_SCHEMA` is optional (exact case as Oracle stores it, normally uppercase): it sets the session's current schema, so the SQL can leave the schema prefix off. A missing or broken file makes the run fail with the path and the expected shape in the message. `config.example.json` shows the shape.
 
 ```text
-~/.config/kealthas-dev/opencode-mcp-oracle/
+~/.config/kealthas-dev/opencode-oracle-query/
 ├── config.json          # used when ORACLE_CONFIG_ENV is unset
 ├── config-prod.json     # ORACLE_CONFIG_ENV=prod
 └── config-dev.json      # ORACLE_CONFIG_ENV=dev
@@ -75,10 +75,10 @@ The connection settings are read from a file, not environment variables, at a fi
 
 ## Installing it
 
-Published as `@kealthas-dev/opencode-mcp-oracle` (the name is part of the config path, so it keeps the `mcp` in it although there is no MCP any more). Install it globally, which puts `opencode-oracle-query` on `PATH`, and write the config file. See SETUP.md step 6.
+Published as `@kealthas-dev/opencode-oracle-query`. Install it globally, which puts `opencode-oracle-query` on `PATH`, and write the config file. See SETUP.md step 6.
 
 ```bash
-npm install -g @kealthas-dev/opencode-mcp-oracle
+npm install -g @kealthas-dev/opencode-oracle-query
 echo 'SELECT 1 FROM dual' | ORACLE_CONFIG_ENV=prod opencode-oracle-query     # reads config-prod.json
 ```
 

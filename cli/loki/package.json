@@ -1,5 +1,5 @@
 {
-  "name": "@kealthas-dev/opencode-mcp-loki",
+  "name": "@kealthas-dev/opencode-loki-query",
   "version": "0.0.0",
   "type": "module",
   "description": "Loki log queries for the agent as a command, `opencode-loki-query`, reading the LogQL from stdin and connecting straight to Loki (or Grafana's datasource proxy) - see README.md for the design and the config.json-driven config",
@@ -16,7 +16,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Keal-thas/opencode-toolkit.git",
-    "directory": "mcp-servers/loki"
+    "directory": "cli/loki"
   },
   "scripts": {
     "build": "tsc",

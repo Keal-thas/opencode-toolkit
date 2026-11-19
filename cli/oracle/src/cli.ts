@@ -8,7 +8,7 @@ import oracledb from "oracledb";
 const EXIT_FAILURE = 1;
 
 const NAME = "opencode-oracle-query";
-const CONFIG_DIR = join(homedir(), ".config", "kealthas-dev", "opencode-mcp-oracle");
+const CONFIG_DIR = join(homedir(), ".config", "kealthas-dev", "opencode-oracle-query");
 
 // oracledb has no timeout of any kind by default (getConnection() can hang
 // forever against a host that accepts the TCP connection but never

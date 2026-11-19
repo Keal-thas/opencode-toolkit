@@ -162,10 +162,10 @@ Each opt-in plugin is just another entry in the same array — `"@kealthas-dev/o
 
 ## Steps 6, 7, 10, 12: the query commands
 
-Steps 6, 7, 10 and 12 (`oracle`, `loki`, `mysql`, `redis`) each install one command, published as a real npm package under `@kealthas-dev/opencode-mcp-<name>`. They are commands, not MCP servers: the agent runs them with `bash`, which lets it pipe, cut and redirect the output instead of taking every row into its context. So there is nothing to start and leave running, no port, and no `mcp` entry in `opencode.json`; `deploy/system-prompt.txt`'s `# Databases` section is what tells the model they exist. Each takes no arguments: the query goes on stdin, in a heredoc with a quoted delimiter.
+Steps 6, 7, 10 and 12 (`oracle`, `loki`, `mysql`, `redis`) each install one command, published as a real npm package under `@kealthas-dev/opencode-<name>-query`. They are commands, not MCP servers: the agent runs them with `bash`, which lets it pipe, cut and redirect the output instead of taking every row into its context. So there is nothing to start and leave running, no port, and no `mcp` entry in `opencode.json`; `deploy/system-prompt.txt`'s `# Databases` section is what tells the model they exist. Each takes no arguments: the query goes on stdin, in a heredoc with a quoted delimiter.
 
 1. Install globally via the internal npm registry (see this doc's intro for why that registry, not public npm, resolves this) — same mechanism that already makes the `opencode` command itself work on this machine. This puts the command on `PATH` (its name is in the table). If `npm install` unexpectedly fails, report it rather than working around by guessing at a substitute package or how to fix the environment.
-2. Each reads its connection settings from a file, not raw environment variables (see the relevant README's Configuration section). The file's *location* is fixed, not an arbitrary path: with no `<X>_CONFIG_ENV` env var set (see the table for the exact name) it is read from `~/.config/kealthas-dev/opencode-mcp-<name>/config.json`; setting `<X>_CONFIG_ENV=prod` reads `config-prod.json` instead, for multi-environment setups. It is read on every run, so editing it needs nothing restarted.
+2. Each reads its connection settings from a file, not raw environment variables (see the relevant README's Configuration section). The file's *location* is fixed, not an arbitrary path: with no `<X>_CONFIG_ENV` env var set (see the table for the exact name) it is read from `~/.config/kealthas-dev/opencode-<name>-query/config.json`; setting `<X>_CONFIG_ENV=prod` reads `config-prod.json` instead, for multi-environment setups. It is read on every run, so editing it needs nothing restarted.
 3. Create the config file yourself — **real values only, never guessed by an executing agent; ask the human running this.**
 4. Check the command with the one-liner in its step.
 5. Use an account that can only read. Every one of these runs the query as given, with at most a read-only transaction on top, so the account's own grants are the real boundary (Oracle and MySQL do not stop `CREATE`/`DROP` with the transaction alone; Redis has no guard but its ACL).
@@ -174,26 +174,26 @@ Per-command specifics:
 
 | | oracle (step 6) | loki (step 7) | mysql (step 10) | redis (step 12) |
 |---|---|---|---|---|
-| Package | `@kealthas-dev/opencode-mcp-oracle` | `@kealthas-dev/opencode-mcp-loki` | `@kealthas-dev/opencode-mcp-mysql` | `@kealthas-dev/opencode-mcp-redis` |
+| Package | `@kealthas-dev/opencode-oracle-query` | `@kealthas-dev/opencode-loki-query` | `@kealthas-dev/opencode-mysql-query` | `@kealthas-dev/opencode-redis-query` |
 | Command | `opencode-oracle-query` | `opencode-loki-query` | `opencode-mysql-query` | `opencode-redis-query` |
 | Prerequisites | none | none | none | none |
 | Config env var | `ORACLE_CONFIG_ENV` | `LOKI_CONFIG_ENV` | `MYSQL_CONFIG_ENV` | `REDIS_CONFIG_ENV` |
 | Config file keys | `ORACLE_CONNECT_STRING`, `ORACLE_USER`, `ORACLE_PASSWORD` (required); `ORACLE_DEFAULT_SCHEMA` (optional — sets the session's current schema, so the SQL can leave the schema prefix off) | `LOKI_BASE_URL` (required); `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` (optional, only if that instance requires them); `LOKI_VIA_GRAFANA`/`LOKI_GRAFANA_DATASOURCE_ID` (optional — set when Loki is only reachable through Grafana's own datasource proxy; see step 7) | `MYSQL_CONNECT_STRING` (required, a `mysql://` URI) | `REDIS_HOST` (required); `REDIS_PORT`, `REDIS_USERNAME`, `REDIS_PASSWORD`, `REDIS_DB`, `REDIS_TLS` (optional) |
-| Notes | read-only transaction on every query, but DDL still goes through — see `mcp-servers/oracle/README.md` | takes Loki's own query parameters (`--since`, `--start`, `--end`, `--limit`) — see `mcp-servers/loki/README.md` | read-only transaction on every query, but DDL still goes through — see `mcp-servers/mysql/README.md` | no guard of its own, the ACL account is the whole boundary — see `mcp-servers/redis/README.md` |
+| Notes | read-only transaction on every query, but DDL still goes through — see `cli/oracle/README.md` | takes Loki's own query parameters (`--since`, `--start`, `--end`, `--limit`) — see `cli/loki/README.md` | read-only transaction on every query, but DDL still goes through — see `cli/mysql/README.md` | no guard of its own, the ACL account is the whole boundary — see `cli/redis/README.md` |
 
 ## 6. Add the Oracle command
 
 Oracle is reached with a command, `opencode-oracle-query`, which reads the SQL from stdin, not an MCP tool: the agent runs it with `bash`, so it can pipe, cut and redirect the output instead of taking every row into its context. The command connects straight to Oracle, so there is nothing to start and leave running.
 
 ```bash
-npm install -g @kealthas-dev/opencode-mcp-oracle
+npm install -g @kealthas-dev/opencode-oracle-query
 ```
 
 This puts `opencode-oracle-query` on `PATH`. Create the config file with real values (see the shared pattern above):
 
 ```bash
-mkdir -p ~/.config/kealthas-dev/opencode-mcp-oracle
-cat > ~/.config/kealthas-dev/opencode-mcp-oracle/config.json <<'EOF'
+mkdir -p ~/.config/kealthas-dev/opencode-oracle-query
+cat > ~/.config/kealthas-dev/opencode-oracle-query/config.json <<'EOF'
 {
   "ORACLE_CONNECT_STRING": "...",
   "ORACLE_USER": "...",
@@ -212,21 +212,21 @@ SQL
 
 It should print `ONE` and `1`. Nothing goes into `opencode.json` for Oracle: there is no `mcp` entry, and `deploy/system-prompt.txt`'s `# Databases` section already tells the model about the command.
 
-Use an account that can only read: every query runs in a read-only transaction, which stops `INSERT`, `UPDATE` and `DELETE`, but not `CREATE`/`DROP`. `mcp-servers/oracle/README.md` has the recommended grants.
+Use an account that can only read: every query runs in a read-only transaction, which stops `INSERT`, `UPDATE` and `DELETE`, but not `CREATE`/`DROP`. `cli/oracle/README.md` has the recommended grants.
 
 ## 7. Add the Loki command
 
 Loki is reached with a command, `opencode-loki-query`, which reads the LogQL from stdin and asks Loki directly.
 
 ```bash
-npm install -g @kealthas-dev/opencode-mcp-loki
+npm install -g @kealthas-dev/opencode-loki-query
 ```
 
 This puts `opencode-loki-query` on `PATH`. Create the config file with real values (see the shared pattern above):
 
 ```bash
-mkdir -p ~/.config/kealthas-dev/opencode-mcp-loki
-cat > ~/.config/kealthas-dev/opencode-mcp-loki/config.json <<'EOF'
+mkdir -p ~/.config/kealthas-dev/opencode-loki-query
+cat > ~/.config/kealthas-dev/opencode-loki-query/config.json <<'EOF'
 {
   "LOKI_BASE_URL": "..."
 }
@@ -236,7 +236,7 @@ EOF
 **If Loki has no directly reachable port of its own and the only way in is Grafana's own datasource proxy** — check this first if the check below prints a redirect-to-login error instead of data — point `LOKI_BASE_URL` at Grafana's own URL instead of Loki's, and add `LOKI_VIA_GRAFANA`/`LOKI_GRAFANA_DATASOURCE_ID`/`LOKI_USERNAME`/`LOKI_PASSWORD` (a real Grafana user's Basic Auth, not a Loki credential):
 
 ```bash
-cat > ~/.config/kealthas-dev/opencode-mcp-loki/config.json <<'EOF'
+cat > ~/.config/kealthas-dev/opencode-loki-query/config.json <<'EOF'
 {
   "LOKI_BASE_URL": "http://<grafana-host>:3000",
   "LOKI_VIA_GRAFANA": true,
@@ -247,7 +247,7 @@ cat > ~/.config/kealthas-dev/opencode-mcp-loki/config.json <<'EOF'
 EOF
 ```
 
-See `mcp-servers/loki/README.md`'s Configuration section for the full field list and how to find the datasource ID.
+See `cli/loki/README.md`'s Configuration section for the full field list and how to find the datasource ID.
 
 Check it:
 
@@ -389,21 +389,21 @@ If port `8093` is taken, write `~/.config/kealthas-dev/opencode-mcp-spring-lsp/s
 MySQL is reached with a command, `opencode-mysql-query`, which reads the SQL from stdin and connects straight to MySQL.
 
 ```bash
-npm install -g @kealthas-dev/opencode-mcp-mysql
+npm install -g @kealthas-dev/opencode-mysql-query
 ```
 
 This puts `opencode-mysql-query` on `PATH`. Create the config file with real values (see the shared pattern above):
 
 ```bash
-mkdir -p ~/.config/kealthas-dev/opencode-mcp-mysql
-cat > ~/.config/kealthas-dev/opencode-mcp-mysql/config.json <<'EOF'
+mkdir -p ~/.config/kealthas-dev/opencode-mysql-query
+cat > ~/.config/kealthas-dev/opencode-mysql-query/config.json <<'EOF'
 {
   "MYSQL_CONNECT_STRING": "mysql://username:password@hostname:3306/database_name"
 }
 EOF
 ```
 
-**If the password has any of `@ : / ? #` or a space in it, percent-encode that character first** (e.g. a literal `@` becomes `%40`) — these are the URI's own delimiters, and an unencoded one gets parsed as part of the host instead of the password, failing in a confusing way rather than a clean auth error. See `mcp-servers/mysql/README.md`'s Configuration section.
+**If the password has any of `@ : / ? #` or a space in it, percent-encode that character first** (e.g. a literal `@` becomes `%40`) — these are the URI's own delimiters, and an unencoded one gets parsed as part of the host instead of the password, failing in a confusing way rather than a clean auth error. See `cli/mysql/README.md`'s Configuration section.
 
 Check it:
 
@@ -415,7 +415,7 @@ SQL
 
 It should print `one` and `1`. Nothing goes into `opencode.json` for MySQL: there is no `mcp` entry, and `deploy/system-prompt.txt`'s `# Databases` section already tells the model about the command.
 
-Before pointing this at a real database: every statement runs inside `START TRANSACTION READ ONLY`, which blocks `INSERT`/`UPDATE`/`DELETE` outright — but not `CREATE`/`DROP`/`ALTER` (DDL implicitly commits before running, escaping the transaction). If a hard guarantee against schema changes matters here, the connecting account also needs its `CREATE`/`DROP`/`ALTER`/`EXECUTE` grants removed — see `mcp-servers/mysql/README.md`'s "Recommended read-only account" section.
+Before pointing this at a real database: every statement runs inside `START TRANSACTION READ ONLY`, which blocks `INSERT`/`UPDATE`/`DELETE` outright — but not `CREATE`/`DROP`/`ALTER` (DDL implicitly commits before running, escaping the transaction). If a hard guarantee against schema changes matters here, the connecting account also needs its `CREATE`/`DROP`/`ALTER`/`EXECUTE` grants removed — see `cli/mysql/README.md`'s "Recommended read-only account" section.
 
 ## 11. Add the Memory MCP server
 
@@ -459,7 +459,7 @@ This knowledge graph will contain whatever the model decides is worth rememberin
 
 Redis is reached with a command, `opencode-redis-query`, which reads one Redis command from stdin and connects straight to Redis.
 
-**Create the dedicated read-only Redis account first** — the command has no guard of its own, the account it connects as is the actual safety boundary (see `mcp-servers/redis/README.md`):
+**Create the dedicated read-only Redis account first** — the command has no guard of its own, the account it connects as is the actual safety boundary (see `cli/redis/README.md`):
 
 ```
 ACL SETUSER readonlyuser on >mypassword ~* +@read -@write
@@ -468,14 +468,14 @@ ACL SETUSER readonlyuser on >mypassword ~* +@read -@write
 That account is refused `INFO`, `PING` and `CLIENT` too, which are not in `@read`; add `+info +ping` to the rule if you want the model to be able to run them.
 
 ```bash
-npm install -g @kealthas-dev/opencode-mcp-redis
+npm install -g @kealthas-dev/opencode-redis-query
 ```
 
 This puts `opencode-redis-query` on `PATH`. Create the config file with real values (see the shared pattern above):
 
 ```bash
-mkdir -p ~/.config/kealthas-dev/opencode-mcp-redis
-cat > ~/.config/kealthas-dev/opencode-mcp-redis/config.json <<'EOF'
+mkdir -p ~/.config/kealthas-dev/opencode-redis-query
+cat > ~/.config/kealthas-dev/opencode-redis-query/config.json <<'EOF'
 {
   "REDIS_HOST": "...",
   "REDIS_PORT": 6379,
@@ -515,7 +515,7 @@ If you installed any plugin (steps 4/5) and `opencode run` errors out instead, t
 
 ## 14. Cleanup (optional)
 
-`$SRC_DIR` (the extracted zip) and the original zip file can be deleted once `$CONFIG_DIR/system-prompt.txt` and the globally-installed `@kealthas-dev/opencode-mcp-oracle`/`@kealthas-dev/opencode-mcp-loki`/`@kealthas-dev/opencode-mcp-java-lsp`/`@kealthas-dev/opencode-mcp-spring-lsp`/`@kealthas-dev/opencode-mcp-mysql`/`@kealthas-dev/opencode-mcp-redis`/`@modelcontextprotocol/server-memory` (whichever of steps 6-12 were installed — nothing under `$SRC_DIR` to clean up for any of them, they're global installs, not copied-in source trees) are in place — those are the only files that matter going forward. Steps 4/5's plugins install themselves into `$CACHE_DIR/packages/<name>@latest/` the first time opencode runs with them configured — nothing under `$SRC_DIR` to clean up for those either. Step 12's redis-mcp-server isn't installed at all in the same sense — `uvx` caches it under its own directory (`uv cache dir`) and re-resolves `@latest` on every spawn — nothing under `$SRC_DIR` for that either. Ask the human running this before deleting anything, don't assume.
+`$SRC_DIR` (the extracted zip) and the original zip file can be deleted once `$CONFIG_DIR/system-prompt.txt` and the globally-installed `@kealthas-dev/opencode-oracle-query`/`@kealthas-dev/opencode-loki-query`/`@kealthas-dev/opencode-mcp-java-lsp`/`@kealthas-dev/opencode-mcp-spring-lsp`/`@kealthas-dev/opencode-mysql-query`/`@kealthas-dev/opencode-redis-query`/`@modelcontextprotocol/server-memory` (whichever of steps 6-12 were installed — nothing under `$SRC_DIR` to clean up for any of them, they're global installs, not copied-in source trees) are in place — those are the only files that matter going forward. Steps 4/5's plugins install themselves into `$CACHE_DIR/packages/<name>@latest/` the first time opencode runs with them configured — nothing under `$SRC_DIR` to clean up for those either. Step 12's redis-mcp-server isn't installed at all in the same sense — `uvx` caches it under its own directory (`uv cache dir`) and re-resolves `@latest` on every spawn — nothing under `$SRC_DIR` for that either. Ask the human running this before deleting anything, don't assume.
 
 ## Report back
 
@@ -534,7 +534,7 @@ All the packages share this repo's one version number and get bumped together on
 **Stop `java-lsp` and `spring-lsp` first, if they are running.** They are the only ones that stay running between uses: on Windows especially, `npm install -g` needs to remove/replace the old package's files, and a still-running `opencode-mcp-*` process holds those files locked — updating first and restarting after (the wrong order) fails with an `EPERM`/`rmdir` error, not a clean update. The four commands (`oracle`, `loki`, `mysql`, `redis`) have nothing running between uses and update in place. Then:
 
 ```bash
-npm install -g @kealthas-dev/opencode-mcp-oracle @kealthas-dev/opencode-mcp-loki @kealthas-dev/opencode-mcp-mysql @kealthas-dev/opencode-mcp-redis @kealthas-dev/opencode-mcp-java-lsp @kealthas-dev/opencode-mcp-spring-lsp
+npm install -g @kealthas-dev/opencode-oracle-query @kealthas-dev/opencode-loki-query @kealthas-dev/opencode-mysql-query @kealthas-dev/opencode-redis-query @kealthas-dev/opencode-mcp-java-lsp @kealthas-dev/opencode-mcp-spring-lsp
 ```
 
 Then re-run each of `java-lsp` and `spring-lsp`'s start commands from steps 8-9 to pick the update back up. If an `EPERM` happens anyway (a lock survives the killed process, or antivirus is holding the directory open), the leftover is at `%APPDATA%\npm\node_modules\@kealthas-dev\opencode-mcp-<name>` on Windows — delete that directory by hand, then re-run the `npm install -g` command above.

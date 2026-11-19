@@ -20,13 +20,13 @@ cat > /home/dev/.config/opencode/opencode.jsonc <<'EOF'
 EOF
 chown dev:dev /home/dev/.config/opencode/opencode.jsonc
 
-# mcp-servers/oracle/ reads its database connection from a fixed
-# config.json (no env var points at it - see mcp-servers/oracle/README.md's
+# cli/oracle/ reads its database connection from a fixed
+# config.json (no env var points at it - see cli/oracle/README.md's
 # Configuration section) - generate one from docker-compose.yml's
 # ORACLE_CONNECT_STRING/ORACLE_USER/ORACLE_PASSWORD so the opencode-oracle-query
 # command works inside this shell.
-mkdir -p /home/dev/.config/kealthas-dev/opencode-mcp-oracle
-cat > /home/dev/.config/kealthas-dev/opencode-mcp-oracle/config.json <<EOF
+mkdir -p /home/dev/.config/kealthas-dev/opencode-oracle-query
+cat > /home/dev/.config/kealthas-dev/opencode-oracle-query/config.json <<EOF
 {
   "ORACLE_CONNECT_STRING": "$ORACLE_CONNECT_STRING",
   "ORACLE_USER": "$ORACLE_USER",
@@ -34,22 +34,22 @@ cat > /home/dev/.config/kealthas-dev/opencode-mcp-oracle/config.json <<EOF
 }
 EOF
 
-# Same pattern for mcp-servers/loki/, generated from docker-compose.yml's
+# Same pattern for cli/loki/, generated from docker-compose.yml's
 # LOKI_BASE_URL.
-mkdir -p /home/dev/.config/kealthas-dev/opencode-mcp-loki
-cat > /home/dev/.config/kealthas-dev/opencode-mcp-loki/config.json <<EOF
+mkdir -p /home/dev/.config/kealthas-dev/opencode-loki-query
+cat > /home/dev/.config/kealthas-dev/opencode-loki-query/config.json <<EOF
 {
   "LOKI_BASE_URL": "$LOKI_BASE_URL"
 }
 EOF
 
-# Same pattern for mcp-servers/mysql/, generated from docker-compose.yml's
+# Same pattern for cli/mysql/, generated from docker-compose.yml's
 # MYSQL_HOST/MYSQL_USER/MYSQL_PASSWORD/MYSQL_DATABASE into the single
 # connect-string shape the server actually reads (see its README's
 # Configuration section) - these are throwaway sandbox fixtures with no
 # reserved URI characters, so no percent-encoding needed here.
-mkdir -p /home/dev/.config/kealthas-dev/opencode-mcp-mysql
-cat > /home/dev/.config/kealthas-dev/opencode-mcp-mysql/config.json <<EOF
+mkdir -p /home/dev/.config/kealthas-dev/opencode-mysql-query
+cat > /home/dev/.config/kealthas-dev/opencode-mysql-query/config.json <<EOF
 {
   "MYSQL_CONNECT_STRING": "mysql://$MYSQL_USER:$MYSQL_PASSWORD@$MYSQL_HOST:3306/$MYSQL_DATABASE"
 }

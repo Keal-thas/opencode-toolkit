@@ -16,10 +16,10 @@ After a merge to `master` lands: confirm `master` is synced with `origin/master`
 
 ## One shared version number for every package
 
-**Pushing a `v*` tag is the single release trigger for every published npm package in this repo** — the root package plus every plugin in [plugins/README.md](../plugins/README.md) and every server we wrote in [mcp-servers/README.md](../mcp-servers/README.md); the exact set is the `for dir in …` list in `release.yml`. `mcp-servers/redis`, `memory` and `playwright` wrap official upstream packages unmodified, so there is nothing of ours to publish. `release.yml` loops over all of them:
+**Pushing a `v*` tag is the single release trigger for every published npm package in this repo** — the root package plus every plugin in [plugins/README.md](../plugins/README.md) and every server we wrote in [mcp-servers/README.md](../mcp-servers/README.md) and every command in [cli/README.md](../cli/README.md); the exact set is the `for dir in …` list in `release.yml`. `memory` and `playwright` wrap official upstream packages unmodified, so there is nothing of ours to publish. `release.yml` loops over all of them:
 
 - sets each one's version from the tag (`npm pkg set version=...`), skipping any already published at that exact version so an accidental workflow re-run can't fail on packages that already went out
-- builds it first if its `package.json` has a `build` script (every `mcp-servers/*` package in the loop — `npm ci && npm run build` before `npm publish`, since the published tarball is `dist/` [+ `vendor/*.tar.gz` for `java-lsp`/`spring-lsp`], not source)
+- builds it first if its `package.json` has a `build` script (every `mcp-servers/*` and `cli/*` package in the loop — `npm ci && npm run build` before `npm publish`, since the published tarball is `dist/` [+ `vendor/*.tar.gz` for `java-lsp`/`spring-lsp`], not source)
 - publishes via npm Trusted Publishing (OIDC, `id-token: write`, no stored token)
 
 None of the individual `package.json` `version` fields are meaningful on their own — Franco decided against independent per-package versioning (bumping only the packages that actually changed) specifically to avoid tracking N different version numbers across N files. A release bumps every package together, even ones with no code change, which is the accepted tradeoff.

@@ -36,14 +36,14 @@ jobs:
           # only source of truth (see docs/npm-publishing.md). The "already
           # published?" check makes a workflow re-run for the same tag safe
           # (e.g. after the release step below fails transiently).
-          for dir in . plugins/hook-logger plugins/gitbash-edit-path-fix plugins/llm-review-gate plugins/loop-guard plugins/path-guard mcp-servers/oracle mcp-servers/loki mcp-servers/java-lsp mcp-servers/spring-lsp mcp-servers/mysql mcp-servers/redis; do
+          for dir in . plugins/hook-logger plugins/gitbash-edit-path-fix plugins/llm-review-gate plugins/loop-guard plugins/path-guard mcp-servers/java-lsp mcp-servers/spring-lsp cli/oracle cli/loki cli/mysql cli/redis; do
             name=$(node -p "require('./$dir/package.json').name")
             if npm view "$name@$VERSION" version >/dev/null 2>&1; then
               echo "$name@$VERSION already published, skipping"
               continue
             fi
             # A package with a "build" script publishes compiled output
-            # (e.g. mcp-servers/oracle's dist/, see its package.json's
+            # (e.g. cli/oracle's dist/, see its package.json's
             # "files" field), not its TypeScript source directly - build it
             # before packing the tarball. Packages with no "build" script
             # (plain JS/loaded-as-TS, everything else here) skip this.

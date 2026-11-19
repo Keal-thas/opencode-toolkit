@@ -30,7 +30,7 @@ Because DDL gets past the transaction, give the connecting account read access o
 
 ## Configuration
 
-Read from a file, not environment variables, at a fixed location under `$HOME/.config/kealthas-dev/opencode-mcp-mysql/`: `config.json` by default, or `config-<name>.json` with `MYSQL_CONFIG_ENV=<name>`. Only a short name is taken from the environment, never a path. The file is read on every run, so editing it needs nothing restarted.
+Read from a file, not environment variables, at a fixed location under `$HOME/.config/kealthas-dev/opencode-mysql-query/`: `config.json` by default, or `config-<name>.json` with `MYSQL_CONFIG_ENV=<name>`. Only a short name is taken from the environment, never a path. The file is read on every run, so editing it needs nothing restarted.
 
 ```json
 {
@@ -42,7 +42,7 @@ The connect string is a URI; its database is the default one, and other database
 
 ## Installing it
 
-Published as `@kealthas-dev/opencode-mcp-mysql` (the name is part of the config path, so it keeps the `mcp` although there is no MCP any more). `npm install -g @kealthas-dev/opencode-mcp-mysql` puts `opencode-mysql-query` on `PATH`; then write the config file. See SETUP.md step 10.
+Published as `@kealthas-dev/opencode-mysql-query`. `npm install -g @kealthas-dev/opencode-mysql-query` puts `opencode-mysql-query` on `PATH`; then write the config file. See SETUP.md step 10.
 
 ## Status
 

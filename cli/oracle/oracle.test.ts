@@ -34,7 +34,7 @@ for (const key of ["ORACLE_CONNECT_STRING", "ORACLE_USER", "ORACLE_PASSWORD"]) {
 // Written to the default config.json location - ORACLE_CONFIG_ENV only takes a bare name, never a path.
 function createFakeHome(overrides?: Record<string, string>): { home: string; configPath: string } {
   const home = mkdtempSync(join(tmpdir(), "oracle-test-"));
-  const configDir = join(home, ".config", "kealthas-dev", "opencode-mcp-oracle");
+  const configDir = join(home, ".config", "kealthas-dev", "opencode-oracle-query");
   mkdirSync(configDir, { recursive: true });
   const configPath = join(configDir, "config.json");
   writeFileSync(
