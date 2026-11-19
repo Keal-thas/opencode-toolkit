@@ -43,7 +43,7 @@ function buildConnectString(overrides?: { password?: string }): string {
 // Written to the default config.json location - MYSQL_CONFIG_ENV only takes a bare name, never a path.
 function createFakeHome(connectString: string = buildConnectString()): { home: string; configPath: string } {
   const home = mkdtempSync(join(tmpdir(), "mysql-test-"));
-  const configDir = join(home, ".config", "kealthas-dev", "opencode-mcp-mysql");
+  const configDir = join(home, ".config", "kealthas-dev", "opencode-mysql-query");
   mkdirSync(configDir, { recursive: true });
   const configPath = join(configDir, "config.json");
   writeFileSync(configPath, JSON.stringify({ MYSQL_CONNECT_STRING: connectString }));

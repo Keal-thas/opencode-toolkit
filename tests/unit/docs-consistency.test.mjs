@@ -54,7 +54,7 @@ test("every relative markdown link in the repo's own docs resolves", () => {
   assert.deepEqual(broken, []);
 });
 
-for (const parent of ["plugins", "mcp-servers"]) {
+for (const parent of ["plugins", "mcp-servers", "cli"]) {
   test(`${parent}/README.md lists exactly the directories under ${parent}/, each with its own README`, () => {
     const listed = tableRows(`${parent}/README.md`).map((r) => rowName(r[0])).sort();
     assert.deepEqual(listed, subdirs(parent));
@@ -85,6 +85,16 @@ test("every mcp-servers directory with its own code is in release.yml's package 
   for (const row of tableRows("mcp-servers/README.md")) {
     const name = rowName(row[0]);
     assert.equal(published.has(`mcp-servers/${name}`), row[2] === "ours", `mcp-servers/${name}: code is "${row[2]}"`);
+  }
+});
+
+test("every cli directory is in release.yml's package loop, and no cli command is wired as an MCP server", () => {
+  const published = new Set(publishedDirs());
+  const raw = read("deploy/opencode.jsonc.example");
+  const config = JSON.parse(raw.replace(/^\s*\/\/.*$/gm, ""));
+  for (const name of subdirs("cli")) {
+    assert.ok(published.has(`cli/${name}`), `cli/${name} is not in release.yml's loop`);
+    assert.equal(config.mcp?.[name], undefined, `mcp.${name} should not exist: it is a command`);
   }
 });
 

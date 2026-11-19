@@ -27,7 +27,7 @@ const REDIS_PORT = Number(process.env.REDIS_PORT ?? "6379");
 // Written to the default config.json location - REDIS_CONFIG_ENV only takes a bare name, never a path.
 function createFakeHome(overrides?: Record<string, unknown>): { home: string; configPath: string } {
   const home = mkdtempSync(join(tmpdir(), "redis-test-"));
-  const configDir = join(home, ".config", "kealthas-dev", "opencode-mcp-redis");
+  const configDir = join(home, ".config", "kealthas-dev", "opencode-redis-query");
   mkdirSync(configDir, { recursive: true });
   const configPath = join(configDir, "config.json");
   writeFileSync(

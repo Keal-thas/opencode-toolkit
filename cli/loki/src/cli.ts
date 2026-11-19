@@ -7,7 +7,7 @@ import { join } from "node:path";
 const EXIT_FAILURE = 1;
 
 const NAME = "opencode-loki-query";
-const CONFIG_DIR = join(homedir(), ".config", "kealthas-dev", "opencode-mcp-loki");
+const CONFIG_DIR = join(homedir(), ".config", "kealthas-dev", "opencode-loki-query");
 
 // fetch() has no timeout by default - without this, a Loki/Grafana host
 // that accepts the TCP connection but never responds (e.g. stuck behind a

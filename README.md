@@ -15,6 +15,7 @@ The target machine is Windows + git-bash with no internet. The repo is downloade
 | `deploy/` | The deployment payload: prompt override, full `opencode.jsonc.example` (incl. MCP wiring), offline models catalog snapshot |
 | `plugins/` | opencode plugins, one npm package each — the list is in [plugins/README.md](plugins/README.md) |
 | `mcp-servers/` | MCP servers — the list is in [mcp-servers/README.md](mcp-servers/README.md) |
+| `cli/` | Commands the agent runs with `bash` to reach Oracle, Loki, MySQL and Redis — the list is in [cli/README.md](cli/README.md) |
 | `docker/` | Local sandbox for exercising the prompt, plugins and servers against a real opencode install without touching your own config — [docker/notes.md](docker/notes.md) |
 | `tests/` | `./tests/run-all.sh` is the entry point — [tests/README.md](tests/README.md) |
 | `docs/` | Reference notes, design notes, lessons learned, and a local mirror of opencode's own docs; [docs/generated-files.md](docs/generated-files.md) lists every generated or vendored file |

@@ -42,19 +42,19 @@ node tests/integration/verifier-agent.test.mjs
 
 echo
 echo "== oracle command integration test (real Oracle instance) =="
-# mcp-servers/oracle/ is its own npm package - its test lives alongside it (not
+# cli/oracle/ is its own npm package - its test lives alongside it (not
 # under tests/) so Node's module resolution finds its node_modules. It's
 # written in TypeScript (see its README's Design section), so the test needs
 # a build (dist/server.js) before it can spawn the compiled server.
-(cd mcp-servers/oracle && npm install --no-audit --no-fund && npm run build && npm test)
+(cd cli/oracle && npm install --no-audit --no-fund && npm run build && npm test)
 
 echo
 echo "== loki command integration test (real Loki instance) =="
-(cd mcp-servers/loki && npm install --no-audit --no-fund && npm run build && npm test)
+(cd cli/loki && npm install --no-audit --no-fund && npm run build && npm test)
 
 echo
 echo "== mysql command integration test (real MySQL instance) =="
-(cd mcp-servers/mysql && npm install --no-audit --no-fund && npm run build && npm test)
+(cd cli/mysql && npm install --no-audit --no-fund && npm run build && npm test)
 
 echo
 echo "== memory MCP server integration test (official @modelcontextprotocol/server-memory package) =="
@@ -62,7 +62,7 @@ echo "== memory MCP server integration test (official @modelcontextprotocol/serv
 
 echo
 echo "== redis command integration test (real Redis instance) =="
-(cd mcp-servers/redis && npm install --no-audit --no-fund && npm run build && npm test)
+(cd cli/redis && npm install --no-audit --no-fund && npm run build && npm test)
 
 echo
 echo "== playwright MCP server integration test (official @playwright/mcp package, real headless Chromium) =="

@@ -43,7 +43,7 @@ ORACLE_JSON="$(docker run --rm \
   -e ORACLE_CONNECT_STRING="oracle-test-host:1521/TESTPDB" \
   -e ORACLE_USER="oracle_test_user" \
   -e ORACLE_PASSWORD="oracle_test_pw" \
-  "$IMAGE" cat /home/dev/.config/kealthas-dev/opencode-mcp-oracle/config.json)"
+  "$IMAGE" cat /home/dev/.config/kealthas-dev/opencode-oracle-query/config.json)"
 check_json "oracle config.json matches ORACLE_CONNECT_STRING/USER/PASSWORD" "$ORACLE_JSON" "{
     'ORACLE_CONNECT_STRING': 'oracle-test-host:1521/TESTPDB',
     'ORACLE_USER': 'oracle_test_user',
@@ -52,7 +52,7 @@ check_json "oracle config.json matches ORACLE_CONNECT_STRING/USER/PASSWORD" "$OR
 
 LOKI_JSON="$(docker run --rm \
   -e LOKI_BASE_URL="http://loki-test-host:3100" \
-  "$IMAGE" cat /home/dev/.config/kealthas-dev/opencode-mcp-loki/config.json)"
+  "$IMAGE" cat /home/dev/.config/kealthas-dev/opencode-loki-query/config.json)"
 check_json "loki config.json matches LOKI_BASE_URL" "$LOKI_JSON" "{'LOKI_BASE_URL': 'http://loki-test-host:3100'}"
 
 MYSQL_JSON="$(docker run --rm \
@@ -60,7 +60,7 @@ MYSQL_JSON="$(docker run --rm \
   -e MYSQL_USER="mysql_test_user" \
   -e MYSQL_PASSWORD="mysql_test_pw" \
   -e MYSQL_DATABASE="mysql_test_db" \
-  "$IMAGE" cat /home/dev/.config/kealthas-dev/opencode-mcp-mysql/config.json)"
+  "$IMAGE" cat /home/dev/.config/kealthas-dev/opencode-mysql-query/config.json)"
 check_json "mysql config.json assembles the right MYSQL_CONNECT_STRING" "$MYSQL_JSON" \
   "{'MYSQL_CONNECT_STRING': 'mysql://mysql_test_user:mysql_test_pw@mysql-test-host:3306/mysql_test_db'}"
 

@@ -33,7 +33,7 @@ if (!process.env.LOKI_BASE_URL) {
 // Written to the default config.json location - LOKI_CONFIG_ENV only takes a bare name, never a path.
 function createFakeHome(config?: Record<string, unknown>): { home: string; configPath: string } {
   const home = mkdtempSync(join(tmpdir(), "loki-test-"));
-  const configDir = join(home, ".config", "kealthas-dev", "opencode-mcp-loki");
+  const configDir = join(home, ".config", "kealthas-dev", "opencode-loki-query");
   mkdirSync(configDir, { recursive: true });
   const configPath = join(configDir, "config.json");
   writeFileSync(

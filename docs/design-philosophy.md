@@ -48,7 +48,7 @@ Every unit that needs to be independently installable by some other mechanism ge
 
 ## Duplication across independent packages is cheaper than coupling them
 
-Each independently-published package (`plugins/*`, `mcp-servers/*`) stays self-contained, even where that means duplicating a handful of small, boring, mechanical functions (config loading, HTTP wiring) byte-for-byte across packages. A shared internal package to remove that duplication would add a coupling/versioning surface — import wiring, an extra publish step — that costs more than the duplication it would save, and it would work against the same installability boundary described above.
+Each independently-published package (`plugins/*`, `mcp-servers/*`, `cli/*`) stays self-contained, even where that means duplicating a handful of small, boring, mechanical functions (config loading, HTTP wiring) byte-for-byte across packages. A shared internal package to remove that duplication would add a coupling/versioning surface — import wiring, an extra publish step — that costs more than the duplication it would save, and it would work against the same installability boundary described above.
 
 ## The offline target machine is a root constraint, not a series of unrelated decisions
 

@@ -1,10 +1,10 @@
 # playwright mcp server
 
-No server code in this directory, same stance as `mcp-servers/redis/` — this is the official [`@playwright/mcp`](https://github.com/microsoft/playwright-mcp) package, used unmodified. This directory just holds the deployment notes. See `mcp-servers/TODO.md`'s Playwright entry for the discussion this README distills.
+No server code in this directory, same stance as `cli/redis/` — this is the official [`@playwright/mcp`](https://github.com/microsoft/playwright-mcp) package, used unmodified. This directory just holds the deployment notes. See `mcp-servers/TODO.md`'s Playwright entry for the discussion this README distills.
 
 ## Why the official package, not a hand-rolled one
 
-Browser automation isn't a small, generic surface like `mcp-servers/mysql/`'s one passthrough SQL tool — it's ~90 tools across navigation, input, network mocking, storage, tracing, and vision-based interaction (see `@playwright/mcp`'s own README for the full list). Hand-rolling and re-verifying that would be a lot of surface for no benefit over the maintained upstream package.
+Browser automation isn't a small, generic surface like `cli/mysql/`'s one passthrough SQL tool — it's ~90 tools across navigation, input, network mocking, storage, tracing, and vision-based interaction (see `@playwright/mcp`'s own README for the full list). Hand-rolling and re-verifying that would be a lot of surface for no benefit over the maintained upstream package.
 
 ## Install
 
@@ -32,7 +32,7 @@ If a target machine has neither Edge nor Chrome and the CDN is unreachable, the 
 
 `@playwright/mcp` has no built-in "read-only mode" flag — all capability groups (`--caps=core,tabs,config,network,storage,devtools,vision,pdf,testing`) stay enabled, and the read/write split is enforced one layer up, in opencode's own `permission` config, matched against the tool names directly (wildcard patterns work the same for MCP tools as built-ins — `docs/opencode-docs-reference/agents.mdx`'s note on this). Read-only tools (snapshot, screenshot, console messages, find, get_config, network reads, route_list, cookie/storage reads, storage_state, pdf_save, generate_locator) are `allow`; everything else — navigation, clicks, typing, `evaluate`/`run_code_unsafe`, form fills, cookie/storage writes, tabs — falls through to a trailing `"playwright_*": "ask"` catch-all. Rule order matters: opencode uses last-matching-rule-wins, so the specific `allow` entries have to come before the catch-all, not after.
 
-This mirrors `mcp-servers/redis/`'s "the safety boundary lives one layer below the tool surface, not in the package itself" shape — there it's a Redis ACL user, here it's the opencode permission config — just with opencode itself as that layer instead of the target system, since there's no ACL concept to borrow from a browser.
+This mirrors `cli/redis/`'s "the safety boundary lives one layer below the tool surface, not in the package itself" shape — there it's a Redis ACL user, here it's the opencode permission config — just with opencode itself as that layer instead of the target system, since there's no ACL concept to borrow from a browser.
 
 ## Other launch flags decided
 

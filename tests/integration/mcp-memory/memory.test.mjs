@@ -18,7 +18,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 const here = dirname(fileURLToPath(import.meta.url));
 // Resolved directly rather than via the `mcp-server-memory` bin shim -
-// same reasoning as mcp-servers/oracle's test spawning `node server.js` directly:
+// same reasoning as cli/oracle's test spawning `node server.js` directly:
 // one less layer of indirection to go wrong.
 const serverEntry = join(here, "node_modules", "@modelcontextprotocol", "server-memory", "dist", "index.js");
 

@@ -1,11 +1,11 @@
 {
-  "name": "@kealthas-dev/opencode-mcp-oracle",
+  "name": "@kealthas-dev/opencode-redis-query",
   "version": "0.0.0",
   "type": "module",
-  "description": "Read-only SQL for the agent as a command, `opencode-oracle-query \"<sql>\"`, connecting straight to Oracle - see README.md for the design and the config.json-driven config",
+  "description": "Redis for the agent as a command, `opencode-redis-query`, reading one Redis command from stdin and connecting straight to Redis - see README.md for the design and the config.json-driven config",
   "main": "dist/cli.js",
   "bin": {
-    "opencode-oracle-query": "dist/cli.js"
+    "opencode-redis-query": "dist/cli.js"
   },
   "files": [
     "dist"
@@ -16,18 +16,17 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Keal-thas/opencode-toolkit.git",
-    "directory": "mcp-servers/oracle"
+    "directory": "cli/redis"
   },
   "scripts": {
     "build": "tsc",
-    "test": "tsx --test oracle.test.ts"
+    "test": "tsx --test redis.test.ts"
   },
   "dependencies": {
-    "oracledb": "^6.5.0"
+    "redis": "^4.7.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "@types/oracledb": "^6.5.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   }

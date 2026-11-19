@@ -36,7 +36,7 @@ Checked against a real Redis 7: this lets `GET`, `KEYS`, `SCAN`, `HGETALL` throu
 
 ## Configuration
 
-Read from a file, not environment variables, at a fixed location under `$HOME/.config/kealthas-dev/opencode-mcp-redis/`: `config.json` by default, or `config-<name>.json` with `REDIS_CONFIG_ENV=<name>`. Only a short name is taken from the environment, never a path. The file is read on every run, so editing it needs nothing restarted.
+Read from a file, not environment variables, at a fixed location under `$HOME/.config/kealthas-dev/opencode-redis-query/`: `config.json` by default, or `config-<name>.json` with `REDIS_CONFIG_ENV=<name>`. Only a short name is taken from the environment, never a path. The file is read on every run, so editing it needs nothing restarted.
 
 ```json
 {
@@ -53,7 +53,7 @@ Only `REDIS_HOST` is required; the port defaults to 6379. `config.example.json` 
 
 ## Installing it
 
-Published as `@kealthas-dev/opencode-mcp-redis` (the name is part of the config path, so it keeps the `mcp` although there is no MCP any more). `npm install -g @kealthas-dev/opencode-mcp-redis` puts `opencode-redis-query` on `PATH`; then create the account and write the config file. See SETUP.md step 12.
+Published as `@kealthas-dev/opencode-redis-query`. `npm install -g @kealthas-dev/opencode-redis-query` puts `opencode-redis-query` on `PATH`; then create the account and write the config file. See SETUP.md step 12.
 
 ## Status
 
