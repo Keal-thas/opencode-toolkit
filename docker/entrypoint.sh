@@ -23,10 +23,8 @@ chown dev:dev /home/dev/.config/opencode/opencode.jsonc
 # mcp-servers/oracle/ reads its database connection from a fixed
 # config.json (no env var points at it - see mcp-servers/oracle/README.md's
 # Configuration section) - generate one from docker-compose.yml's
-# ORACLE_CONNECT_STRING/ORACLE_USER/ORACLE_PASSWORD so
-# `cd mcp-servers/oracle && npm install && npm run build && npm start`
-# still works with zero manual setup, matching a real deployment's
-# file-based config rather than passing those three straight through.
+# ORACLE_CONNECT_STRING/ORACLE_USER/ORACLE_PASSWORD so the opencode-oracle-query
+# command works inside this shell.
 mkdir -p /home/dev/.config/kealthas-dev/opencode-mcp-oracle
 cat > /home/dev/.config/kealthas-dev/opencode-mcp-oracle/config.json <<EOF
 {
