@@ -4,14 +4,6 @@ FROM node:22-bookworm
 # Always the newest opencode; the compose file builds this image with no_cache so a rebuild picks up a new release.
 RUN npm install -g opencode-ai@latest
 
-# uv/uvx - self-contained (Rust binary, no python dependency for the
-# installer itself; uvx manages its own Python toolchain on demand).
-# Needed to run the official upstream redis-mcp-server package the way a
-# real deployment would (mcp-servers/redis/ uses it unmodified rather than
-# vendoring - see mcp-servers/redis/README.md), so its integration test can
-# spawn the real thing instead of staying manual-only.
-RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
-
 # @playwright/mcp + a real headless Chromium, installed the same way
 # mcp-servers/playwright/README.md documents for a real deployment
 # (global npm install), so the sandbox can spawn the real official

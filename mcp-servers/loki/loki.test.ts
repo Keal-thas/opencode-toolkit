@@ -1,39 +1,27 @@
 // Requires a live Loki instance reachable via LOKI_BASE_URL - the docker/
-// sandbox's `loki` compose service (see notes.md's "Loki test
-// instance" section), a shared fixture started separately (see
-// tests/README.md for the current bring-up precondition). Not mockable:
-// exercises the real Loki HTTP query API round-trip. Lives here (not under
-// tests/) so Node's module resolution finds this package's own node_modules -
-// run via `npm run build && npx tsx --test mcp-servers/loki/loki.test.ts`
-// after `npm install` here (see tests/run-in-container.sh); tsx rather than
-// compiled since a test file isn't published.
+// sandbox's `loki` compose service (see notes.md's "Loki test instance"
+// section), a shared fixture started separately. Not mockable: exercises the
+// real Loki HTTP query API round-trip. Lives here (not under tests/) so Node's
+// module resolution finds this package's own node_modules - run via
+// `npm run build && npm test` after `npm install` here (see
+// tests/run-in-container.sh); tsx rather than compiled since a test file isn't
+// published.
 //
-// server.ts is a persistent HTTP server (opencode connects as type: "remote",
-// doesn't spawn it - see README's Design section), config-file-driven (see
-// its Configuration section, and oracle.test.ts for the same fake-$HOME
-// pattern this test reuses). Spawns the built dist/server.js itself, gives it
-// its own fake $HOME so it never shares config with a real server in the same
-// container, then drives it over real Streamable HTTP once it logs "listening".
-//
-// This server's tools are read-only, so unlike oracle.test.ts's CREATE
-// TABLE/INSERT there's no MCP tool to seed test data - this test pushes log
-// lines straight to Loki's push API instead, independent of the MCP server,
-// then reads them back through the tools.
+// The package is one command, dist/cli.js, that talks straight to Loki. Each test runs it the way an agent
+// would, with its own fake $HOME holding a config file (os.homedir() reads $HOME at call time, so the command
+// needs no test-only escape hatch). Test data is pushed to Loki's push API, independent of the command.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn, type ChildProcess } from "node:child_process";
+import { execFile } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const DIST_SERVER_PATH = join(here, "dist", "server.js");
-const READY_TIMEOUT_MS = 15_000;
+const CLI = join(here, "dist", "cli.js");
 
 if (!process.env.LOKI_BASE_URL) {
   throw new Error(
@@ -42,19 +30,16 @@ if (!process.env.LOKI_BASE_URL) {
   );
 }
 
-function startServer(port: number, configOverrides?: Record<string, unknown>): Promise<ChildProcess> {
-  const home = mkdtempSync(join(tmpdir(), "loki-mcp-test-"));
+// Written to the default config.json location - LOKI_CONFIG_ENV only takes a bare name, never a path.
+function createFakeHome(config?: Record<string, unknown>): { home: string; configPath: string } {
+  const home = mkdtempSync(join(tmpdir(), "loki-test-"));
   const configDir = join(home, ".config", "kealthas-dev", "opencode-mcp-loki");
   mkdirSync(configDir, { recursive: true });
-  writeFileSync(join(configDir, "server.json"), JSON.stringify({ LOKI_MCP_PORT: port }));
-
-  // Written straight to the default config.json location (not pointed at via
-  // an env var) - LOKI_CONFIG_ENV only takes a bare name, never a path, so
-  // there's nothing for this test to point at beyond that fixed default.
+  const configPath = join(configDir, "config.json");
   writeFileSync(
-    join(configDir, "config.json"),
+    configPath,
     JSON.stringify(
-      configOverrides ?? {
+      config ?? {
         LOKI_BASE_URL: process.env.LOKI_BASE_URL,
         LOKI_USERNAME: process.env.LOKI_USERNAME,
         LOKI_PASSWORD: process.env.LOKI_PASSWORD,
@@ -62,181 +47,205 @@ function startServer(port: number, configOverrides?: Record<string, unknown>): P
       },
     ),
   );
+  return { home, configPath };
+}
 
-  // os.homedir() reads USERPROFILE on Windows, HOME elsewhere.
+const good = createFakeHome();
+
+interface CliResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+// os.homedir() reads USERPROFILE on Windows, HOME elsewhere. stdin is closed at once when there is nothing
+// to send, so a run that would read it does not wait.
+function runWithStdin(home: string, stdin: string | undefined, ...args: string[]): Promise<CliResult> {
   const env = { ...process.env, HOME: home, USERPROFILE: home };
   delete env.LOKI_CONFIG_ENV;
-
-  return new Promise((resolve, reject) => {
-    const child = spawn("node", [DIST_SERVER_PATH], { env });
-
-    const timeout = setTimeout(() => {
-      child.kill();
-      reject(new Error("server did not report listening within the timeout"));
-    }, READY_TIMEOUT_MS);
-
-    let stderr = "";
-    child.stderr!.on("data", (chunk) => {
-      stderr += chunk;
-      if (stderr.includes("listening on")) {
-        clearTimeout(timeout);
-        resolve(child);
-      }
+  return new Promise((resolve) => {
+    const child = execFile("node", [CLI, ...args], { env, maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
+      resolve({ code: err ? ((err as NodeJS.ErrnoException & { code?: number }).code as number) : 0, stdout, stderr });
     });
-    child.on("exit", (code) => {
-      clearTimeout(timeout);
-      reject(new Error(`server exited early (code ${code}) before listening - stderr:\n${stderr}`));
-    });
+    child.stdin!.end(stdin ?? "");
   });
 }
+const query = (logql: string, ...args: string[]) => runWithStdin(good.home, logql, ...args);
 
-async function stopServer(child: ChildProcess): Promise<void> {
-  child.removeAllListeners("exit");
-  child.kill();
-  await new Promise((resolve) => child.once("exit", resolve));
-}
+// A fresh label value per run, not fixed - this Loki instance is a shared fixture, so a fixed value could
+// collide with a concurrent test run.
+const app = `loki_test_${Date.now()}`;
+const line1 = `hello from the loki test ${Date.now()}`;
+const line2 = `price is a$b and \`ticks\` and back\\slash ${Date.now()}`;
 
-// A fresh label value per run, not fixed - this Loki instance is a shared
-// fixture, so a fixed value could collide with a concurrent test run (same
-// reason oracle.test.ts uses a dynamic table name).
-const testAppLabel = `loki_mcp_test_${Date.now()}`;
-const testLogLine = `hello from loki mcp test ${Date.now()}`;
-const windowStartNs = String((Date.now() - 5 * 60_000) * 1_000_000);
-const windowEndNs = String((Date.now() + 5 * 60_000) * 1_000_000);
-
-async function pushTestLogLine(): Promise<void> {
-  const nowNs = String(Date.now() * 1_000_000);
+before(async () => {
+  const nowNs = BigInt(Date.now()) * 1_000_000n;
   const response = await fetch(new URL("/loki/api/v1/push", process.env.LOKI_BASE_URL), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      streams: [
-        {
-          stream: { app: testAppLabel, source: "loki-mcp-test" },
-          values: [[nowNs, testLogLine]],
-        },
-      ],
+      streams: [{ stream: { app, source: "loki-test" }, values: [[String(nowNs), line1], [String(nowNs + 1_000n), line2]] }],
     }),
   });
-  if (!response.ok) {
-    throw new Error(`Seeding Loki failed: ${response.status} ${await response.text()}`);
-  }
-}
-
-let serverProcess: ChildProcess;
-let serverPort: number;
-let client: Client;
-
-before(async () => {
-  await pushTestLogLine();
-
-  serverPort = 8235;
-  serverProcess = await startServer(serverPort);
-  const transport = new StreamableHTTPClientTransport(new URL(`http://localhost:${serverPort}/mcp`));
-  client = new Client({ name: "loki-mcp-test", version: "1.0.0" }, { capabilities: {} });
-  await client.connect(transport);
+  if (!response.ok) throw new Error(`Seeding Loki failed: ${response.status} ${await response.text()}`);
 });
 
-after(async () => {
-  await client?.close();
-  if (serverProcess) await stopServer(serverProcess);
+// One JSON object per stream; the entries inside are [ns timestamp, line].
+const entries = (stdout: string): string[] =>
+  stdout.trim().split("\n").filter(Boolean).flatMap((l) => (JSON.parse(l).values as [string, string][]).map(([, text]) => text));
+
+test("a query prints one line of JSON per stream, with the log lines in it", async () => {
+  const r = await query(`{app="${app}"}`, "--since", "1h");
+  assert.equal(r.code, 0, r.stderr);
+  const streams = r.stdout.trim().split("\n").map((l) => JSON.parse(l));
+  assert.equal(streams.length, 1);
+  assert.equal(streams[0].stream.app, app);
+  assert.deepEqual(entries(r.stdout).sort(), [line1, line2].sort());
+  assert.doesNotMatch(r.stdout, /"stats"|"status"/, "only the result, not Loki's envelope or statistics");
 });
 
-async function callTool(name: string, args: Record<string, unknown>): Promise<any> {
-  const result = await client.callTool({ name, arguments: args });
-  const content = result.content as Array<{ type: string; text: string }>;
-  return JSON.parse(content[0].text);
-}
+test("--start and --end are passed through as given", async () => {
+  const start = new Date(Date.now() - 5 * 60_000).toISOString();
+  const end = new Date(Date.now() + 5 * 60_000).toISOString();
+  const inside = await query(`{app="${app}"}`, "--start", start, "--end", end);
+  assert.equal(inside.code, 0, inside.stderr);
+  assert.equal(entries(inside.stdout).length, 2);
 
-test("lists exactly the three loki tools", async () => {
-  const { tools } = await client.listTools();
-  assert.deepEqual(
-    tools.map((t) => t.name).sort(),
-    ["loki_label_values", "loki_labels", "loki_query_range"],
+  const past = await query(`{app="${app}"}`, "--start", new Date(Date.now() - 3 * 3_600_000).toISOString(), "--end", new Date(Date.now() - 2 * 3_600_000).toISOString());
+  assert.equal(past.code, 0, past.stderr);
+  assert.equal(past.stdout.trim(), "", "nothing in a window two hours back");
+});
+
+test("--limit is Loki's own limit", async () => {
+  const r = await query(`{app="${app}"}`, "--since", "1h", "--limit", "1");
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(entries(r.stdout).length, 1);
+});
+
+test("the query reaches Loki untouched, with $, backticks and a backslash in it", async () => {
+  // In an argument bash would expand $b and run the backticks; on stdin they arrive as written.
+  const r = await query('{app="' + app + '"} |= "a$b"', "--since", "1h");
+  assert.equal(r.code, 0, r.stderr);
+  assert.deepEqual(entries(r.stdout), [line2]);
+
+  const env = { ...process.env, HOME: good.home, USERPROFILE: good.home };
+  const viaHeredoc = await new Promise<string>((resolve) =>
+    execFile("bash", ["-c", `node "${CLI}" --since 1h <<'LOGQL'\n{app="${app}"} |= \`ticks\`\nLOGQL`], { env }, (_e, stdout) => resolve(stdout)),
   );
+  assert.deepEqual(entries(viaHeredoc), [line2]);
 });
 
-test("loki_labels finds the pushed test stream's label name", async () => {
-  const result = await callTool("loki_labels", {});
-  assert.equal(result.success, true);
-  assert.ok(result.data.includes("app"), `expected "app" in labels, got ${JSON.stringify(result.data)}`);
+test("--labels lists the label names, one per line", async () => {
+  const r = await runWithStdin(good.home, undefined, "--labels", "--since", "1h");
+  assert.equal(r.code, 0, r.stderr);
+  assert.ok(r.stdout.trim().split("\n").includes("app"), r.stdout);
 });
 
-test("loki_label_values finds the pushed test label value", async () => {
-  const result = await callTool("loki_label_values", { label: "app" });
-  assert.equal(result.success, true);
-  assert.ok(
-    result.data.includes(testAppLabel),
-    `expected ${testAppLabel} in label values, got ${JSON.stringify(result.data)}`,
-  );
+test("--values lists the values of one label, one per line", async () => {
+  const r = await runWithStdin(good.home, undefined, "--values", "app", "--since", "1h");
+  assert.equal(r.code, 0, r.stderr);
+  assert.ok(r.stdout.trim().split("\n").includes(app), r.stdout);
 });
 
-test("loki_query_range finds the pushed log line by content", async () => {
-  const result = await callTool("loki_query_range", {
-    query: `{app="${testAppLabel}"}`,
-    start: windowStartNs,
-    end: windowEndNs,
+test("a malformed query exits 1 with Loki's own message, nothing added", async () => {
+  const r = await query("{app=", "--since", "1h");
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /^parse error at line 1, col 6: syntax error: unexpected \$end, expecting STRING\n$/);
+});
+
+test("a query that matches nothing prints nothing and succeeds", async () => {
+  const r = await query(`{app="${app}_nope"}`, "--since", "1h");
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.stdout, "");
+});
+
+test("usage errors exit 1, and --help prints the usage", async () => {
+  assert.equal((await query("")).code, 1, "an empty query");
+  assert.equal((await query("  \n ")).code, 1, "only whitespace");
+  const withArg = await runWithStdin(good.home, '{app="x"}', '{app="y"}');
+  assert.equal(withArg.code, 1, "there is no argument form");
+  assert.match(withArg.stderr, /read from stdin, not given as an argument|unknown argument/);
+  assert.equal((await runWithStdin(good.home, undefined, "--labels", "--values", "app")).code, 1, "two modes at once");
+  const help = await runWithStdin(good.home, undefined, "--help");
+  assert.equal(help.code, 0);
+  assert.match(help.stdout, /Usage: opencode-loki-query/);
+});
+
+test("an unreachable Loki exits 1 with the network error", async () => {
+  const dead = createFakeHome({ LOKI_BASE_URL: "http://127.0.0.1:1" });
+  const r = await runWithStdin(dead.home, '{app="x"}', "--since", "1h");
+  assert.equal(r.code, 1);
+  assert.ok(r.stderr.trim().length > 0);
+});
+
+test("a missing or broken config file exits 1 and says where it looked", async () => {
+  const empty = mkdtempSync(join(tmpdir(), "loki-nohome-"));
+  const missing = await runWithStdin(empty, '{app="x"}');
+  assert.equal(missing.code, 1);
+  assert.match(missing.stderr, /Loki config file not found[\s\S]*config\.json/);
+
+  const broken = createFakeHome();
+  writeFileSync(broken.configPath, "{ this is not json");
+  const r = await runWithStdin(broken.home, '{app="x"}');
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /Failed to load Loki config/);
+
+  writeFileSync(broken.configPath, JSON.stringify({ LOKI_USERNAME: "only-a-user" }));
+  const partial = await runWithStdin(broken.home, '{app="x"}');
+  assert.equal(partial.code, 1);
+  assert.match(partial.stderr, /missing required key LOKI_BASE_URL/);
+});
+
+// A throwaway HTTP server standing in for Grafana: records each request, and answers as told.
+async function withFakeGrafana<T>(respond: (res: http.ServerResponse) => void, fn: (baseUrl: string, seen: http.IncomingMessage[]) => Promise<T>): Promise<T> {
+  const seen: http.IncomingMessage[] = [];
+  const server = http.createServer((req, res) => {
+    seen.push(req);
+    respond(res);
   });
-  assert.equal(result.success, true);
-  const lines = result.data.result.flatMap((stream: any) => stream.values.map(([, line]: [string, string]) => line));
-  assert.ok(lines.includes(testLogLine), `expected pushed log line in result, got ${JSON.stringify(lines)}`);
-});
-
-test("a query matching nothing returns an empty result, not an error", async () => {
-  const result = await callTool("loki_query_range", {
-    query: `{app="definitely_does_not_exist_${Date.now()}"}`,
-    start: windowStartNs,
-    end: windowEndNs,
-  });
-  assert.equal(result.success, true);
-  assert.deepEqual(result.data.result, []);
-});
-
-test("malformed LogQL returns a clean error, not a crash", async () => {
-  const result = await callTool("loki_query_range", { query: "{app=" });
-  assert.equal(result.success, false);
-  assert.ok(result.error, "expected a clean error message, not a crash");
-});
-
-test("via Grafana proxy: correct request path/auth, and a redirect-to-login surfaces a clean diagnostic", async () => {
-  // Stands in for a Grafana instance rejecting the request - real Grafana
-  // responds to a rejected /api/datasources/proxy/... call with a 302 to its
-  // own login page, never a 401, which is the failure mode LOKI_VIA_GRAFANA
-  // needs to survive without a raw JSON-parse crash.
-  let receivedPath: string | undefined;
-  let receivedAuth: string | undefined;
-  const fakeGrafana = http.createServer((req, res) => {
-    receivedPath = req.url;
-    receivedAuth = req.headers.authorization;
-    res.writeHead(302, { Location: "/login" }).end();
-  });
-  await new Promise<void>((resolve) => fakeGrafana.listen(0, resolve));
-  const fakeGrafanaPort = (fakeGrafana.address() as AddressInfo).port;
-
-  const viaGrafanaPort = 8236;
-  const viaGrafanaServerProcess = await startServer(viaGrafanaPort, {
-    LOKI_BASE_URL: `http://localhost:${fakeGrafanaPort}`,
-    LOKI_VIA_GRAFANA: true,
-    LOKI_GRAFANA_DATASOURCE_ID: "1",
-    LOKI_USERNAME: "opter",
-    LOKI_PASSWORD: "opter",
-  });
-  const transport = new StreamableHTTPClientTransport(new URL(`http://localhost:${viaGrafanaPort}/mcp`));
-  const viaGrafanaClient = new Client({ name: "loki-mcp-test-via-grafana", version: "1.0.0" }, { capabilities: {} });
-
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   try {
-    await viaGrafanaClient.connect(transport);
-    const result = await viaGrafanaClient.callTool({ name: "loki_labels", arguments: {} });
-    const content = result.content as Array<{ type: string; text: string }>;
-    const parsed = JSON.parse(content[0].text);
-
-    assert.equal(receivedPath, "/api/datasources/proxy/1/loki/api/v1/labels");
-    assert.equal(receivedAuth, `Basic ${Buffer.from("opter:opter").toString("base64")}`);
-    assert.equal(parsed.success, false);
-    assert.match(parsed.error, /redirected/i);
+    return await fn(`http://127.0.0.1:${(server.address() as AddressInfo).port}`, seen);
   } finally {
-    await viaGrafanaClient.close();
-    await stopServer(viaGrafanaServerProcess);
-    await new Promise<void>((resolve) => fakeGrafana.close(() => resolve()));
+    await new Promise((resolve) => server.close(resolve));
   }
+}
+
+test("LOKI_VIA_GRAFANA sends the request through Grafana's datasource proxy, with Basic Auth and the org id", async () => {
+  await withFakeGrafana(
+    (res) => res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ status: "success", data: { resultType: "streams", result: [] } })),
+    async (baseUrl, seen) => {
+      const home = createFakeHome({ LOKI_BASE_URL: baseUrl, LOKI_VIA_GRAFANA: true, LOKI_GRAFANA_DATASOURCE_ID: 7, LOKI_USERNAME: "u", LOKI_PASSWORD: "p", LOKI_ORG_ID: "tenant-1" });
+      const r = await runWithStdin(home.home, '{app="x"}', "--since", "1h");
+      assert.equal(r.code, 0, r.stderr);
+      assert.equal(seen.length, 1);
+      assert.match(seen[0].url!, /^\/api\/datasources\/proxy\/7\/loki\/api\/v1\/query_range\?/);
+      assert.equal(seen[0].headers.authorization, `Basic ${Buffer.from("u:p").toString("base64")}`);
+      assert.equal(seen[0].headers["x-scope-orgid"], "tenant-1");
+    },
+  );
+});
+
+test("a redirect (Grafana's login page) is reported, not followed", async () => {
+  await withFakeGrafana(
+    (res) => res.writeHead(302, { Location: "/login" }).end(),
+    async (baseUrl) => {
+      const home = createFakeHome({ LOKI_BASE_URL: baseUrl });
+      const r = await runWithStdin(home.home, '{app="x"}', "--since", "1h");
+      assert.equal(r.code, 1);
+      assert.match(r.stderr, /redirected \(302\) to \/login[\s\S]*LOKI_VIA_GRAFANA/);
+    },
+  );
+});
+
+test("an error body from Loki or Grafana is printed as it came", async () => {
+  await withFakeGrafana(
+    (res) => res.writeHead(500, { "Content-Type": "text/plain" }).end("too many outstanding requests"),
+    async (baseUrl) => {
+      const home = createFakeHome({ LOKI_BASE_URL: baseUrl });
+      const r = await runWithStdin(home.home, '{app="x"}', "--since", "1h");
+      assert.equal(r.code, 1);
+      assert.equal(r.stderr, "too many outstanding requests\n");
+    },
+  );
 });

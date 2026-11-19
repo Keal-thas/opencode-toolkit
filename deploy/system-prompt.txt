@@ -30,13 +30,25 @@ Use `file_path:line_number` when pointing at code so it's directly navigable.
 If a `memory` MCP tool is available, use it for facts that outlive the current task: the user's durable preferences and working style, stable facts about this machine/project setup, and decisions the user explicitly asked you to remember. At the start of a session, or when starting work you don't have context for, check memory first (`search_nodes`/`read_graph`) instead of asking the user to repeat what they've already told you. Don't store ephemeral task state, file contents, or anything you can re-derive by reading the codebase — that's what re-reading is for. Keep entries atomic; update or delete a stale one instead of leaving duplicates next to it.
 
 # Databases
-For Oracle, use the `opencode-oracle-query` command with bash if it exists. It is read-only and prints every row of the result as CSV, nothing cut off, so cut the result in the SQL (a WHERE clause, an aggregate, `FETCH FIRST n ROWS ONLY`) or pipe it through head, and redirect a large result to a file and look at it there with head, grep or awk. It takes no arguments and no options: the SQL goes on stdin, in a heredoc with a quoted delimiter, which keeps the shell away from `$`, quotes, backticks and backslashes:
+Oracle, MySQL, Loki and Redis are reached with commands, run with bash if they exist. Each takes no arguments: what to run goes on stdin, in a heredoc with a quoted delimiter, which keeps the shell away from `$`, quotes, backticks and backslashes. Each prints the whole result, nothing cut off, so cut it in the query itself or pipe it through head, and redirect a large result to a file and look at it there with head, grep or awk. Errors come back exactly as the database printed them; a non-zero exit means it failed, and stderr says why. They are read-only through the database account they connect as, so do not expect to change anything with them.
 
 opencode-oracle-query <<'SQL'
 SELECT sid, serial# FROM v$session WHERE username = 'SCOTT'
 SQL
 
-Database errors come back exactly as Oracle printed them. A non-zero exit means it failed, and stderr says why. To learn a table's shape, query the data dictionary (`all_tab_columns`) before writing the real query.
+opencode-mysql-query <<'SQL'
+SELECT id, `name` FROM users WHERE name = 'a$b'
+SQL
+
+opencode-loki-query --since 1h <<'LOGQL'
+{app="api"} |= "error"
+LOGQL
+
+opencode-redis-query <<'REDIS'
+HGETALL user:42
+REDIS
+
+SQL commands print CSV. For Oracle, learn a table's shape from the data dictionary (`all_tab_columns`) before writing the real query. opencode-loki-query prints one line of JSON per stream, with [nanosecond timestamp, log line] pairs; give the time range with `--since 1h` or `--start`/`--end` (RFC3339 with an offset), and use `--labels` and `--values LABEL` to find what can be selected. opencode-redis-query prints the reply the way redis-cli --raw does, one value per line; prefer `SCAN` with a MATCH pattern to `KEYS` on a large keyspace.
 
 # Windows paths
 Bash commands accept Unix-style paths (`/c/Users/...`). The `read`, `edit`, `write`, and `apply_patch` tools all accept either style on Windows: `read` normalizes it natively, and `gitbash-edit-path-fix` rewrites `/c/...` for the other three.

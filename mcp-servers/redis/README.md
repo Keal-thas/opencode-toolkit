@@ -1,43 +1,60 @@
-# redis mcp server
+# redis
 
-Unlike `mcp-servers/oracle/`, `mcp-servers/loki/`, and `mcp-servers/mysql/`, there's no server code in this directory — this is the official upstream [`redis/mcp-redis`](https://github.com/redis/mcp-redis) package (PyPI `redis-mcp-server`), used unmodified, same "sight-unseen from its own README" stance as the Memory MCP server (see `mcp-servers/memory/README.md`). This directory just holds the deployment notes.
+Redis for the agent as a command, `opencode-redis-query`, which reads one Redis command from stdin, connects straight to Redis, runs it and prints the reply. Written in TypeScript (one file, `src/cli.ts`, with the npm `redis` client), compiled to `dist/`. There is no server to run and no Python: an earlier version used the official `redis-mcp-server` PyPI package, which needed `uv`, only spoke stdio and ignored `REDIS_HOST`/`REDIS_PORT`. It is the same shape as [`oracle`](../oracle/README.md), whose README has the reasoning (why a command and not an MCP tool, why only a heredoc, why exit 0 or 1).
 
-## Why the official package, not a hand-rolled one like mysql
+## Usage
 
-`mcp-servers/mysql/` and `mcp-servers/oracle/` are hand-written because the problem there is small and generic: one passthrough SQL tool, with a read-only guarantee that has to be bolted on ourselves (a `START TRANSACTION READ ONLY` wrapper for MySQL, DB grants for Oracle) since SQL has no native per-statement read/write tagging — see `mcp-servers/mysql/README.md`'s documented DDL gap for exactly how fiddly that gets. Redis doesn't have that problem: every command already carries a `@read`/`@write` ACL category natively (confirmed against a real Redis 7 instance — see `docker/notes.md`'s "Redis test instance" section: a `+@read -@write` user gets `NOPERM` on `SET`/`DEL`/`FLUSHALL`, and on `EVAL` and `SORT ... STORE` too, since Redis categorizes anything with a possible write side effect as `@write` outright, no MySQL-style DDL loophole). The official package's own tool surface (string/hash/list/set/sorted-set/stream/pub-sub/JSON tools — see its README) would also be a lot to hand-roll and re-verify for no benefit, when the read-only guarantee is enforced one layer down regardless of which tools call into it.
+```bash
+opencode-redis-query <<'REDIS'
+GET user:42:name
+REDIS
 
-## Read-only enforcement: a dedicated ACL user, not code
+opencode-redis-query <<'REDIS'
+HGETALL "user:42"
+REDIS
 
-The package's own README documents this directly (see its "Redis ACL" section) — there's no config flag or connection setting on the package itself that trims it to a read-only tool set; the safety boundary is the account it connects as:
+opencode-redis-query <<'REDIS' | head -n 20
+SCAN 0 MATCH session:* COUNT 1000
+REDIS
+
+opencode-redis-query --help
+```
+
+The command is read from stdin, always, with no arguments and no options: use a heredoc with a quoted delimiter so the shell leaves quotes, `$`, backticks and backslashes alone. It is written as in `redis-cli`: words separated by spaces, `"double quotes"` (with `\n`, `\xHH` and `\"` escapes) or `'single quotes'` around a word that contains spaces.
+
+The reply is printed the way `redis-cli --raw` prints it, one value per line: a string or number as it is, a missing value as an empty line, an array one element per line (nested arrays flattened, so `HGETALL` is field, value, field, value, and `SCAN` is the cursor and then the keys). An error from Redis is printed to stderr exactly as Redis gave it. Exit codes: `0` ok, `1` anything went wrong (stderr says what). A command that waits for data (`BLPOP key 0`, `SUBSCRIBE`) gives up after 30 seconds.
+
+## Read-only: a dedicated ACL account, not code
+
+Nothing is blocked in this command. What it may do is decided by the Redis account in the config, and Redis already tags every command `@read` or `@write`, with no SQL-style loophole, so a read-only account is one line:
 
 ```
-127.0.0.1:6379> ACL SETUSER readonlyuser on >mypassword ~* +@read -@write
+ACL SETUSER readonlyuser on >mypassword ~* +@read -@write
 ```
 
-Confirmed end-to-end against a real Redis 7 instance (this repo's own `docker/docker-compose.redis.yml` sandbox, see `docker/redis.conf`): this exact ruleset lets `GET`/`KEYS` through and denies `SET`/`DEL`/`FLUSHALL`/`EVAL`/`SORT ... STORE` with `NOPERM`, regardless of what tool or query text asked for it.
+Checked against a real Redis 7: this lets `GET`, `KEYS`, `SCAN`, `HGETALL` through and refuses `SET`, `DEL`, `FLUSHALL` and `EVAL` with `NOPERM`. It also refuses `INFO`, `PING` and `CLIENT`, which are not in `@read`; add `+info +ping` to the rule if you want them. If the keys follow a prefix convention, `~app:*` instead of `~*` limits the account to those keys. Redis has no schema; the closest thing is the numbered database (`REDIS_DB`), and an ACL cannot limit an account to one database number as far as I know.
 
-## Wired as `type: "local"`, not `type: "remote"`
+## Configuration
 
-Unlike `oracle`/`loki`/`mysql` (persistent HTTP servers opencode connects to), `redis-mcp-server` only supports stdio transport today — its own README: "Support to the streamable-http transport will be added in the future." So opencode spawns and owns this one directly, same shape as the Memory MCP server:
+Read from a file, not environment variables, at a fixed location under `$HOME/.config/kealthas-dev/opencode-mcp-redis/`: `config.json` by default, or `config-<name>.json` with `REDIS_CONFIG_ENV=<name>`. Only a short name is taken from the environment, never a path. The file is read on every run, so editing it needs nothing restarted.
 
 ```json
-"mcp": {
-  "redis": {
-    "type": "local",
-    "command": ["uvx", "--from", "redis-mcp-server@latest", "redis-mcp-server", "--host", "...", "--port", "..."],
-    "enabled": true,
-    "environment": {
-      "REDIS_USERNAME": "readonlyuser",
-      "REDIS_PWD": "..."
-    }
-  }
+{
+  "REDIS_HOST": "hostname",
+  "REDIS_PORT": 6379,
+  "REDIS_USERNAME": "readonlyuser",
+  "REDIS_PASSWORD": "password",
+  "REDIS_DB": 0,
+  "REDIS_TLS": false
 }
 ```
 
-**`--host`/`--port` have to be CLI args, not `REDIS_HOST`/`REDIS_PORT` env vars — confirmed a real bug in the installed package (`redis-mcp-server`, version resolved via `@latest` at the time of writing), not a style choice.** Its `src/common/config.py` correctly seeds `REDIS_CFG` from `REDIS_HOST`/`REDIS_PORT`/`REDIS_DB`/`REDIS_SSL`/`REDIS_CLUSTER_MODE` env vars at import time — but `src/main.py`'s `cli()` then unconditionally rebuilds `{"host": host, "port": port, "db": db, "ssl": ssl, "cluster_mode": cluster_mode}` from Click's own option values (which default to `"127.0.0.1"`/`6379`/etc. whether or not the user passed `--host`/`--port` — none of those five Click options declare `envvar=`, so Click has no idea the env vars exist) and passes it to `set_redis_config_from_cli()`, which **overwrites** the correctly-seeded env-derived config every single run. `username`/`password` (and every SSL path option) escape this because `main.py` only adds them to that dict `if username:`/`if password:` — Click leaves them `None` when not passed, so the falsy check skips them and the env-derived `REDIS_USERNAME`/`REDIS_PWD` survive untouched. Reproduced against the real sandbox: pure env vars connected to `127.0.0.1:6379` (`Connection refused`, since nothing listens there) instead of the intended `redis:6379`; `--host`/`--port` as CLI args plus `REDIS_USERNAME`/`REDIS_PWD` as env vars connected correctly and authenticated as `readonlyuser`. Host/port aren't secret, so putting them in argv costs nothing; credentials still go through `environment`, not `--username`/`--password`/`--url` args — an argv-based secret shows up in `ps` output for anyone else on the machine, an `environment` entry doesn't. (`--url redis://user:pass@host:port/db` is the package's other documented shortcut and does still read correctly — `parse_redis_uri()`'s branch doesn't have this bug — but it means embedding the password in one URI, which needs percent-encoding for any reserved character (`@ : / ? #`, space) — same gotcha as `mcp-servers/mysql/README.md`'s Configuration section covers for MySQL's connect string, on top of putting the password in argv. Discrete flags avoid both problems.)
+Only `REDIS_HOST` is required; the port defaults to 6379. `config.example.json` shows the shape.
 
-Needs `uv`/`uvx` on the target machine — a real prerequisite this deployment doesn't otherwise have (see SETUP.md's step for it and `docker/notes.md`'s "uv/uvx" section for how the sandbox gets it).
+## Installing it
+
+Published as `@kealthas-dev/opencode-mcp-redis` (the name is part of the config path, so it keeps the `mcp` although there is no MCP any more). `npm install -g @kealthas-dev/opencode-mcp-redis` puts `opencode-redis-query` on `PATH`; then create the account and write the config file. See SETUP.md step 12.
 
 ## Status
 
-**Verified end-to-end.** `tests/integration/mcp-redis/redis.test.mjs` spawns the real `redis-mcp-server` package via `uvx` against the sandbox's real `redis` service, connected as the ACL-restricted `readonlyuser`: tool listing, a `set`/`get` round-trip through the tools that exist for it, and a write-shaped tool call coming back as a clean Redis `NOPERM` error rather than a crash. Wired into `deploy/opencode.jsonc.example` (`mcp.redis`, `type: "local"`, `enabled: true`).
+`redis.test.ts` runs against a real Redis in the docker sandbox (see `docker/notes.md`, "Redis test instance"), as the sandbox's `readonlyuser`, with data seeded and writes checked over a second connection as the default user: strings, integers, lists, hashes, sorted sets and `SCAN` replies, a missing value, quoting as `redis-cli` reads it, `$`/backticks/backslashes arriving untouched, `| head` closing the pipe early, writes refused with Redis's own `NOPERM` and nothing written, an unknown command, a wrong password, an unreachable Redis failing at once, usage errors, and a missing or broken config file.
