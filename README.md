@@ -29,7 +29,8 @@ opencode replaces the system prompt it sends to a model through its own config; 
 ### What's in `deploy/`
 
 - `system-prompt.txt` — the replacement prompt. Also carries a `# Memory` policy section for the memory MCP server.
-- `opencode.jsonc.example` — wires `system-prompt.txt` in, enables the plugins and MCP servers listed in the two index READMEs above, and defines the `review-gate` agent used by `llm-review-gate`. Each MCP server still needs its own process started or its credentials supplied per SETUP.md before it works; disable in `opencode.json` whichever ones are not wanted.
+- `verifier-prompt.txt` — the prompt of the read-only `verifier` agent, an independent reviewer of the current changes; `/verify [what to check]` starts it in a fresh subagent session with the git status, diff and recent commits already in its prompt, and the main agent can also call it itself. Its permissions deny edits and web access, and let only a fixed list of exact read-only git commands run without asking; any other command asks first.
+- `opencode.jsonc.example` — wires `system-prompt.txt` in, enables the plugins and MCP servers listed in the two index READMEs above, defines the `review-gate` agent used by `llm-review-gate`, and defines the read-only `verifier` agent plus the `/verify` command that runs it. Each MCP server still needs its own process started or its credentials supplied per SETUP.md before it works; disable in `opencode.json` whichever ones are not wanted.
 - `models-dev-snapshot.json` — a local copy of opencode's models.dev catalog; point `OPENCODE_MODELS_PATH` at it so the offline machine never tries to fetch it live (SETUP.md step 3). Optional, since the offline build has its own baked-in snapshot. Generated; refresh with `./deploy/fetch-models-snapshot.sh`. See [docs/generated-files.md](docs/generated-files.md) for why it is both tracked and gitignored.
 
 ### How the override works

@@ -36,6 +36,7 @@ ls "$SRC_DIR"   # sanity check: should show README.md, deploy/, etc.
 
 ```bash
 cp "$SRC_DIR/deploy/system-prompt.txt" "$CONFIG_DIR/system-prompt.txt"
+cp "$SRC_DIR/deploy/verifier-prompt.txt" "$CONFIG_DIR/verifier-prompt.txt"
 ```
 
 ## 2. Wire it into opencode.json
@@ -64,6 +65,28 @@ Check whether `$CONFIG_DIR/opencode.jsonc` or `$CONFIG_DIR/opencode.json` alread
     "general": {
       "prompt": "{file:./system-prompt.txt}"
     },
+    "verifier": {
+      "description": "Independent, read-only reviewer. Use it after a non-trivial change to check the work. Give it the user's original request verbatim and what to check; it reads the diff itself.",
+      "mode": "subagent",
+      "prompt": "{file:./verifier-prompt.txt}",
+      "permission": {
+        "edit": "deny",
+        "webfetch": "deny",
+        "websearch": "deny",
+        "bash": {
+          "*": "ask",
+          "git status": "allow",
+          "git status --short": "allow",
+          "git diff": "allow",
+          "git diff --stat": "allow",
+          "git diff HEAD": "allow",
+          "git log --oneline": "allow",
+          "git log --oneline -10": "allow",
+          "git merge-base HEAD origin/master": "allow",
+          "git merge-base HEAD origin/main": "allow"
+        }
+      }
+    },
     "review-gate": {
       "description": "Internal ALLOW/BLOCK safety reviewer used by the llm-review-gate plugin. Not user-facing.",
       "mode": "subagent",
@@ -83,12 +106,22 @@ Check whether `$CONFIG_DIR/opencode.jsonc` or `$CONFIG_DIR/opencode.json` alread
         "review_verdict": "allow"
       }
     }
+  },
+  "command": {
+    "verify": {
+      "description": "Review the current changes in an independent read-only session (usage: /verify [what to check])",
+      "agent": "verifier",
+      "subtask": true,
+      "template": "What to check: $ARGUMENTS\n\n## git status --short\n!`git status --short`\n\n## git diff from the fork point of the main branch\n!`git diff $(git merge-base HEAD origin/master 2>/dev/null || git merge-base HEAD origin/main 2>/dev/null || echo HEAD)`\n\n## Recent commits\n!`git log --oneline -10`"
+    }
   }
   ```
 
+  `verifier` is an independent, read-only reviewer, and `/verify [what to check]` starts it in a fresh subagent session with the git status, the diff from the fork point and the recent commits already in its prompt; the main agent may also call it by itself. Its permissions deny edits and web access and let only the exact git commands listed run without asking, so anything else (a test command, say) asks for permission first. Keep that list to exact commands: a wildcard such as `git diff*` also matches `git diff > file`. In a headless `opencode run` a command that asks is auto-rejected and ends the reviewer.
+
   `review-gate` has no `prompt` override on purpose — it's the internal session `llm-review-gate` (step 5) uses for an ALLOW/BLOCK verdict, and must not inherit `system-prompt.txt`'s coding-agent persona (a `system` field is appended after `prompt`, not a replacement for it, so without this dedicated agent the review would compete with that persona for the model's attention). `review_verdict` is the plugin's custom tool for recording that verdict as a function call — denied globally so `build`/`plan`/`general` never see it, re-allowed only inside `review-gate`'s own `permission` block. **Don't "fix" this apparent contradiction (deny at top level, allow inside one agent) — it's intentional.**
 
-  If an `"agent"` key already exists with other agents configured, merge `build`/`plan`/`general`/`review-gate` into it rather than replacing the whole key; same for `"permission"` if one already exists. Keep the file valid (comments are fine in `.jsonc`) and verify opencode still loads it (e.g. `opencode debug config`) before moving on.
+  If an `"agent"` key already exists with other agents configured, merge `build`/`plan`/`general`/`verifier`/`review-gate` into it rather than replacing the whole key; same for `"permission"` and `"command"` if they already exist. Keep the file valid (comments are fine in `.jsonc`) and verify opencode still loads it (e.g. `opencode debug config`) before moving on.
 
 ## 3. Point the models.dev catalog at a local file
 
@@ -111,21 +144,20 @@ Every entry in the `plugin` array is a published npm package, referenced by bare
 
 **Important:** `opencode debug config` showing a `plugin_origins` entry is NOT proof the install succeeded — a bad/unreachable package name fails silently (exit 0, no log line) and leaves `$CACHE_DIR/packages/@kealthas-dev/<package>@latest/` permanently empty. The real proof is whether that cache directory has files in it (`package.json`/`node_modules` = real install; empty = failed) — if empty, delete it by hand and retry rather than assuming the config itself is wrong.
 
-## 5. Plugins: gitbash-edit-path-fix and verify-session (included), the rest opt-in
+## 5. Plugins: gitbash-edit-path-fix (included), the rest opt-in
 
-The rest of `plugins/` is general-purpose tooling, unrelated to the prompt override itself. Each is its own published npm package, independent of the others, so adding or removing one from the `plugin` array doesn't affect the rest. `deploy/opencode.jsonc.example` enables `gitbash-edit-path-fix` and `verify-session` and leaves the rest commented out:
+The rest of `plugins/` is general-purpose tooling, unrelated to the prompt override itself. Each is its own published npm package, independent of the others, so adding or removing one from the `plugin` array doesn't affect the rest. `deploy/opencode.jsonc.example` enables `gitbash-edit-path-fix` and leaves the rest commented out:
 
 - `gitbash-edit-path-fix.ts` (`@kealthas-dev/opencode-gitbash-edit-path-fix`) — fixes Git-Bash paths in the `edit`/`write`/`apply_patch` tools on Windows.
 - `hook-logger.ts` (`@kealthas-dev/opencode-hook-logger`) — opt-in. Logs essentially every opencode hook event (chat, tool execution, permission asks, compaction, etc.) as JSONL under `~/opencode-hook-output/`, for debugging/observability.
-- `verify-session.ts` (`@kealthas-dev/opencode-verify-session`) — adds `/verify <claim>`, which starts a fresh top-level session that independently reviews the working tree; nothing runs until the command is used.
 - `llm-review-gate.ts` (`@kealthas-dev/opencode-llm-review-gate`) — opt-in. Gates `bash` tool calls behind an LLM safety review: before a command runs, it's sent to a hidden internal opencode session for an ALLOW/BLOCK verdict, layered on top of (not replacing) opencode's own permission config. Fails open on review errors/timeouts by default. **This changes real runtime behavior** (an extra hidden model call before every `bash` call).
 - `loop-guard.ts` (`@kealthas-dev/opencode-loop-guard`) — opt-in. Warns, then refuses, a model that keeps calling the same tool with the same arguments. Enable after confirming its thresholds suit this machine's model; they are untested against it.
 - `path-guard.ts` (`@kealthas-dev/opencode-path-guard`) — opt-in. Repairs an absolute path a model guessed with directory segments dropped, and gives `grep`/`glob` a clear error for a search path that does not exist.
 
-If step 2 merged into an existing `opencode.json` rather than copying the example fresh, add the ones you want to the same `plugin` array (install mechanism: step 4). At minimum the two enabled by default:
+If step 2 merged into an existing `opencode.json` rather than copying the example fresh, add the ones you want to the same `plugin` array (install mechanism: step 4). At minimum the one enabled by default:
 
 ```json
-"plugin": ["@kealthas-dev/opencode-gitbash-edit-path-fix", "@kealthas-dev/opencode-verify-session"]
+"plugin": ["@kealthas-dev/opencode-gitbash-edit-path-fix"]
 ```
 
 Each opt-in plugin is just another entry in the same array — `"@kealthas-dev/opencode-hook-logger"`, `"@kealthas-dev/opencode-llm-review-gate"`, `"@kealthas-dev/opencode-loop-guard"`, `"@kealthas-dev/opencode-path-guard"`. Merge into the same `plugin` array rather than replacing it — each entry here is independent: include just one by adding just its own array entry.
