@@ -67,7 +67,7 @@ Small models drop segments from absolute paths (`/home/u/Work/Project` for `/hom
 - **Receipts and completion gate.** Record each write into a task directory as a receipt (path, size, content hash, session), witness only. When a progress file flips to `completed`, check every artifact it names has a receipt and refuse otherwise. The cost is code, not context.
 - **Hash-anchored edit.** Tag read lines `LINE#HASH`, require edits to quote the tag, reject when the line changed. Guards against edits on stale content; needs its own `edit` tool.
 - **Journaled node state.** An append-only event log per run, node states, a fingerprint of the definition, and amendments that report which nodes they invalidate, so finished nodes are never re-run.
-- **Verdict bound to state.** `/verify` produces `PASS | FAIL | UNVERIFIABLE`; a later step could make that verdict the only thing that can mark work done.
+- **Verdict bound to state.** The `verifier` agent produces `PASS | FAIL | UNVERIFIABLE`; a later step could make that verdict the only thing that can mark work done.
 
 ## Host pitfalls the prior art ran into
 

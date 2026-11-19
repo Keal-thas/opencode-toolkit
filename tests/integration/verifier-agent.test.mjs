@@ -1,11 +1,10 @@
 #!/usr/bin/env node
-// Integration test for the `verifier` agent and the `/verify` command shipped in deploy/opencode.jsonc.example.
-// Runs a real `opencode run` (OPENCODE_BIN, default `opencode`) with the agent and command taken from that
+// Integration test for the `verifier` agent shipped in deploy/opencode.jsonc.example.
+// Runs a real `opencode run` (OPENCODE_BIN, default `opencode`) with the agent taken from that
 // example file, and a fake local OpenAI-compatible server standing in for the model. The fake model replays
 // scripted tool calls for the main agent and for the verifier and records what the verifier was shown.
 // It proves, against a real opencode, that the verifier is offered no edit/write tools, that a bash call
-// outside the allowlist does not run, that a read-only git call does, and that `/verify` injects git output
-// into a fresh subagent session.
+// outside the allowlist does not run, and that the read-only git calls its prompt names do.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, access, rm } from "node:fs/promises";
@@ -153,15 +152,20 @@ for (const { name, command, check } of forbidden) {
   });
 }
 
-test("/verify starts a verifier subtask with the claim and the git evidence already in its prompt", async () => {
-  const { seen, stdout } = await runOpencode("command", { runArgs: ["--command", "verify", "login must reject expired tokens"] });
+test("the git commands the verifier prompt tells it to use run without asking", async () => {
+  const mainScript = [{ tool: "task", args: { description: "verify the change", prompt: "Check that a.txt got a second line.", subagent_type: "verifier" } }];
+  const verifierScript = [
+    { tool: "bash", args: { command: "git status --short", description: "status" } },
+    { tool: "bash", args: { command: "git diff HEAD", description: "uncommitted diff" } },
+    { tool: "bash", args: { command: "git log --oneline origin/master..HEAD", description: "branch commits" } },
+    { tool: "bash", args: { command: "git diff origin/master...HEAD", description: "branch diff" } },
+  ];
+  const { seen, stdout } = await runOpencode("allowlisted", { mainScript, verifierScript, runArgs: ["go"] });
   const dump = () => `\n--- stdout ---\n${stdout}\n--- verifier ---\n${JSON.stringify(seen.verifier, null, 1)}`;
 
-  assert.ok(seen.verifier.length >= 1, `the command ran the verifier agent${dump()}`);
-  const prompt = seen.verifier[0].firstUser;
-  assert.match(prompt, /login must reject expired tokens/, `the claim reaches the verifier${dump()}`);
-  assert.match(prompt, /M a\.txt/, `git status output is injected${dump()}`);
-  assert.match(prompt, /\?\? new\.txt/, `untracked files show up in the status${dump()}`);
-  assert.match(prompt, /\+two-changed-line/, `the diff is injected${dump()}`);
-  assert.match(prompt, /init/, `recent commits are injected${dump()}`);
+  assert.doesNotMatch(stdout, /permission requested/, `none of the allowlisted commands asks for permission${dump()}`);
+  const results = seen.verifier.at(-1).toolResults;
+  assert.equal(results.length, 4, `all four commands ran${dump()}`);
+  assert.match(results[0], /M a\.txt/);
+  assert.match(results[1], /\+two-changed-line/, `git diff HEAD shows the uncommitted change${dump()}`);
 });

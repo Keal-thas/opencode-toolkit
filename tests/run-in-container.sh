@@ -41,7 +41,7 @@ echo "== guard plugins integration test (loop-guard and path-guard in a real ope
 node tests/integration/guard-plugins.test.mjs
 
 echo
-echo "== verifier agent and /verify integration test (real opencode, fake model) =="
+echo "== verifier agent integration test (real opencode, fake model) =="
 node tests/integration/verifier-agent.test.mjs
 
 echo
