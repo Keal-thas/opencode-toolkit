@@ -80,6 +80,12 @@ Check whether `$CONFIG_DIR/opencode.jsonc` or `$CONFIG_DIR/opencode.json` alread
           "git diff": "allow",
           "git diff --stat": "allow",
           "git diff HEAD": "allow",
+          "git diff origin/master...HEAD": "allow",
+          "git diff origin/main...HEAD": "allow",
+          "git diff master...HEAD": "allow",
+          "git diff main...HEAD": "allow",
+          "git log --oneline origin/master..HEAD": "allow",
+          "git log --oneline origin/main..HEAD": "allow",
           "git log --oneline": "allow",
           "git log --oneline -10": "allow",
           "git merge-base HEAD origin/master": "allow",
@@ -106,22 +112,14 @@ Check whether `$CONFIG_DIR/opencode.jsonc` or `$CONFIG_DIR/opencode.json` alread
         "review_verdict": "allow"
       }
     }
-  },
-  "command": {
-    "verify": {
-      "description": "Review the current changes in an independent read-only session (usage: /verify [what to check])",
-      "agent": "verifier",
-      "subtask": true,
-      "template": "What to check: $ARGUMENTS\n\n## git status --short\n!`git status --short`\n\n## git diff from the fork point of the main branch\n!`git diff $(git merge-base HEAD origin/master 2>/dev/null || git merge-base HEAD origin/main 2>/dev/null || echo HEAD)`\n\n## Recent commits\n!`git log --oneline -10`"
-    }
   }
   ```
 
-  `verifier` is an independent, read-only reviewer, and `/verify [what to check]` starts it in a fresh subagent session with the git status, the diff from the fork point and the recent commits already in its prompt; the main agent may also call it by itself. Its permissions deny edits and web access and let only the exact git commands listed run without asking, so anything else (a test command, say) asks for permission first. Keep that list to exact commands: a wildcard such as `git diff*` also matches `git diff > file`. In a headless `opencode run` a command that asks is auto-rejected and ends the reviewer.
+  `verifier` is an independent, read-only reviewer. The main agent can call it as a subagent after a non-trivial change, and, according to opencode's docs, you can call it yourself by writing `@verifier` in a message, followed by what to check (not tested here: `opencode run` does not parse the mention). It gets no edit or web tools and reads the git evidence itself: only the exact git commands listed (status, diff, log) run without asking, so anything else (a test command, say) asks for permission first. Keep that list to exact commands: a wildcard such as `git diff*` also matches `git diff > file`. In a headless `opencode run` a command that asks is auto-rejected and ends the reviewer.
 
   `review-gate` has no `prompt` override on purpose — it's the internal session `llm-review-gate` (step 5) uses for an ALLOW/BLOCK verdict, and must not inherit `system-prompt.txt`'s coding-agent persona (a `system` field is appended after `prompt`, not a replacement for it, so without this dedicated agent the review would compete with that persona for the model's attention). `review_verdict` is the plugin's custom tool for recording that verdict as a function call — denied globally so `build`/`plan`/`general` never see it, re-allowed only inside `review-gate`'s own `permission` block. **Don't "fix" this apparent contradiction (deny at top level, allow inside one agent) — it's intentional.**
 
-  If an `"agent"` key already exists with other agents configured, merge `build`/`plan`/`general`/`verifier`/`review-gate` into it rather than replacing the whole key; same for `"permission"` and `"command"` if they already exist. Keep the file valid (comments are fine in `.jsonc`) and verify opencode still loads it (e.g. `opencode debug config`) before moving on.
+  If an `"agent"` key already exists with other agents configured, merge `build`/`plan`/`general`/`verifier`/`review-gate` into it rather than replacing the whole key; same for `"permission"` if one already exists. Keep the file valid (comments are fine in `.jsonc`) and verify opencode still loads it (e.g. `opencode debug config`) before moving on.
 
 ## 3. Point the models.dev catalog at a local file
 

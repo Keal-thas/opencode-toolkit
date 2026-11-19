@@ -10,6 +10,7 @@ Single-person project used across multiple machines — these preferences are gi
 
 - **Decide and act on small, reversible calls within scope instead of asking permission one level down.** E.g. told to merge/push/tag a branch, also committing a pending change first doesn't need its own ask — just do it and report. Reserve `AskUserQuestion` for forks that are genuinely ambiguous or costly to get wrong. Confirmed explicitly 2026-09-26 (Franco, chat): implement first, don't wait for a permission round-trip mid-task — if something turns out unwanted, he reverts it himself afterward rather than pre-approving each step. Extends to publishing this repo's own packages to public registries (npm, etc.) too, not just git operations — see "No backward-compatibility constraint" below for the versioning discipline (latest only) that makes that safe to do unprompted.
 - **Committing itself is included in the above — this repo overrides Claude Code's own harness-level default of asking before every commit.** Confirmed explicitly 2026-09-26 (Franco, chat): commit anytime, without asking first.
+- **Keep `.local/feature-map.html` current.** It is the user's feature map (plugins, MCP servers, agents, infrastructure, with a detail section for some). Whenever a plugin, MCP server, agent or command is added, removed, renamed or changes what it does, update the map in the same piece of work, without being asked. It is gitignored, so it is not part of the commit.
 - **Deliver anything needing confirmation or unhurried reading as a file, not a chat wall of text.** One or two sentences in chat, the rest in the gitignored `.local/` dir at the repo root. Clean up a `.local/` file once its content has been acted on.
 - **Verify claims against the real system when the tooling exists, rather than reasoning from inspection alone.** Has caught real bugs before. See [lessons-learned.md](docs/lessons-learned.md).
 
@@ -30,7 +31,7 @@ Single-person project used across multiple machines — these preferences are gi
 
 - **kebab-case everywhere, except the conventional entry files** (`README.md`, `CLAUDE.md`, `SETUP.md`, `TODO.md`).
 - **Don't repeat the directory's category in a file name** (`docker/notes.md`, not `docker/docker-notes.md`), and don't use ordinal prefixes unless the order is the point.
-- **One word, one meaning.** `probe` is a black-box check of opencode itself (`tests/capability-probes/*.probe.mjs`), while `verify` is the `/verify` command and the `verifier` agent in `deploy/opencode.jsonc.example`.
+- **One word, one meaning.** `probe` is a black-box check of opencode itself (`tests/capability-probes/*.probe.mjs`), while `verifier` is the read-only reviewer subagent in `deploy/opencode.jsonc.example`.
 - **`.zh` marks a Chinese file; a Chinese mirror of an English file shares its base name** (`SETUP.md` / `SETUP.zh.md`).
 - **npm packages are `@kealthas-dev/opencode-<plugin>` and `@kealthas-dev/opencode-mcp-<server>`; config lives in `~/.config/kealthas-dev/<package>/`; the env var is `<NAME>_CONFIG_ENV`.** The package name is part of the config path, so a rename is a deployment change, not just a repo change.
 
