@@ -12,6 +12,5 @@ This table is the one list of plugins; other docs link here instead of repeating
 | [`verify-session`](verify-session/README.md) | `/verify` starts an independent review session | enabled | yes |
 | [`loop-guard`](loop-guard/README.md) | warns on, then refuses, a model repeating the same tool call | commented out (opt-in) | yes |
 | [`path-guard`](path-guard/README.md) | repairs a guessed absolute path, clear error for a missing `grep`/`glob` path | commented out (opt-in) | yes |
-| [`council`](council/README.md) | `council` tool and `/council`: several independent advisors, then a tool-less synthesis | commented out (opt-in) | yes |
 
 "Published" means included in `release.yml`'s package loop ([docs/npm-publishing.md](../docs/npm-publishing.md)).
