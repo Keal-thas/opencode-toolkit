@@ -88,8 +88,8 @@ test("every mcp-servers directory with its own code is in release.yml's package 
   }
 });
 
-test("'In deploy/opencode.json.example' columns match the example config", () => {
-  const raw = read("deploy/opencode.json.example");
+test("'In deploy/opencode.jsonc.example' columns match the example config", () => {
+  const raw = read("deploy/opencode.jsonc.example");
   const config = JSON.parse(raw.replace(/^\s*\/\/.*$/gm, ""));
 
   for (const row of tableRows("mcp-servers/README.md")) {

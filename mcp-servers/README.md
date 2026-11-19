@@ -4,7 +4,7 @@ One directory per MCP server. Each README has that server's setup and design; `T
 
 This table is the one list of servers; other docs link here instead of repeating it.
 
-| Server | What it does | Code | Transport | In `deploy/opencode.json.example` |
+| Server | What it does | Code | Transport | In `deploy/opencode.jsonc.example` |
 |---|---|---|---|---|
 | [`oracle`](oracle/README.md) | `oracle_query`, passthrough SQL | ours | remote | enabled |
 | [`loki`](loki/README.md) | read-only LogQL queries | ours | remote | enabled |

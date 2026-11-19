@@ -40,15 +40,15 @@ cp "$SRC_DIR/deploy/system-prompt.txt" "$CONFIG_DIR/system-prompt.txt"
 
 ## 2. Wire it into opencode.json
 
-Check whether `$CONFIG_DIR/opencode.json` already exists.
+Check whether `$CONFIG_DIR/opencode.jsonc` or `$CONFIG_DIR/opencode.json` already exists (opencode reads either; the example is JSONC, with comments).
 
-- **If it does NOT exist yet**: copy the example as a starting point, then edit it to add your actual provider/model config (vLLM) on top — this repo doesn't know your exact provider setup, beyond the model server exposing an OpenAI-compatible API, which opencode supports as a provider type natively.
+- **If neither exists yet**: copy the example as a starting point, then edit it to add your actual provider/model config (vLLM) on top — this repo doesn't know your exact provider setup, beyond the model server exposing an OpenAI-compatible API, which opencode supports as a provider type natively.
 
   ```bash
-  cp "$SRC_DIR/deploy/opencode.json.example" "$CONFIG_DIR/opencode.json"
+  cp "$SRC_DIR/deploy/opencode.jsonc.example" "$CONFIG_DIR/opencode.jsonc"
   ```
 
-- **If it already exists** (most likely — your vLLM provider is probably already configured there): read it, then add these exact keys to the top-level JSON object, merging with whatever is already there. Do not remove or alter any existing keys (provider config, permissions, etc.) — only add/merge the `agent` and `permission` keys:
+- **If one already exists** (most likely — your vLLM provider is probably already configured there): read it, then add these exact keys to the top-level JSON object, merging with whatever is already there. Do not remove or alter any existing keys (provider config, permissions, etc.) — only add/merge the `agent` and `permission` keys:
 
   ```json
   "permission": {
@@ -88,7 +88,7 @@ Check whether `$CONFIG_DIR/opencode.json` already exists.
 
   `review-gate` has no `prompt` override on purpose — it's the internal session `llm-review-gate` (step 5) uses for an ALLOW/BLOCK verdict, and must not inherit `system-prompt.txt`'s coding-agent persona (a `system` field is appended after `prompt`, not a replacement for it, so without this dedicated agent the review would compete with that persona for the model's attention). `review_verdict` is the plugin's custom tool for recording that verdict as a function call — denied globally so `build`/`plan`/`general` never see it, re-allowed only inside `review-gate`'s own `permission` block. **Don't "fix" this apparent contradiction (deny at top level, allow inside one agent) — it's intentional.**
 
-  If an `"agent"` key already exists with other agents configured, merge `build`/`plan`/`general`/`review-gate` into it rather than replacing the whole key; same for `"permission"` if one already exists. Produce valid JSON and verify it parses (e.g. `python -c "import json,sys; json.load(open(sys.argv[1]))" "$CONFIG_DIR/opencode.json"` or equivalent) before moving on.
+  If an `"agent"` key already exists with other agents configured, merge `build`/`plan`/`general`/`review-gate` into it rather than replacing the whole key; same for `"permission"` if one already exists. Keep the file valid (comments are fine in `.jsonc`) and verify opencode still loads it (e.g. `opencode debug config`) before moving on.
 
 ## 3. Point the models.dev catalog at a local file
 
@@ -107,7 +107,7 @@ OPENCODE_DISABLE_MODELS_FETCH=1
 
 ## 4. Install the viewer plugin
 
-This lets you actually see what gets sent to the model — a JSON-valid `opencode.json` doesn't guarantee the override actually took effect at runtime, and this is the only way to check. Published as a real npm package, `@kealthas-dev/opencode-system-prompt-tools` — opencode's own npm-plugin loader installs it itself, no manual packaging or cache-seeding needed. If step 2 copied `deploy/opencode.json.example` fresh (the "does NOT exist yet" branch), this entry — along with step 5's default plugins — is already in there by default; skip straight to the verification note below unless you want to remove one. Otherwise (the more likely case — you merged into an existing `opencode.json`), add it to `opencode.json`'s top level (merge, don't replace, same rule as step 2), by bare package name, no version:
+This lets you actually see what gets sent to the model — a JSON-valid `opencode.json` doesn't guarantee the override actually took effect at runtime, and this is the only way to check. Published as a real npm package, `@kealthas-dev/opencode-system-prompt-tools` — opencode's own npm-plugin loader installs it itself, no manual packaging or cache-seeding needed. If step 2 copied `deploy/opencode.jsonc.example` fresh (the "does NOT exist yet" branch), this entry — along with step 5's default plugins — is already in there by default; skip straight to the verification note below unless you want to remove one. Otherwise (the more likely case — you merged into an existing `opencode.json`), add it to `opencode.json`'s top level (merge, don't replace, same rule as step 2), by bare package name, no version:
 
 ```json
 "plugin": ["@kealthas-dev/opencode-system-prompt-tools"]
@@ -119,7 +119,7 @@ opencode does a real `npm install` of this on first use, against whatever regist
 
 ## 5. Plugins: hook-logger and verify-session (included), the rest opt-in
 
-The rest of `plugins/` is general-purpose tooling, unrelated to the prompt override itself. Each is its own published npm package, independent of the others, so adding or removing one from the `plugin` array doesn't affect the rest. `deploy/opencode.json.example` enables `hook-logger` and `verify-session` and leaves the rest commented out:
+The rest of `plugins/` is general-purpose tooling, unrelated to the prompt override itself. Each is its own published npm package, independent of the others, so adding or removing one from the `plugin` array doesn't affect the rest. `deploy/opencode.jsonc.example` enables `hook-logger` and `verify-session` and leaves the rest commented out:
 
 - `hook-logger.ts` (`@kealthas-dev/opencode-hook-logger`) — logs essentially every opencode hook event (chat, tool execution, permission asks, compaction, etc.) as JSONL under `~/opencode-hook-output/`, for debugging/observability.
 - `verify-session.ts` (`@kealthas-dev/opencode-verify-session`) — adds `/verify <claim>`, which starts a fresh top-level session that independently reviews the working tree; nothing runs until the command is used.
@@ -145,7 +145,7 @@ Steps 6-10 (`oracle`, `loki`, `java-lsp`, `spring-lsp`, `mysql`) all follow the 
 3. Each reads its config from files, not raw environment variables (see the relevant README's Configuration section) — a config file plus a `server.json` for just the port (only needed if the default port below isn't free; an `<X>_MCP_PORT` env var overrides it too, for running more than one instance). The config file's *location* is fixed too, not an arbitrary path: with no `<X>_CONFIG_ENV` env var set (see the table below for the exact name) it's read from `~/.config/kealthas-dev/opencode-mcp-<name>/config.json`; setting `<X>_CONFIG_ENV=prod` reads `config-prod.json` instead, for multi-environment setups.
 4. Create the config file yourself — **real values only, never guessed by an executing agent; ask the human running this.**
 5. Start the server and leave it running. `oracle`/`loki` re-read their config file on every call, so editing it takes effect without a restart; `java-lsp`/`spring-lsp` read it once at startup (their LSP session is stateful and tied to one workspace) and need a restart after an edit.
-6. `deploy/opencode.json.example` already carries all five `mcp` blocks below, enabled, with placeholder ports — only add one by hand if step 2 merged into an existing `opencode.json` instead of copying the example fresh (merge into the top-level `mcp` key, don't replace it).
+6. `deploy/opencode.jsonc.example` already carries all five `mcp` blocks below, enabled, with placeholder ports — only add one by hand if step 2 merged into an existing `opencode.json` instead of copying the example fresh (merge into the top-level `mcp` key, don't replace it).
 
 Per-server specifics:
 
@@ -395,7 +395,7 @@ MEMORY_FILE_PATH="$CONFIG_DIR/memory.jsonl"
 echo "$MEMORY_FILE_PATH"
 ```
 
-`deploy/opencode.json.example` already carries this same block, enabled, but with no `environment` (the example can't know this machine's `$CONFIG_DIR` in advance) — add that `environment` block to `opencode.json`'s top level (merge, don't replace, same rule as step 2). Substitute the real path you just echoed for `<MEMORY_FILE_PATH>` below:
+`deploy/opencode.jsonc.example` already carries this same block, enabled, but with no `environment` (the example can't know this machine's `$CONFIG_DIR` in advance) — add that `environment` block to `opencode.json`'s top level (merge, don't replace, same rule as step 2). Substitute the real path you just echoed for `<MEMORY_FILE_PATH>` below:
 
 ```json
 "mcp": {
@@ -455,7 +455,7 @@ Then wire it in. **`--host`/`--port` have to be CLI args, not `REDIS_HOST`/`REDI
 }
 ```
 
-`deploy/opencode.json.example` already carries this block with `REPLACE_WITH_...` placeholders for the four real values (host/port/username/password) — substitute them rather than adding a fresh block (merge, don't replace, same rule as step 2).
+`deploy/opencode.jsonc.example` already carries this block with `REPLACE_WITH_...` placeholders for the four real values (host/port/username/password) — substitute them rather than adding a fresh block (merge, don't replace, same rule as step 2).
 
 ## 13. Verify
 

@@ -2,7 +2,7 @@
 # Meant to run *inside* the docker/ dev sandbox (see tests/README.md) -
 # not against whatever node/bash happens to be on the host. Covers
 # everything that needs no live opencode/model server: the plugin unit
-# tests, the analyze-modules.ts integration test (real opencode server,
+# tests, the guard-plugins integration test (real opencode server,
 # fake model provider), the oracle MCP server test (needs a real Oracle
 # instance), the loki MCP server test (needs a real Loki instance), and
 # the mysql MCP server test (needs a real MySQL instance) - all reachable
@@ -25,7 +25,7 @@ echo "== unit tests (node --test) =="
 # runtime dependency (zod, for its review_verdict tool's argument schema -
 # every other plugin here is zero-runtime-dependency by design, see its
 # package.json) - install it before its unit test tries to import the
-# plugin module, same reasoning as clients/module-analysis below.
+# plugin module.
 (cd plugins/llm-review-gate && npm install --no-audit --no-fund)
 # plugins/council/ likewise needs zod, for its tool's argument schema.
 (cd plugins/council && npm install --no-audit --no-fund)
@@ -37,18 +37,6 @@ echo "== unit tests (node --test) =="
 # with ERR_MODULE_NOT_FOUND. Verified directly on real node-v20.18.1 and
 # node-v22.23.2 builds, not assumed. The glob form works on both.
 node --test tests/unit/*.test.mjs
-
-echo
-echo "== analyze-modules.ts integration test =="
-# clients/module-analysis/ is its own npm package (see its package.json) -
-# install @opencode-ai/sdk before driving it, same as mcp-servers/oracle below.
-# It's TypeScript run directly via its local tsx devDependency (no build
-# step, unlike the mcp-servers/*/ packages - see its package.json), so
-# `npm run typecheck` (tsc --noEmit) is the only thing that actually
-# type-checks it - tsx itself only strips types at runtime, it doesn't
-# verify them.
-(cd clients/module-analysis && npm install --no-audit --no-fund && npm run typecheck)
-node tests/integration/analyze-modules.test.mjs
 
 echo
 echo "== guard plugins integration test (loop-guard, path-guard, council in a real opencode) =="

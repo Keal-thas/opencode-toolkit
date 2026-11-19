@@ -8,6 +8,6 @@ Works around an opencode bug on Windows + Git Bash: `edit` and `write` never re-
   - `apply_patch`: rewrites the `*** Add File:` / `*** Delete File:` / `*** Update File:` / `*** Move to:` header paths in `args.patchText`.
   - It mutates the existing `args` object in place rather than reassigning `output.args`, because the real tool reads the same `args` object right after the hook (source citation in the file's header comment). No-op off `win32`.
 - The helpers live in `path-convert.ts` rather than the plugin entry file: opencode 1.19.x calls every exported function of a plugin module as a plugin factory, so exporting them from the entry file breaks loading. Tests import them from `path-convert.ts`.
-- Not yet published and not in `deploy/opencode.json.example`, see `TODO.md`.
+- Not yet published and not in `deploy/opencode.jsonc.example`, see `TODO.md`.
 
 Tests: `tests/unit/gitbash-edit-path-fix.test.mjs` covers the conversion for all four path forms plus negatives, the in-place rewrite for `edit`/`write`, the `apply_patch` header rewrite, and an end-to-end reproduction of `edit.ts`'s branch via `path.win32`. It overrides `process.platform` because the sandbox is Linux, so it proves the plugin's logic, not that real Windows opencode honours the mutation. `tests/capability-probes/gitbash-edit-path-fix.probe.mjs` is the real check (Windows only) and `.github/workflows/probe-gitbash-path-bug.yml` runs it on a Windows runner.

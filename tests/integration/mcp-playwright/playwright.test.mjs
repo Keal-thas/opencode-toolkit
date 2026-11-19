@@ -1,5 +1,5 @@
 // Verifies the official @playwright/mcp package (not our own code) actually
-// installs and behaves as documented, since deploy/opencode.json.example
+// installs and behaves as documented, since deploy/opencode.jsonc.example
 // (once wired in) + mcp-servers/playwright/README.md describe it sight-unseen
 // from its own README - see that README for the full design discussion
 // (browser selection, permission split, launch flags).

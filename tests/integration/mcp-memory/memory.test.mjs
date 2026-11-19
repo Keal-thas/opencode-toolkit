@@ -1,6 +1,6 @@
 // Verifies the official @modelcontextprotocol/server-memory package (not
 // our own code) actually installs and behaves as documented, since
-// deploy/opencode.json.example + SETUP.md step 8 wire it in sight-unseen
+// deploy/opencode.jsonc.example + SETUP.md step 8 wire it in sight-unseen
 // from its README - see mcp-servers/memory/README.md.
 //
 // Spawns the real installed package over stdio, the same way opencode

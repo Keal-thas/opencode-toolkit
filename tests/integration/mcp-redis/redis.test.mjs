@@ -1,5 +1,5 @@
 // Verifies the official redis-mcp-server PyPI package (not our own code)
-// actually installs and behaves as documented, since deploy/opencode.json.example
+// actually installs and behaves as documented, since deploy/opencode.jsonc.example
 // + SETUP.md wire it in sight-unseen from its README - see
 // mcp-servers/redis/README.md.
 //

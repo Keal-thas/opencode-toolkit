@@ -40,4 +40,4 @@ Needs `uv`/`uvx` on the target machine — a real prerequisite this deployment d
 
 ## Status
 
-**Verified end-to-end.** `tests/integration/mcp-redis/redis.test.mjs` spawns the real `redis-mcp-server` package via `uvx` against the sandbox's real `redis` service, connected as the ACL-restricted `readonlyuser`: tool listing, a `set`/`get` round-trip through the tools that exist for it, and a write-shaped tool call coming back as a clean Redis `NOPERM` error rather than a crash. Wired into `deploy/opencode.json.example` (`mcp.redis`, `type: "local"`, `enabled: true`).
+**Verified end-to-end.** `tests/integration/mcp-redis/redis.test.mjs` spawns the real `redis-mcp-server` package via `uvx` against the sandbox's real `redis` service, connected as the ACL-restricted `readonlyuser`: tool listing, a `set`/`get` round-trip through the tools that exist for it, and a write-shaped tool call coming back as a clean Redis `NOPERM` error rather than a crash. Wired into `deploy/opencode.jsonc.example` (`mcp.redis`, `type: "local"`, `enabled: true`).

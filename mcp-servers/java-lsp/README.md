@@ -71,7 +71,7 @@ npm start   # reads ~/.config/kealthas-dev/opencode-mcp-java-lsp/config.json
 
 `npm run dev` runs `src/server.ts` directly via `tsx watch` instead, for a compile-on-save loop.
 
-Either way, point opencode at it with a `type: "remote"` entry (see `deploy/opencode.json.example`) — it needs to already be running and stay running, since opencode connects rather than spawns it.
+Either way, point opencode at it with a `type: "remote"` entry (see `deploy/opencode.jsonc.example`) — it needs to already be running and stay running, since opencode connects rather than spawns it.
 
 ## Status
 

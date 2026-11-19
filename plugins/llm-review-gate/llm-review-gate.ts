@@ -53,7 +53,7 @@ async function logReview(entry: Record<string, unknown>) {
 
 // Custom tool the review-gate agent uses to record its verdict as a real
 // function call (confirmed enabled on this deployment's model - see
-// deploy/opencode.json.example's "review_verdict" permission, denied globally
+// deploy/opencode.jsonc.example's "review_verdict" permission, denied globally
 // and re-allowed only for "review-gate"). Keyed by session ID so concurrent
 // reviews never clobber each other.
 //

@@ -2,7 +2,7 @@
   "name": "@kealthas-dev/opencode-toolkit",
   "version": "0.0.0",
   "private": false,
-  "description": "opencode tooling workspace (system-prompt override, opencode plugins, module-analysis toolkit, LAN-internal MCP servers), published whole as a single package purely as a download channel for the offline target machine's npm mirror - not a real dependency, not intended for outside reuse.",
+  "description": "opencode tooling workspace (system-prompt override, opencode plugins, LAN-internal MCP servers), published whole as a single package purely as a download channel for the offline target machine's npm mirror - not a real dependency, not intended for outside reuse.",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",

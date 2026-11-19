@@ -84,13 +84,13 @@ Plus, in the top-level `permission` block:
 "playwright_*": "ask"
 ```
 
-Not yet added to `deploy/opencode.json.example` — deliberately held back until this gets tested end-to-end alongside the rest of the deployment, same as any other change there.
+Not yet added to `deploy/opencode.jsonc.example` — deliberately held back until this gets tested end-to-end alongside the rest of the deployment, same as any other change there.
 
 ## Status
 
 **Verified in the docker sandbox, against a real headless Chromium — not yet against the real Windows target.** `tests/integration/mcp-playwright/playwright.test.mjs` spawns the real `@playwright/mcp` binary (`playwright-mcp`, globally installed in `docker/Dockerfile`) and drives it with a real `@modelcontextprotocol/sdk` `Client` against a fixture page served by the test itself (no external network dependency at test time): tool listing (spot-checks the read/write split documented above actually matches the real tool names, catching drift), a real `browser_navigate` + `browser_snapshot` round trip, a real `browser_click` that changes real DOM state (confirmed independently via `browser_evaluate`, not just trusting the click tool's own success report), `browser_console_messages` capturing a real `console.log` triggered by that click, and `--allowed-origins` actually blocking a disallowed navigation (not just documented as a caveat — observed the navigation itself come back as an error). All 5 pass. Wired into `tests/run-in-container.sh`, so it's part of `./tests/run-all.sh` going forward.
 
-The sandbox's Linux base image can't exercise the `msedge`/`chrome` channel path that matters for the actual Windows target — the test above uses `--browser chromium` (the bundled default), a different code path from what production will actually use — so the CDN-reachability and `msedge`/`chrome` channel-selection questions from the Install/Browser-selection sections above are still open, and `opencode.json`'s tolerance for an unrecognized `"#"`-keyed comment field is still unconfirmed. Not yet added to `deploy/opencode.json.example` for the same reason.
+The sandbox's Linux base image can't exercise the `msedge`/`chrome` channel path that matters for the actual Windows target — the test above uses `--browser chromium` (the bundled default), a different code path from what production will actually use — so the CDN-reachability and `msedge`/`chrome` channel-selection questions from the Install/Browser-selection sections above are still open, and `opencode.json`'s tolerance for an unrecognized `"#"`-keyed comment field is still unconfirmed. Not yet added to `deploy/opencode.jsonc.example` for the same reason.
 
 **Two real bugs found while verifying this, not assumed from the README:**
 

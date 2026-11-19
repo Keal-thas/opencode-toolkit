@@ -4,7 +4,7 @@ A minimal MCP server exposing one tool, `mysql_query`, that runs an ad-hoc SQL s
 
 ## Design, and why it looks the way it does
 
-- **Remote, not local.** Same reasoning as `mcp-servers/oracle/`: a persistent HTTP server, started independently (`npm start` under a process supervisor — see `deploy/opencode.json.example`/SETUP.md) and reachable at a fixed URL, rather than a `local`/stdio server whose uptime opencode itself would own.
+- **Remote, not local.** Same reasoning as `mcp-servers/oracle/`: a persistent HTTP server, started independently (`npm start` under a process supervisor — see `deploy/opencode.jsonc.example`/SETUP.md) and reachable at a fixed URL, rather than a `local`/stdio server whose uptime opencode itself would own.
 - **Stateless HTTP, one `Server`/transport pair per request** (`sessionIdGenerator: undefined`, matching the SDK's own reference example) — no session state worth keeping between calls, since each `mysql_query` is already a fresh, independent connection (below).
 - **One MySQL connection per request**, opened and closed within the call, not pooled — same three reasons as `mcp-servers/oracle/`: a stray statement can't outlive its request, concurrent calls never race on the same session, and a session killed DB-side only fails the one request in flight. Cost: connection-setup latency on every call — fine for a low-QPS internal tool.
 - **Every query runs inside `START TRANSACTION READ ONLY` — this is the enforcement mechanism, not a keyword filter.** No SQL parsing, no allow/deny list of statement keywords (unlike the app-level "query validation" most community MySQL MCP servers use — see "Why not the popular community servers" below); the guarantee comes from MySQL itself. Confirmed against a real MySQL 8 instance (this repo's own `docker/docker-compose.mysql.yml` sandbox), not assumed from docs:
@@ -66,7 +66,7 @@ npm start   # reads ~/.config/kealthas-dev/opencode-mcp-mysql/config.json
 
 `npm run dev` runs `src/server.ts` directly via `tsx watch` instead, for a compile-on-save loop.
 
-Either way, this starts a persistent HTTP server on the configured port (default `8094`), serving MCP over Streamable HTTP at `/mcp`. Point opencode at it with a `type: "remote"` entry (see `deploy/opencode.json.example`) — it needs to already be running and stay running, since opencode connects rather than spawns it.
+Either way, this starts a persistent HTTP server on the configured port (default `8094`), serving MCP over Streamable HTTP at `/mcp`. Point opencode at it with a `type: "remote"` entry (see `deploy/opencode.jsonc.example`) — it needs to already be running and stay running, since opencode connects rather than spawns it.
 
 ## Testing against a real MySQL instance
 
@@ -83,4 +83,4 @@ The default config file is already in place inside that shell — `entrypoint.sh
 
 ## Status
 
-**Verified end-to-end and automated.** `mysql.test.ts` covers tool listing, a plain SELECT, the READ ONLY transaction unconditionally rejecting an INSERT (error 1792, even from a fully-privileged account), the same transaction *not* rejecting a CREATE TABLE and that table actually persisting (the documented DDL gap above), a nonexistent-table error path, and a connection-failure regression — driven over the real Streamable HTTP transport against the sandbox's `mysql` service. Wired into `deploy/opencode.json.example` (`mcp.mysql`, `type: "remote"`, `enabled: true`). The `auditQuery()` hook remains an intentional no-op until a rule-based or LLM-based check is designed for it.
+**Verified end-to-end and automated.** `mysql.test.ts` covers tool listing, a plain SELECT, the READ ONLY transaction unconditionally rejecting an INSERT (error 1792, even from a fully-privileged account), the same transaction *not* rejecting a CREATE TABLE and that table actually persisting (the documented DDL gap above), a nonexistent-table error path, and a connection-failure regression — driven over the real Streamable HTTP transport against the sandbox's `mysql` service. Wired into `deploy/opencode.jsonc.example` (`mcp.mysql`, `type: "remote"`, `enabled: true`). The `auditQuery()` hook remains an intentional no-op until a rule-based or LLM-based check is designed for it.

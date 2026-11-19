@@ -6,7 +6,7 @@ opencode has no cross-session memory of its own: `AGENTS.md`/`instructions` are 
 
 ## Wiring
 
-- `deploy/opencode.json.example`'s `mcp.memory` entry, `type: "local"`: opencode spawns `mcp-server-memory` itself, installed once with `npm install -g @modelcontextprotocol/server-memory` (SETUP.md step 11). Unlike oracle/loki it needs no separately-supervised process.
+- `deploy/opencode.jsonc.example`'s `mcp.memory` entry, `type: "local"`: opencode spawns `mcp-server-memory` itself, installed once with `npm install -g @modelcontextprotocol/server-memory` (SETUP.md step 11). Unlike oracle/loki it needs no separately-supervised process.
 - `deploy/system-prompt.txt`'s `# Memory` section tells the model when to read and write. Without it the tools exist but nothing prompts the model to use them.
 - `MEMORY_FILE_PATH` points at `$CONFIG_DIR/memory.jsonl`.
 
