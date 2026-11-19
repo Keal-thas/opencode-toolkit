@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fetches the top-level English opencode docs pages (upstream
-# anomalyco/opencode, dev branch, packages/web/src/content/docs/) into
+# anomalyco/opencode, dev branch, services/site/src/docs/v1/content/) into
 # docs/opencode-docs-reference/. Committed to git on purpose: the actual
 # target machine has no internet access at all, so this travels with the
 # repo in the zip transfer, and whoever is deploying or troubleshooting
@@ -25,7 +25,10 @@ set -euo pipefail
 
 REPO="anomalyco/opencode"
 BRANCH="dev"
-DOC_PATH="packages/web/src/content/docs"
+# The v1 docs, which match the opencode 1.x this repo targets (docker/.env).
+# Upstream also has an unversioned docs tree next to it for the next major
+# version, with different pages and a rewritten plugin API.
+DOC_PATH="services/site/src/docs/v1/content"
 OUT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/opencode-docs-reference"
 
 mkdir -p "$OUT_DIR"
