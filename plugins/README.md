@@ -6,7 +6,7 @@ This table is the one list of plugins; other docs link here instead of repeating
 
 | Plugin | What it does | In `deploy/opencode.jsonc.example` | Published |
 |---|---|---|---|
-| [`hook-logger`](hook-logger/README.md) | logs every hook event as JSONL | enabled | yes |
+| [`hook-logger`](hook-logger/README.md) | logs every hook event as JSONL | commented out (opt-in) | yes |
 | [`llm-review-gate`](llm-review-gate/README.md) | LLM safety review before each `bash` call | commented out (opt-in) | yes |
 | [`gitbash-edit-path-fix`](gitbash-edit-path-fix/README.md) | fixes Git-Bash paths in the `edit`/`write`/`apply_patch` tools on Windows | enabled | yes |
 | [`verify-session`](verify-session/README.md) | `/verify` starts an independent review session | enabled | yes |

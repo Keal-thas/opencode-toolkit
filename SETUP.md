@@ -109,13 +109,14 @@ OPENCODE_DISABLE_MODELS_FETCH=1
 
 Every entry in the `plugin` array is a published npm package, referenced by bare name, no version. opencode does a real `npm install` of it on first use, against whatever registry this machine's npm is configured for (this machine's internal registry mirror — confirmed working via steps 6/7's `npm install` calls), and caches the result so later runs skip straight past it. Leaving off a version means every fresh cache picks up whatever's currently tagged `latest` on the registry at install time — it won't silently update again after that first install.
 
-**Important:** `opencode debug config` showing a `plugin_origins` entry is NOT proof the install succeeded — a bad/unreachable package name fails silently (exit 0, no log line) and leaves `$CACHE_DIR/packages/@kealthas-dev/<package>@latest/` permanently empty. The real proof is step 13: does `~/opencode-hook-output/` get files after `opencode run`? If not, check whether that cache directory actually has files in it (`package.json`/`node_modules` = real install; empty = failed) — if empty, delete it by hand and retry rather than assuming the config itself is wrong.
+**Important:** `opencode debug config` showing a `plugin_origins` entry is NOT proof the install succeeded — a bad/unreachable package name fails silently (exit 0, no log line) and leaves `$CACHE_DIR/packages/@kealthas-dev/<package>@latest/` permanently empty. The real proof is whether that cache directory has files in it (`package.json`/`node_modules` = real install; empty = failed) — if empty, delete it by hand and retry rather than assuming the config itself is wrong.
 
-## 5. Plugins: hook-logger and verify-session (included), the rest opt-in
+## 5. Plugins: gitbash-edit-path-fix and verify-session (included), the rest opt-in
 
-The rest of `plugins/` is general-purpose tooling, unrelated to the prompt override itself. Each is its own published npm package, independent of the others, so adding or removing one from the `plugin` array doesn't affect the rest. `deploy/opencode.jsonc.example` enables `hook-logger` and `verify-session` and leaves the rest commented out:
+The rest of `plugins/` is general-purpose tooling, unrelated to the prompt override itself. Each is its own published npm package, independent of the others, so adding or removing one from the `plugin` array doesn't affect the rest. `deploy/opencode.jsonc.example` enables `gitbash-edit-path-fix` and `verify-session` and leaves the rest commented out:
 
-- `hook-logger.ts` (`@kealthas-dev/opencode-hook-logger`) — logs essentially every opencode hook event (chat, tool execution, permission asks, compaction, etc.) as JSONL under `~/opencode-hook-output/`, for debugging/observability.
+- `gitbash-edit-path-fix.ts` (`@kealthas-dev/opencode-gitbash-edit-path-fix`) — fixes Git-Bash paths in the `edit`/`write`/`apply_patch` tools on Windows.
+- `hook-logger.ts` (`@kealthas-dev/opencode-hook-logger`) — opt-in. Logs essentially every opencode hook event (chat, tool execution, permission asks, compaction, etc.) as JSONL under `~/opencode-hook-output/`, for debugging/observability.
 - `verify-session.ts` (`@kealthas-dev/opencode-verify-session`) — adds `/verify <claim>`, which starts a fresh top-level session that independently reviews the working tree; nothing runs until the command is used.
 - `llm-review-gate.ts` (`@kealthas-dev/opencode-llm-review-gate`) — opt-in. Gates `bash` tool calls behind an LLM safety review: before a command runs, it's sent to a hidden internal opencode session for an ALLOW/BLOCK verdict, layered on top of (not replacing) opencode's own permission config. Fails open on review errors/timeouts by default. **This changes real runtime behavior** (an extra hidden model call before every `bash` call).
 - `loop-guard.ts` (`@kealthas-dev/opencode-loop-guard`) — opt-in. Warns, then refuses, a model that keeps calling the same tool with the same arguments. Enable after confirming its thresholds suit this machine's model; they are untested against it.
@@ -125,10 +126,10 @@ The rest of `plugins/` is general-purpose tooling, unrelated to the prompt overr
 If step 2 merged into an existing `opencode.json` rather than copying the example fresh, add the ones you want to the same `plugin` array (install mechanism: step 4). At minimum the two enabled by default:
 
 ```json
-"plugin": ["@kealthas-dev/opencode-hook-logger", "@kealthas-dev/opencode-verify-session"]
+"plugin": ["@kealthas-dev/opencode-gitbash-edit-path-fix", "@kealthas-dev/opencode-verify-session"]
 ```
 
-Each opt-in plugin is just another entry in the same array — `"@kealthas-dev/opencode-llm-review-gate"`, `"@kealthas-dev/opencode-loop-guard"`, `"@kealthas-dev/opencode-path-guard"`, `"@kealthas-dev/opencode-council"`. Merge into the same `plugin` array rather than replacing it — each entry here is independent: include just one by adding just its own array entry.
+Each opt-in plugin is just another entry in the same array — `"@kealthas-dev/opencode-hook-logger"`, `"@kealthas-dev/opencode-llm-review-gate"`, `"@kealthas-dev/opencode-loop-guard"`, `"@kealthas-dev/opencode-path-guard"`, `"@kealthas-dev/opencode-council"`. Merge into the same `plugin` array rather than replacing it — each entry here is independent: include just one by adding just its own array entry.
 
 ## Steps 6-10: the shared MCP server pattern
 
@@ -459,7 +460,7 @@ Run a trivial request against your actual local model:
 opencode run --model <your-provider>/<your-model> "say hi in one word"
 ```
 
-If `hook-logger` is enabled (it is in the example config), check what actually got sent. It logs the system prompt blocks of every request as one JSON line; look at `output.system` in the last line:
+To check what actually got sent, enable `hook-logger` for this one run (add `"@kealthas-dev/opencode-hook-logger"` to the `plugin` array, step 5). It logs the system prompt blocks of every request as one JSON line; look at `output.system` in the last line:
 
 ```bash
 tail -n 1 ~/opencode-hook-output/experimental.chat.system.transform.jsonl
