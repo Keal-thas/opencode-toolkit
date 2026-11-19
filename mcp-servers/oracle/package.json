@@ -2,12 +2,15 @@
   "name": "@kealthas-dev/opencode-mcp-oracle",
   "version": "0.0.0",
   "type": "module",
-  "description": "MCP server exposing a single passthrough oracle_query tool - see README.md for the connection/audit design and the config.json-driven config",
+  "description": "Read-only SQL query server for Oracle (a local HTTP /query route) and its `oracle q` command-line client - see README.md for the connection design and the config.json-driven config",
   "main": "dist/server.js",
   "bin": {
+    "oracle": "dist/cli.js",
     "opencode-mcp-oracle": "dist/server.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -23,9 +26,7 @@
     "test": "tsx --test oracle.test.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "oracledb": "^6.5.0",
-    "zod": "^3.25 || ^4.0"
+    "oracledb": "^6.5.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

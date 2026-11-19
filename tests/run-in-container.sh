@@ -3,7 +3,7 @@
 # not against whatever node/bash happens to be on the host. Covers
 # everything that needs no live opencode/model server: the plugin unit
 # tests, the guard-plugins integration test (real opencode server,
-# fake model provider), the oracle MCP server test (needs a real Oracle
+# fake model provider), the oracle query server and command test (needs a real Oracle
 # instance), the loki MCP server test (needs a real Loki instance), and
 # the mysql MCP server test (needs a real MySQL instance) - all reachable
 # here because the shared `oracle`/`loki`/`mysql` services are started
@@ -45,7 +45,7 @@ echo "== verifier agent integration test (real opencode, fake model) =="
 node tests/integration/verifier-agent.test.mjs
 
 echo
-echo "== oracle MCP server integration test (real Oracle instance) =="
+echo "== oracle query server and command integration test (real Oracle instance) =="
 # mcp-servers/oracle/ is its own npm package - its test lives alongside it (not
 # under tests/) so Node's module resolution finds its node_modules. It's
 # written in TypeScript (see its README's Design section), so the test needs

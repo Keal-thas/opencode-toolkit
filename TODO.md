@@ -7,7 +7,7 @@ Concrete, actionable follow-up work for this repo — things that should actuall
   - `docs/deployment-environment.md` still carries dated "confirmed … chat" asides; keep the facts and any rationale, drop the dates and who said it.
   - `mcp-servers/oracle/README.md` says "unlike the other three servers' `.env`"; recheck the count against the servers that exist now.
   - Trim this file: move the memory RAG survey, the IDEA debugger open questions and the web UI spacing trace to `docs/` so each item here is a line or two plus a link; drop the memory item's already-done half.
-- **Convert `oracle` (then `loki`/`mysql`/`redis`) from MCP-only to a CLI.** The decision and concrete steps are in [mcp-servers/TODO.md](mcp-servers/TODO.md). It reaches beyond `mcp-servers/`: `deploy/opencode.jsonc.example`'s `mcp` block loses the entries, the agent-facing interface becomes a `bash` command with its own permission rule, and `SETUP.md` needs the CLIs on `PATH` instead of MCP URLs.
+- **Convert `loki`, `mysql` and `redis` from MCP-only to a command, as `oracle` now is.** The steps are in [mcp-servers/TODO.md](mcp-servers/TODO.md). Each one also loses its `mcp` entry in `deploy/opencode.jsonc.example`, gets a line in `deploy/system-prompt.txt`'s `# Databases` section, and a step in `SETUP.md` that installs the command.
 
 - **Extend `tests/unit/docs-consistency.test.mjs` as new drift shows up.** It currently checks relative links, that `plugins/README.md` and `mcp-servers/README.md` list exactly the directories present, and that their published/enabled columns match `release.yml` and `deploy/opencode.jsonc.example`. Add a check whenever a doc is found out of step with its source.
 

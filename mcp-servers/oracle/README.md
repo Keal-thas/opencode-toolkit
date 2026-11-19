@@ -1,106 +1,89 @@
-# oracle mcp server
+# oracle
 
-A minimal MCP server exposing one tool, `oracle_query`, that runs an arbitrary SQL statement against a configured Oracle database and returns the result as JSON. Written in TypeScript (`src/server.ts` + `src/types/config.ts`, compiled to `dist/` — see Run below), built directly against `@modelcontextprotocol/sdk` and `oracledb` (thin mode, no Oracle Instant Client needed — works fully offline), same hand-rolled-against-the-raw-API pattern as `plugins/`. Speaks MCP over Streamable HTTP, as a persistent process opencode connects to (`type: "remote"`) rather than spawns and owns (`type: "local"`) — see below for why.
+Read-only SQL for the agent as a command, `oracle q "<sql>"`, backed by a small local HTTP query server. Written in TypeScript (`src/server.ts`, `src/cli.ts`), compiled to `dist/`.
 
-## Design, and why it looks the way it does
+It is a command, not an MCP tool, because an MCP tool result goes into the model's context whole: the agent cannot `head`, `grep` or `awk` it first, and a broad `SELECT` costs all of its rows. The command's stdout can be cut, piped or written to a file.
 
-- **Remote, not local.** A `local`/stdio server would have opencode spawning and owning the process, tying the server's uptime to opencode's own restarts. Instead this runs as a persistent HTTP server, started independently (`npm start` under a process supervisor — see `deploy/opencode.jsonc.example`/SETUP.md step 6) and reachable at a fixed URL. Still runs on the same machine as opencode in this repo's deployment — "remote" describes the connection model, not a different host.
-- **Stateless HTTP, one `Server`/transport pair per request** (`sessionIdGenerator: undefined`, matching the SDK's own reference example). No session state is worth keeping between calls — each `oracle_query` is already a fresh, independent Oracle connection (below) — so sharing one pair across requests would only let concurrent requests interfere with each other for no benefit.
-- **Full passthrough, by design.** `oracle_query` executes whatever SQL it's given — no read-only enforcement, no keyword filtering, DDL/DML included. Safety is meant to live elsewhere: the DB account's own grants, and the `auditQuery()` hook in `src/server.ts` — currently a no-op that allows everything, a drop-in point for a rule-based or LLM-based check later (mirroring `plugins/llm-review-gate/llm-review-gate.ts`'s gate).
-- **One Oracle connection per request**, opened and closed within the call, not pooled. A stray DML statement can't outlive its request (closing a session with uncommitted work rolls it back); concurrent calls never race on the same session; a session killed on the DB side only fails the one request in flight. Cost: connection-setup latency on every call — fine for a low-QPS internal tool, not for anything latency-sensitive.
-- **`autoCommit: true`** on every execute — otherwise a successful UPDATE/INSERT would report no error and then silently roll back the moment its connection closes right after (immediately, given one connection per request).
+## Design
+
+- **Two parts.** `dist/server.js` is a persistent HTTP server with one route, `POST /query`; `dist/cli.js` is the `oracle` command that calls it. The server holds the credentials, the config and the Oracle connection logic; the command only formats. Started independently and left running (`npm start`, a process supervisor or a container), so its uptime is not tied to opencode's restarts.
+- **Per-request connection, not pooled.** A stray statement cannot outlive its request (closing rolls back), concurrent calls never share a session, and a session dropped on the database side fails only that call. The price is connection-setup latency per call, fine for low-QPS internal use.
+- **Read-only by two layers.** Every query runs after `SET TRANSACTION READ ONLY`, so Oracle itself refuses `INSERT`, `UPDATE` and `DELETE` (`ORA-01456`) even for an account that holds write grants. **DDL is not covered:** it commits first and then runs, so `CREATE TABLE` or `DROP TABLE` goes through. The connecting account's own grants are the real boundary, see below.
+- **Capped output.** The command prints 100 rows by default, `--limit N` or `--all` raises that, and the server refuses to return more than `ORACLE_MAX_ROWS` (default 10000) whatever is asked. A notice on stderr says when rows were left out.
+- **Plain output.** CLOB and NCLOB come back as text, BLOB as base64, RAW as hex, DATE and TIMESTAMP as `YYYY-MM-DD HH24:MI:SS` text (a TIMESTAMP keeps milliseconds, nothing finer; time-zone types become an ISO instant). A trailing `;` on a `SELECT` is dropped, since the server rejects it. A join with two columns of the same name keeps both (the driver renames the second to `ID_1`).
+- **A table changed a moment ago cannot be read for a few seconds.** A read-only transaction takes a snapshot, and Oracle answers `ORA-01466` for a table whose definition changed within about the last few seconds. It passes by itself.
+- **No keyword filtering.** `auditQuery()` in `src/server.ts` is a no-op extension point for a rule-based or LLM-based check later (mirroring `plugins/llm-review-gate/llm-review-gate.ts`).
+
+## Usage
+
+```bash
+oracle q "SELECT * FROM employees WHERE dept = 10"          # CSV, first 100 rows
+oracle q "SELECT ..." --json                                 # one JSON object per row
+oracle q "SELECT ..." --format tsv --limit 20
+oracle q "SELECT ..." --out /tmp/result.csv                  # whole result to a file, a summary on stdout
+oracle q "SELECT ..." --schema HR                            # ALTER SESSION SET CURRENT_SCHEMA
+oracle --help
+```
+
+Exit codes: `0` ok, `1` the SQL failed, `2` usage error, `3` the query could not run (server unreachable, bad credentials or config, timeout).
 
 ## Recommended read-only account
 
-Since `oracle_query` is a full passthrough with no code-level restriction (see Design above), the account `ORACLE_USER`/`ORACLE_PASSWORD` point at is the actual safety boundary. Create a dedicated account for it rather than pointing this server at an account that also has write access:
+The transaction guard does not stop DDL, so the account `ORACLE_USER` points at is the actual safety boundary. Give it read access only, for example:
 
 ```sql
 CREATE USER readonly IDENTIFIED BY "<a real password>";
 
 GRANT CREATE SESSION, READ ANY TABLE, SELECT ANY SEQUENCE,
-      FLASHBACK ANY TABLE, SELECT_CATALOG_ROLE, SELECT ANY DICTIONARY,
-      EXECUTE_CATALOG_ROLE
+      SELECT ANY DICTIONARY, SELECT_CATALOG_ROLE, EXECUTE_CATALOG_ROLE
 TO readonly;
 ```
 
-A few things confirmed against a real Oracle 23ai Free instance (this repo's own `docker/docker-compose.oracle.yml` sandbox), not just assumed from Oracle's docs:
-
-- `READ ANY TABLE` genuinely blocks locking reads too — `SELECT ... FOR UPDATE` fails with `ORA-41900`, on top of `INSERT`/`UPDATE`/`DELETE`/DDL all failing — stricter than the more commonly-used `SELECT ANY TABLE`.
-- `SELECT ANY DICTIONARY` does **not** expose `SYS.USER$` (password hashes) or other similarly hardened SYS tables — Oracle hardcodes that protection regardless of grants, so this combination doesn't leak credential material.
-- `EXECUTE_CATALOG_ROLE` is broader than its name suggests for a read-only setup: it grants `EXECUTE` on 115 SYS packages, not just the `DBMS_METADATA` package a DDL-extraction use case actually needs — includes `DBMS_LOCK`, `DBMS_FILE_TRANSFER`, `DBMS_REDEFINITION`, `DBMS_RLS` among others. Included above as an accepted tradeoff for this deployment; a narrower alternative if only DDL text is needed is `GRANT EXECUTE ON DBMS_METADATA TO readonly;` in place of the whole role.
-
-See `mcp-servers/TODO.md` for planned follow-ups that go further than DB grants alone (a result-size cap, `SET TRANSACTION READ ONLY` as an independent session-level guard, `CURRENT_SCHEMA` support).
+- `SELECT ANY DICTIONARY` does **not** expose `SYS.USER$` (password hashes) or other similarly hardened SYS tables: Oracle hardcodes that protection regardless of grants.
+- `EXECUTE_CATALOG_ROLE` is broader than its name suggests: it grants `EXECUTE` on 115 SYS packages, not just `DBMS_METADATA`, including `DBMS_LOCK`, `DBMS_FILE_TRANSFER`, `DBMS_REDEFINITION` and `DBMS_RLS`. It is there for DDL extraction through `DBMS_METADATA`; drop it if you do not need that.
 
 ## Configuration
 
-Config is file-based, not env-var-based — two separate files, matching how the port (infrastructure, fixed per machine) and the database connection (per-environment: prod/staging/dev/...) actually vary independently. Same shape across all four `mcp-servers/*` packages (`loki/`/`java-lsp/`/`spring-lsp/` included) — this is the fullest writeup of it.
+Config is read from files, not environment variables, and the files' location is fixed under `$HOME/.config/kealthas-dev/opencode-mcp-oracle/`:
 
-- **`$HOME/.config/kealthas-dev/opencode-mcp-oracle/server.json`** — the port to listen on. `ORACLE_MCP_PORT` env var overrides it, for running more than one instance. Otherwise optional: if missing, defaults to `8090`; if present, must be valid JSON or the server refuses to start. Shape (see `server.example.json`):
-  ```json
-  { "ORACLE_MCP_PORT": 8090 }
-  ```
-- **A database config file, re-read on every query (no restart needed after editing it).** The *location* it's read from is never user-supplied — only a short environment name is, via `ORACLE_CONFIG_ENV`. Deliberately not an arbitrary-path env var: a caller's shell not expanding `~`, a quoted value suppressing that expansion, or a typo'd relative path resolving against whatever `cwd` happens to be would each silently point `path.resolve()` at the wrong file — a bare name has none of that surface. With no `ORACLE_CONFIG_ENV` set, it's read from `config.json`; with `ORACLE_CONFIG_ENV=prod`, from `config-prod.json` instead. Required (one file or the other must exist) — the server prints a sample and exits if the resolved file doesn't exist or is missing a required key. Shape (see `config.example.json`):
+- **`server.json`**, the port: `{ "ORACLE_MCP_PORT": 8090 }`. The `ORACLE_MCP_PORT` environment variable overrides it, for running more than one instance. Optional, the default is `8090`. The server and the command both read it, so they find each other.
+- **A database config file, re-read on every query** (no restart after editing it): `config.json` by default, or `config-<name>.json` with `ORACLE_CONFIG_ENV=<name>`. Only a short name is taken from the environment, never a path, so a shell that did not expand `~` cannot point the server at a wrong location.
+
   ```json
   {
     "ORACLE_CONNECT_STRING": "hostname:1521/service_name",
     "ORACLE_USER": "username",
     "ORACLE_PASSWORD": "password",
-    "ORACLE_DEFAULT_SCHEMA": "schema_name"
+    "ORACLE_DEFAULT_SCHEMA": "SCHEMA_NAME",
+    "ORACLE_MAX_ROWS": 10000
   }
   ```
-  `ORACLE_CONNECT_STRING` accepts either an Easy Connect string (`host:port/service_name`) or a full TNS descriptor — both are passed straight through to `oracledb.getConnection()`, which supports both natively. Not a JDBC URL either way. `ORACLE_DEFAULT_SCHEMA` is optional — when set, every connection runs `ALTER SESSION SET CURRENT_SCHEMA` before the agent's SQL, so queries don't need to qualify every table with `schema.table`. `oracle_query`'s own optional `schema` argument overrides this per call. Like `sql` itself, this value is interpolated directly into the `ALTER SESSION` statement, not bind-parameterized — same full-passthrough stance (see Design above).
 
-A typical multi-environment layout:
+  `ORACLE_CONNECT_STRING` is an Easy Connect string (`host:port/service_name`) or a full TNS descriptor. `ORACLE_DEFAULT_SCHEMA` (optional, exact case as Oracle stores it, normally uppercase) sets the session's default schema; `--schema` overrides it per call. `ORACLE_MAX_ROWS` (optional) is the hard cap. A missing or broken file fails that one query with the path and the expected shape in the message; the server stays up.
 
-```
+```text
 ~/.config/kealthas-dev/opencode-mcp-oracle/
-├── server.json          # port - one per machine
-├── config.json           # used when ORACLE_CONFIG_ENV is unset
-├── config-prod.json      # ORACLE_CONFIG_ENV=prod
-├── config-staging.json   # ORACLE_CONFIG_ENV=staging
-└── config-dev.json       # ORACLE_CONFIG_ENV=dev
+├── server.json          # port, one per machine
+├── config.json          # used when ORACLE_CONFIG_ENV is unset
+├── config-prod.json     # ORACLE_CONFIG_ENV=prod
+└── config-dev.json      # ORACLE_CONFIG_ENV=dev
 ```
 
-Real credentials never need to live inside this repo's checkout at all (unlike the other three servers' `.env`, which needs the `mcp-servers/**/.env` `.gitignore` rule to stay out of git) — the config directory lives under `$HOME`, entirely outside the working tree.
+`config.example.json` and `server.example.json` show the shapes.
 
-## Run
+## Running it
 
-Published as `@kealthas-dev/opencode-mcp-oracle` — on a real deployment, install it globally and run the resulting binary (see SETUP.md step 6):
+Published as `@kealthas-dev/opencode-mcp-oracle`. Install it globally, which puts two commands on `PATH`: `oracle` (the client the agent runs) and `opencode-mcp-oracle` (the server, which stays running). See SETUP.md step 6.
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-oracle
-mkdir -p ~/.config/kealthas-dev/opencode-mcp-oracle
-# real config at ~/.config/kealthas-dev/opencode-mcp-oracle/config-prod.json (see config.example.json for the shape)
-ORACLE_CONFIG_ENV=prod opencode-mcp-oracle
+ORACLE_CONFIG_ENV=prod opencode-mcp-oracle     # reads config-prod.json; leave it running
 ```
 
-For local dev/testing against this repo's own checkout (this directory, not the published package), same idea — drop a real config file at the default location, or a named `config-<name>.json` (see `config.example.json` for the shape — the sandbox's entrypoint.sh generates the default one automatically, see Testing below):
-
-```bash
-npm install
-npm run build
-npm start   # reads ~/.config/kealthas-dev/opencode-mcp-oracle/config.json
-```
-
-`npm run dev` runs `src/server.ts` directly via `tsx watch` instead, for a compile-on-save loop.
-
-Either way, this starts a persistent HTTP server on the configured port (default `8090`), serving MCP over Streamable HTTP at `/mcp`. Point opencode at it with a `type: "remote"` entry (see `deploy/opencode.jsonc.example`) — it needs to already be running and stay running, since opencode connects rather than spawns it (either command alone exits when its terminal closes; see Design above for real supervisor options).
-
-## Testing against a real Oracle instance
-
-`docker/docker-compose.oracle.yml`'s `oracle` service (`gvenzl/oracle-free` — see `docker/notes.md`'s "Oracle test instance" section) is a shared fixture started separately, not by `docker/dev.sh`:
-
-```sh
-docker compose -f docker/docker-compose.oracle.yml up -d --wait
-docker/dev.sh run --rm opencode-dev bash
-```
-
-The default config file is already in place inside that shell — `entrypoint.sh` generates `~/.config/kealthas-dev/opencode-mcp-oracle/config.json` from the sandbox's `ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD` compose env vars, matching a real deployment's file-based config rather than passing those three straight through. `cd mcp-servers/oracle && npm install && npm run build && npm start`, then hit `http://localhost:8090/mcp` from an MCP client or `curl`.
-
-`oracle.test.ts` (see `tests/README.md`) doesn't need this manual dance — it builds against `process.env.ORACLE_CONNECT_STRING`/`ORACLE_USER`/`ORACLE_PASSWORD` (still plain env vars at the test level) to write its own config files into a fake `$HOME` per spawned server, and starts/stops its own `dist/server.js` process on its own port as part of the test run.
+For the repo's own checkout, `npm install && npm run build && npm start` in this directory does the same with the default `config.json`. The `oracle` command must run with the same `ORACLE_CONFIG_ENV`/`ORACLE_MCP_PORT` as the server it should reach, or find the same `server.json`.
 
 ## Status
 
-**Verified end-to-end and automated.** `oracle.test.ts` covers tool listing, a plain SELECT, a write surviving the per-request connection close (autoCommit), a nonexistent-table error path, and a connection-failure regression (an earlier bug crashed the MCP protocol instead of returning a clean error) — driven over the real Streamable HTTP transport against the sandbox's `oracle` service. Wired into `deploy/opencode.jsonc.example` (`mcp.oracle`, `type: "remote"`, `enabled: true` — see SETUP.md step 6). The `auditQuery()` hook remains an intentional no-op until a rule-based or LLM-based check is designed for it.
+`oracle.test.ts` runs against a real Oracle instance in the docker sandbox (see `docker/notes.md`, "Oracle test instance"), through the `oracle` command: CSV, TSV and JSON output, CSV quoting, the 100-row default and `--limit`/`--all`/`--out`, the server-side cap, duplicate column names, dates, CLOB, BLOB and RAW, `INSERT`/`UPDATE`/`DELETE` refused with nothing changed, an Oracle error, usage errors, bad credentials, no server running, and a broken config file that fails one query without taking the server down.
 
-The Streamable HTTP implementation is verified against the pinned SDK version (`@modelcontextprotocol/sdk@1.30.0`, per `package-lock.json`) by reading its compiled `.d.ts`/`.js`, not only by following docs examples.
+Known, not covered: DDL goes through (see Design), and a TIMESTAMP loses anything finer than milliseconds.

@@ -72,11 +72,6 @@
     // "@kealthas-dev/opencode-path-guard"
   ],
   "mcp": {
-    "oracle": {
-      "type": "remote",
-      "url": "http://localhost:8090/mcp",
-      "enabled": true
-    },
     "loki": {
       "type": "remote",
       "url": "http://localhost:8091/mcp",

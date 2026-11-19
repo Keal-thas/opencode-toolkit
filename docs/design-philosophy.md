@@ -57,3 +57,7 @@ Several separate-looking choices — publishing to npm as a second channel along
 ## Chinese documentation only where a human follows it step by step live
 
 Docs written for a human to execute directly, in the moment, on the target machine get a Chinese counterpart; reference material meant for a developer or an AI agent to read stays English-only. The split isn't about topic — it's about who is actually the reader for that specific document.
+
+## A query capability is a command when its result can be large
+
+An MCP tool hands the agent one string per call, so a query-shaped result cannot be cut with `head`, `grep` or `awk` before it costs context; a command's stdout can. A capability that returns query results is therefore a command the agent runs with `bash`, backed by a server that holds the credentials, not an MCP tool (`oracle` is built this way; `loki`, `mysql` and `redis` are still MCP servers, see `mcp-servers/TODO.md`). MCP stays where no command exists or can be wrapped cheaply and results are small and typed (`memory`, `java-lsp`, `spring-lsp`).
