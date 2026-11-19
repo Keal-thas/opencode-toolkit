@@ -160,27 +160,26 @@ If step 2 merged into an existing `opencode.json` rather than copying the exampl
 
 Each opt-in plugin is just another entry in the same array — `"@kealthas-dev/opencode-hook-logger"`, `"@kealthas-dev/opencode-llm-review-gate"`, `"@kealthas-dev/opencode-loop-guard"`, `"@kealthas-dev/opencode-path-guard"`. Merge into the same `plugin` array rather than replacing it — each entry here is independent: include just one by adding just its own array entry.
 
-## Steps 6-10: the shared MCP server pattern
+## Steps 6, 7, 10, 12: the query commands
 
-Steps 6-10 (`oracle`, `loki`, `java-lsp`, `spring-lsp`, `mysql`) all follow the same shape, except that `oracle` is a command that connects straight to the database, with no server to run (step 6), each published as a real npm package under `@kealthas-dev/opencode-mcp-<name>`:
+Steps 6, 7, 10 and 12 (`oracle`, `loki`, `mysql`, `redis`) each install one command, published as a real npm package under `@kealthas-dev/opencode-mcp-<name>`. They are commands, not MCP servers: the agent runs them with `bash`, which lets it pipe, cut and redirect the output instead of taking every row into its context. So there is nothing to start and leave running, no port, and no `mcp` entry in `opencode.json`; `deploy/system-prompt.txt`'s `# Databases` section is what tells the model they exist. Each takes no arguments: the query goes on stdin, in a heredoc with a quoted delimiter.
 
-1. Install globally via the internal npm registry (see this doc's intro for why that registry, not public npm, resolves this) — same mechanism that already makes the `opencode` command itself work on this machine. This puts an `opencode-mcp-<name>` binary on `PATH` (for `oracle` it is the `opencode-oracle-query` command, step 6). If `npm install` (or a prerequisite check below) unexpectedly fails, report it rather than working around by guessing at a substitute package or how to fix the environment.
-2. Each is wired as `type: "remote"` in `opencode.json` (`oracle` is the exception, see step 6): opencode connects to it as an already-running HTTP endpoint rather than spawning and owning it. The server process has to be started independently, before opencode ever tries to use it — a persistent terminal/session running the binary, a process supervisor, or a container, whichever fits this machine — and left running. opencode itself never starts, stops, or restarts any of these four.
-3. Each reads its config from files, not raw environment variables (see the relevant README's Configuration section) — a config file plus a `server.json` for just the port (only needed if the default port below isn't free; an `<X>_MCP_PORT` env var overrides it too, for running more than one instance). The config file's *location* is fixed too, not an arbitrary path: with no `<X>_CONFIG_ENV` env var set (see the table below for the exact name) it's read from `~/.config/kealthas-dev/opencode-mcp-<name>/config.json`; setting `<X>_CONFIG_ENV=prod` reads `config-prod.json` instead, for multi-environment setups.
-4. Create the config file yourself — **real values only, never guessed by an executing agent; ask the human running this.**
-5. Start the server and leave it running. `loki` re-reads its config file on every call, so editing it takes effect without a restart (`oracle` reads it on every run too); `java-lsp`/`spring-lsp` read it once at startup (their LSP session is stateful and tied to one workspace) and need a restart after an edit.
-6. `deploy/opencode.jsonc.example` already carries the four `mcp` blocks below (`loki`, `java-lsp`, `spring-lsp`, `mysql`; `oracle` has none, it is a command), enabled, with placeholder ports — only add one by hand if step 2 merged into an existing `opencode.json` instead of copying the example fresh (merge into the top-level `mcp` key, don't replace it).
+1. Install globally via the internal npm registry (see this doc's intro for why that registry, not public npm, resolves this) — same mechanism that already makes the `opencode` command itself work on this machine. This puts the command on `PATH` (its name is in the table). If `npm install` unexpectedly fails, report it rather than working around by guessing at a substitute package or how to fix the environment.
+2. Each reads its connection settings from a file, not raw environment variables (see the relevant README's Configuration section). The file's *location* is fixed, not an arbitrary path: with no `<X>_CONFIG_ENV` env var set (see the table for the exact name) it is read from `~/.config/kealthas-dev/opencode-mcp-<name>/config.json`; setting `<X>_CONFIG_ENV=prod` reads `config-prod.json` instead, for multi-environment setups. It is read on every run, so editing it needs nothing restarted.
+3. Create the config file yourself — **real values only, never guessed by an executing agent; ask the human running this.**
+4. Check the command with the one-liner in its step.
+5. Use an account that can only read. Every one of these runs the query as given, with at most a read-only transaction on top, so the account's own grants are the real boundary (Oracle and MySQL do not stop `CREATE`/`DROP` with the transaction alone; Redis has no guard but its ACL).
 
-Per-server specifics:
+Per-command specifics:
 
-| | oracle (step 6) | loki (step 7) | java-lsp (step 8) | spring-lsp (step 9) | mysql (step 10) |
-|---|---|---|---|---|---|
-| Package | `@kealthas-dev/opencode-mcp-oracle` | `@kealthas-dev/opencode-mcp-loki` | `@kealthas-dev/opencode-mcp-java-lsp` | `@kealthas-dev/opencode-mcp-spring-lsp` | `@kealthas-dev/opencode-mcp-mysql` |
-| Prerequisites | none | none | `python3` + JDK 21+ `java` on `PATH`, separate from whatever JDK the analyzed project targets — neither confirmed present on the actual target machine yet | JDK 21+ `java` on `PATH` (no `python3` needed), and Maven (`mvn`) on `PATH` for a Maven project (see step 9) | none |
-| Config env var | `ORACLE_CONFIG_ENV` | `LOKI_CONFIG_ENV` | `JAVA_LSP_CONFIG_ENV` | `SPRING_LSP_CONFIG_ENV` | `MYSQL_CONFIG_ENV` |
-| Config file keys | `ORACLE_CONNECT_STRING`, `ORACLE_USER`, `ORACLE_PASSWORD` (required); `ORACLE_DEFAULT_SCHEMA` (optional — sets the session's current schema, so the SQL can leave the schema prefix off) | `LOKI_BASE_URL` (required); `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` (optional, only if that instance requires them); `LOKI_VIA_GRAFANA`/`LOKI_GRAFANA_DATASOURCE_ID` (optional — set when Loki is only reachable through Grafana's own datasource proxy, not directly; see step 7 below) | `JAVA_LSP_WORKSPACE_ROOT` (project to analyze), `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch dir, not the project root) — both required | `SPRING_LSP_WORKSPACE_ROOT` (project to analyze, required) | `MYSQL_CONNECT_STRING` (required — a single `mysql://user:pass@host:port/db` URI; any reserved character in the password needs percent-encoding first, see `mcp-servers/mysql/README.md`) |
-| Default port / override key | none, no server | `8091` / `LOKI_MCP_PORT` | `8092` / `JAVA_LSP_MCP_PORT` | `8093` / `SPRING_LSP_MCP_PORT` | `8094` / `MYSQL_MCP_PORT` |
-| Passthrough / notes | read-only transaction on every query, but DDL still goes through, so the account's own grants are the boundary — see `mcp-servers/oracle/README.md` | full passthrough, any LogQL, by deliberate design — see `mcp-servers/loki/README.md` | vendored `jdtls` (Eclipse JDT Language Server) ships inside the npm package — nothing extra to download | vendored `spring-boot-language-server` ships inside the npm package; classpath-aware richness needs pairing with a `java-lsp` jdtls instance via a "classpath listener" not implemented yet — see `mcp-servers/TODO.md` | every call runs inside `START TRANSACTION READ ONLY` — unconditionally blocks DML, does NOT block DDL (implicitly commits first); the connecting account's own grants have to close that gap — see `mcp-servers/mysql/README.md`'s "Recommended read-only account" |
+| | oracle (step 6) | loki (step 7) | mysql (step 10) | redis (step 12) |
+|---|---|---|---|---|
+| Package | `@kealthas-dev/opencode-mcp-oracle` | `@kealthas-dev/opencode-mcp-loki` | `@kealthas-dev/opencode-mcp-mysql` | `@kealthas-dev/opencode-mcp-redis` |
+| Command | `opencode-oracle-query` | `opencode-loki-query` | `opencode-mysql-query` | `opencode-redis-query` |
+| Prerequisites | none | none | none | none |
+| Config env var | `ORACLE_CONFIG_ENV` | `LOKI_CONFIG_ENV` | `MYSQL_CONFIG_ENV` | `REDIS_CONFIG_ENV` |
+| Config file keys | `ORACLE_CONNECT_STRING`, `ORACLE_USER`, `ORACLE_PASSWORD` (required); `ORACLE_DEFAULT_SCHEMA` (optional — sets the session's current schema, so the SQL can leave the schema prefix off) | `LOKI_BASE_URL` (required); `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` (optional, only if that instance requires them); `LOKI_VIA_GRAFANA`/`LOKI_GRAFANA_DATASOURCE_ID` (optional — set when Loki is only reachable through Grafana's own datasource proxy; see step 7) | `MYSQL_CONNECT_STRING` (required, a `mysql://` URI) | `REDIS_HOST` (required); `REDIS_PORT`, `REDIS_USERNAME`, `REDIS_PASSWORD`, `REDIS_DB`, `REDIS_TLS` (optional) |
+| Notes | read-only transaction on every query, but DDL still goes through — see `mcp-servers/oracle/README.md` | takes Loki's own query parameters (`--since`, `--start`, `--end`, `--limit`) — see `mcp-servers/loki/README.md` | read-only transaction on every query, but DDL still goes through — see `mcp-servers/mysql/README.md` | no guard of its own, the ACL account is the whole boundary — see `mcp-servers/redis/README.md` |
 
 ## 6. Add the Oracle command
 
@@ -215,13 +214,15 @@ It should print `ONE` and `1`. Nothing goes into `opencode.json` for Oracle: the
 
 Use an account that can only read: every query runs in a read-only transaction, which stops `INSERT`, `UPDATE` and `DELETE`, but not `CREATE`/`DROP`. `mcp-servers/oracle/README.md` has the recommended grants.
 
-## 7. Add the Loki MCP server
+## 7. Add the Loki command
+
+Loki is reached with a command, `opencode-loki-query`, which reads the LogQL from stdin and asks Loki directly.
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-loki
 ```
 
-Create the config file with real values (see the shared pattern above), then start the server:
+This puts `opencode-loki-query` on `PATH`. Create the config file with real values (see the shared pattern above):
 
 ```bash
 mkdir -p ~/.config/kealthas-dev/opencode-mcp-loki
@@ -232,7 +233,7 @@ cat > ~/.config/kealthas-dev/opencode-mcp-loki/config.json <<'EOF'
 EOF
 ```
 
-**If Loki has no directly reachable port of its own and the only way in is Grafana's own datasource proxy** — check this first if the config above returns a redirect-to-login error instead of data — point `LOKI_BASE_URL` at Grafana's own URL instead of Loki's, and add `LOKI_VIA_GRAFANA`/`LOKI_GRAFANA_DATASOURCE_ID`/`LOKI_USERNAME`/`LOKI_PASSWORD` (a real Grafana user's Basic Auth, not a Loki credential):
+**If Loki has no directly reachable port of its own and the only way in is Grafana's own datasource proxy** — check this first if the check below prints a redirect-to-login error instead of data — point `LOKI_BASE_URL` at Grafana's own URL instead of Loki's, and add `LOKI_VIA_GRAFANA`/`LOKI_GRAFANA_DATASOURCE_ID`/`LOKI_USERNAME`/`LOKI_PASSWORD` (a real Grafana user's Basic Auth, not a Loki credential):
 
 ```bash
 cat > ~/.config/kealthas-dev/opencode-mcp-loki/config.json <<'EOF'
@@ -248,21 +249,43 @@ EOF
 
 See `mcp-servers/loki/README.md`'s Configuration section for the full field list and how to find the datasource ID.
 
+Check it:
+
 ```bash
-opencode-mcp-loki
+opencode-loki-query --labels --since 24h
 ```
 
-```json
-"mcp": {
-  "loki": {
-    "type": "remote",
-    "url": "http://localhost:8091/mcp",
-    "enabled": true
-  }
-}
+It should print the label names Loki knows, one per line. A query goes on stdin, with Loki's own time options:
+
+```bash
+opencode-loki-query --since 1h <<'LOGQL'
+{app="api"} |= "error"
+LOGQL
 ```
 
-If port `8091` is taken, write `~/.config/kealthas-dev/opencode-mcp-loki/server.json` (`{"LOKI_MCP_PORT": <port>}`) and update the `url` above to match.
+Nothing goes into `opencode.json` for Loki: there is no `mcp` entry, and `deploy/system-prompt.txt`'s `# Databases` section already tells the model about the command.
+
+## Steps 8-9: the shared MCP server pattern
+
+Steps 8 and 9 (`java-lsp`, `spring-lsp`) are the two servers that stay MCP: they hold a stateful language-server session, so each is a persistent HTTP server, published as a real npm package under `@kealthas-dev/opencode-mcp-<name>`:
+
+1. Install globally via the internal npm registry (see this doc's intro for why that registry, not public npm, resolves this) — same mechanism that already makes the `opencode` command itself work on this machine. This puts an `opencode-mcp-<name>` binary on `PATH`. If `npm install` (or a prerequisite check below) unexpectedly fails, report it rather than working around by guessing at a substitute package or how to fix the environment.
+2. Each is wired as `type: "remote"` in `opencode.json`: opencode connects to it as an already-running HTTP endpoint rather than spawning and owning it. The server process has to be started independently, before opencode ever tries to use it — a persistent terminal/session running the binary, a process supervisor, or a container, whichever fits this machine — and left running. opencode itself never starts, stops, or restarts either of them.
+3. Each reads its config from files, not raw environment variables (see the relevant README's Configuration section) — a config file plus a `server.json` for just the port (only needed if the default port below isn't free; an `<X>_MCP_PORT` env var overrides it too, for running more than one instance). The config file's *location* is fixed too, not an arbitrary path: with no `<X>_CONFIG_ENV` env var set (see the table below for the exact name) it's read from `~/.config/kealthas-dev/opencode-mcp-<name>/config.json`; setting `<X>_CONFIG_ENV=prod` reads `config-prod.json` instead, for multi-environment setups.
+4. Create the config file yourself — **real values only, never guessed by an executing agent; ask the human running this.**
+5. Start the server and leave it running. Both read their config once at startup (their LSP session is stateful and tied to one workspace) and need a restart after an edit.
+6. `deploy/opencode.jsonc.example` already carries the two `mcp` blocks below, enabled, with placeholder ports — only add one by hand if step 2 merged into an existing `opencode.json` instead of copying the example fresh (merge into the top-level `mcp` key, don't replace it).
+
+Per-server specifics:
+
+| | java-lsp (step 8) | spring-lsp (step 9) |
+|---|---|---|
+| Package | `@kealthas-dev/opencode-mcp-java-lsp` | `@kealthas-dev/opencode-mcp-spring-lsp` |
+| Prerequisites | `python3` + JDK 21+ `java` on `PATH`, separate from whatever JDK the analyzed project targets — neither confirmed present on the actual target machine yet | JDK 21+ `java` on `PATH` (no `python3` needed), and Maven (`mvn`) on `PATH` for a Maven project (see step 9) |
+| Config env var | `JAVA_LSP_CONFIG_ENV` | `SPRING_LSP_CONFIG_ENV` |
+| Config file keys | `JAVA_LSP_WORKSPACE_ROOT` (project to analyze), `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch dir, not the project root) — both required | `SPRING_LSP_WORKSPACE_ROOT` (project to analyze, required) |
+| Default port / override key | `8092` / `JAVA_LSP_MCP_PORT` | `8093` / `SPRING_LSP_MCP_PORT` |
+| Notes | vendored `jdtls` (Eclipse JDT Language Server) ships inside the npm package — nothing extra to download | vendored `spring-boot-language-server` ships inside the npm package; classpath-aware richness needs pairing with a `java-lsp` jdtls instance via a "classpath listener" not implemented yet — see `mcp-servers/TODO.md` |
 
 ## 8. Add the java-lsp MCP server
 
@@ -361,13 +384,15 @@ opencode-mcp-spring-lsp
 
 If port `8093` is taken, write `~/.config/kealthas-dev/opencode-mcp-spring-lsp/server.json` (`{"SPRING_LSP_MCP_PORT": <port>}`) and update the `url` above to match.
 
-## 10. Add the MySQL MCP server
+## 10. Add the MySQL command
+
+MySQL is reached with a command, `opencode-mysql-query`, which reads the SQL from stdin and connects straight to MySQL.
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-mysql
 ```
 
-Create the config file with real values (see the shared pattern above), then start the server:
+This puts `opencode-mysql-query` on `PATH`. Create the config file with real values (see the shared pattern above):
 
 ```bash
 mkdir -p ~/.config/kealthas-dev/opencode-mcp-mysql
@@ -380,29 +405,23 @@ EOF
 
 **If the password has any of `@ : / ? #` or a space in it, percent-encode that character first** (e.g. a literal `@` becomes `%40`) — these are the URI's own delimiters, and an unencoded one gets parsed as part of the host instead of the password, failing in a confusing way rather than a clean auth error. See `mcp-servers/mysql/README.md`'s Configuration section.
 
+Check it:
+
 ```bash
-opencode-mcp-mysql
+opencode-mysql-query <<'SQL'
+SELECT 1 AS one
+SQL
 ```
 
-```json
-"mcp": {
-  "mysql": {
-    "type": "remote",
-    "url": "http://localhost:8094/mcp",
-    "enabled": true
-  }
-}
-```
+It should print `one` and `1`. Nothing goes into `opencode.json` for MySQL: there is no `mcp` entry, and `deploy/system-prompt.txt`'s `# Databases` section already tells the model about the command.
 
-If port `8094` is taken, write `~/.config/kealthas-dev/opencode-mcp-mysql/server.json` (`{"MYSQL_MCP_PORT": <port>}`) and update the `url` above to match.
-
-Before pointing this at a real database: `mysql_query` unconditionally wraps every call in `START TRANSACTION READ ONLY`, which blocks `INSERT`/`UPDATE`/`DELETE` outright — but not `CREATE`/`DROP`/`ALTER` (DDL implicitly commits before running, escaping the transaction). If a hard guarantee against schema changes matters here, the connecting account also needs its `CREATE`/`DROP`/`ALTER`/`EXECUTE` grants removed — see `mcp-servers/mysql/README.md`'s "Recommended read-only account" section for the exact `GRANT` statement, confirmed against a real MySQL 8 instance.
+Before pointing this at a real database: every statement runs inside `START TRANSACTION READ ONLY`, which blocks `INSERT`/`UPDATE`/`DELETE` outright — but not `CREATE`/`DROP`/`ALTER` (DDL implicitly commits before running, escaping the transaction). If a hard guarantee against schema changes matters here, the connecting account also needs its `CREATE`/`DROP`/`ALTER`/`EXECUTE` grants removed — see `mcp-servers/mysql/README.md`'s "Recommended read-only account" section.
 
 ## 11. Add the Memory MCP server
 
-Unlike steps 6-10, this isn't a server this repo wrote — it's the official upstream `@modelcontextprotocol/server-memory` package (a local knowledge-graph memory: entities/relations/observations in a JSONL file, keyword search only, no embeddings). See `mcp-servers/memory/README.md` for why this one and not a vector/RAG approach. It's also wired as `type: "local"` (opencode spawns and owns the process itself), unlike steps 6-10's `type: "remote"` — no separate terminal or process supervisor to keep running.
+Unlike steps 6-10 and 12, this isn't code this repo wrote — it's the official upstream `@modelcontextprotocol/server-memory` package (a local knowledge-graph memory: entities/relations/observations in a JSONL file, keyword search only, no embeddings). See `mcp-servers/memory/README.md` for why this one and not a vector/RAG approach. It's also wired as `type: "local"` (opencode spawns and owns the process itself), unlike steps 6-10's `type: "remote"` — no separate terminal or process supervisor to keep running.
 
-Install it globally via the internal npm registry (same registry steps 6-10 already confirmed works for third-party packages):
+Install it globally via the internal npm registry (same registry steps 6-10 and 12 already confirmed works for third-party packages):
 
 ```bash
 npm install -g @modelcontextprotocol/server-memory
@@ -436,48 +455,45 @@ echo "$MEMORY_FILE_PATH"
 
 This knowledge graph will contain whatever the model decides is worth remembering about the user/project over time — unlike this repo's own git-tracked `memory/`, `$CONFIG_DIR/memory.jsonl` is local machine state, not backed up or version-controlled by anything in this repo. If that's not the durability/privacy tradeoff wanted here, that's a real open decision, not something to guess at — flag it back rather than silently changing where the file lives.
 
-## 12. Add the Redis MCP server
+## 12. Add the Redis command
 
-Also not a server this repo wrote — the official upstream `redis-mcp-server` PyPI package (source: `redis/mcp-redis`), used unmodified. See `mcp-servers/redis/README.md` for the full design (why the official package, the ACL-based read-only account, and a confirmed upstream bug this step routes around). Wired as `type: "local"`, same as step 11 — it only supports stdio transport, no persistent process to keep running separately.
+Redis is reached with a command, `opencode-redis-query`, which reads one Redis command from stdin and connects straight to Redis.
 
-**Prerequisite: `uv`/`uvx` on `PATH`.** Check first:
-
-```bash
-uv --version
-```
-
-**Unlike steps 6-11, this needs PyPI reachable, not just the internal npm registry** — confirmed reachable too (see `docs/deployment-environment.md`), and the machine's Python is standard CPython, so no exotic-interpreter wheel-compatibility concern for `redis-mcp-server`'s C-extension dependencies. If `uv --version` fails anyway, install it — the official installer works the same way it did for this repo's own dev sandbox (see `docker/notes.md`'s "uv/uvx" section):
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-**Create the dedicated read-only Redis account first** — `redis-mcp-server` has no config flag or connection setting that trims it to read-only tools; the account it connects as is the actual safety boundary (see `mcp-servers/redis/README.md`):
+**Create the dedicated read-only Redis account first** — the command has no guard of its own, the account it connects as is the actual safety boundary (see `mcp-servers/redis/README.md`):
 
 ```
 ACL SETUSER readonlyuser on >mypassword ~* +@read -@write
 ```
 
-Then wire it in. **`--host`/`--port` have to be CLI args, not `REDIS_HOST`/`REDIS_PORT` environment values — a confirmed bug in the installed package silently discards those two env vars in favor of its own hardcoded `127.0.0.1:6379` defaults** (see `mcp-servers/redis/README.md`'s "Wired as type: local" section for the full root cause). `REDIS_USERNAME`/`REDIS_PWD` are unaffected and belong in `environment`, not argv, so the password doesn't show up in this machine's `ps` output:
+That account is refused `INFO`, `PING` and `CLIENT` too, which are not in `@read`; add `+info +ping` to the rule if you want the model to be able to run them.
 
-```json
-"mcp": {
-  "redis": {
-    "type": "local",
-    "command": [
-      "uvx", "--from", "redis-mcp-server@latest", "redis-mcp-server",
-      "--host", "...", "--port", "..."
-    ],
-    "enabled": true,
-    "environment": {
-      "REDIS_USERNAME": "readonlyuser",
-      "REDIS_PWD": "..."
-    }
-  }
-}
+```bash
+npm install -g @kealthas-dev/opencode-mcp-redis
 ```
 
-`deploy/opencode.jsonc.example` already carries this block with `REPLACE_WITH_...` placeholders for the four real values (host/port/username/password) — substitute them rather than adding a fresh block (merge, don't replace, same rule as step 2).
+This puts `opencode-redis-query` on `PATH`. Create the config file with real values (see the shared pattern above):
+
+```bash
+mkdir -p ~/.config/kealthas-dev/opencode-mcp-redis
+cat > ~/.config/kealthas-dev/opencode-mcp-redis/config.json <<'EOF'
+{
+  "REDIS_HOST": "...",
+  "REDIS_PORT": 6379,
+  "REDIS_USERNAME": "readonlyuser",
+  "REDIS_PASSWORD": "..."
+}
+EOF
+```
+
+Check it:
+
+```bash
+opencode-redis-query <<'REDIS'
+DBSIZE
+REDIS
+```
+
+It should print a number. Nothing goes into `opencode.json` for Redis: there is no `mcp` entry, and `deploy/system-prompt.txt`'s `# Databases` section already tells the model about the command. It needs no `uv` or Python: an earlier setup used the official `redis-mcp-server` PyPI package through `uvx`, and a `redis` entry left over from that in `opencode.json` should be removed.
 
 ## 13. Verify
 
@@ -495,11 +511,11 @@ tail -n 1 ~/opencode-hook-output/experimental.chat.system.transform.jsonl
 
 Confirm: the first block should be the content of `system-prompt.txt` (not the original hand-holding `default.txt` identity paragraph), and should still have an `<env>` block further down with the real working directory/platform/date. If it still looks like the original verbose default, the `agent.prompt` config wasn't picked up — check for a JSON syntax error in `opencode.json` first.
 
-If you installed any plugin (steps 4/5) and `opencode run` errors out instead, that's more likely this machine's `npm install` failing against its registry (network/proxy issue, same class of failure as steps 6-10) than a problem with the prompt override itself — check `opencode debug config` output for a `plugin_origins` entry resolving correctly before assuming the whole setup is broken.
+If you installed any plugin (steps 4/5) and `opencode run` errors out instead, that's more likely this machine's `npm install` failing against its registry (network/proxy issue, same class of failure as steps 6-12) than a problem with the prompt override itself — check `opencode debug config` output for a `plugin_origins` entry resolving correctly before assuming the whole setup is broken.
 
 ## 14. Cleanup (optional)
 
-`$SRC_DIR` (the extracted zip) and the original zip file can be deleted once `$CONFIG_DIR/system-prompt.txt` and the globally-installed `@kealthas-dev/opencode-mcp-oracle`/`@kealthas-dev/opencode-mcp-loki`/`@kealthas-dev/opencode-mcp-java-lsp`/`@kealthas-dev/opencode-mcp-spring-lsp`/`@kealthas-dev/opencode-mcp-mysql`/`@modelcontextprotocol/server-memory` (whichever of steps 6-11 were installed — nothing under `$SRC_DIR` to clean up for any of them, they're global installs, not copied-in source trees) are in place — those are the only files that matter going forward. Steps 4/5's plugins install themselves into `$CACHE_DIR/packages/<name>@latest/` the first time opencode runs with them configured — nothing under `$SRC_DIR` to clean up for those either. Step 12's redis-mcp-server isn't installed at all in the same sense — `uvx` caches it under its own directory (`uv cache dir`) and re-resolves `@latest` on every spawn — nothing under `$SRC_DIR` for that either. Ask the human running this before deleting anything, don't assume.
+`$SRC_DIR` (the extracted zip) and the original zip file can be deleted once `$CONFIG_DIR/system-prompt.txt` and the globally-installed `@kealthas-dev/opencode-mcp-oracle`/`@kealthas-dev/opencode-mcp-loki`/`@kealthas-dev/opencode-mcp-java-lsp`/`@kealthas-dev/opencode-mcp-spring-lsp`/`@kealthas-dev/opencode-mcp-mysql`/`@kealthas-dev/opencode-mcp-redis`/`@modelcontextprotocol/server-memory` (whichever of steps 6-12 were installed — nothing under `$SRC_DIR` to clean up for any of them, they're global installs, not copied-in source trees) are in place — those are the only files that matter going forward. Steps 4/5's plugins install themselves into `$CACHE_DIR/packages/<name>@latest/` the first time opencode runs with them configured — nothing under `$SRC_DIR` to clean up for those either. Step 12's redis-mcp-server isn't installed at all in the same sense — `uvx` caches it under its own directory (`uv cache dir`) and re-resolves `@latest` on every spawn — nothing under `$SRC_DIR` for that either. Ask the human running this before deleting anything, don't assume.
 
 ## Report back
 
@@ -508,20 +524,17 @@ State plainly, as a checklist:
 - Did `opencode.json` already exist (merged) or get created fresh (copied)?
 - Did step 13 confirm the custom prompt is actually being sent? If not, what did the output look like instead?
 - Which `plugin` entries got installed, and did `npm install` against this machine's registry succeed cleanly for them?
-- Did steps 6-10's `npm install` succeed against the internal registry? For steps 8/9: were `python3`/JDK 21+ `java` already present, or did they need manually transferring in (see step 8's note)?
+- Did steps 6-12's `npm install` succeed against the internal registry, and did each command's check print what the step says it should? For steps 8/9: were `python3`/JDK 21+ `java` already present, or did they need manually transferring in (see step 8's note)?
 - If step 11 was installed: did `npm install -g` put `mcp-server-memory` on `PATH`? Did the model actually call the memory tools during step 13, or does `deploy/system-prompt.txt`'s `# Memory` section need stronger wording for this model?
-- If step 12 was attempted: was `uv`/`uvx` already present, or did it need installing (PyPI access is confirmed, see `docs/deployment-environment.md` — this should just work)?
 
-## Updating steps 6-10's MCP servers later
+## Updating the installed packages later
 
-All five share this repo's one version number and get bumped together on every release, even a package whose own code didn't change (see [docs/npm-publishing.md](docs/npm-publishing.md) for why) — so update all five together rather than tracking which one actually changed. Name them explicitly instead of a blanket `npm update -g`, which would also touch every other global npm package on this machine unrelated to this project.
+All the packages share this repo's one version number and get bumped together on every release, even a package whose own code didn't change (see [docs/npm-publishing.md](docs/npm-publishing.md) for why) — so update them together rather than tracking which one actually changed. Name them explicitly instead of a blanket `npm update -g`, which would also touch every other global npm package on this machine unrelated to this repo.
 
-**Stop whichever of these servers are currently running first.** On Windows especially, `npm install -g` needs to remove/replace the old package's files, and a still-running `opencode-mcp-*` process holds those files locked — updating first and restarting after (the wrong order) fails with an `EPERM`/`rmdir` error, not a clean update. Kill each running `opencode-mcp-*` process, then:
+**Stop `java-lsp` and `spring-lsp` first, if they are running.** They are the only ones that stay running between uses: on Windows especially, `npm install -g` needs to remove/replace the old package's files, and a still-running `opencode-mcp-*` process holds those files locked — updating first and restarting after (the wrong order) fails with an `EPERM`/`rmdir` error, not a clean update. The four commands (`oracle`, `loki`, `mysql`, `redis`) have nothing running between uses and update in place. Then:
 
 ```bash
-npm install -g @kealthas-dev/opencode-mcp-oracle @kealthas-dev/opencode-mcp-loki @kealthas-dev/opencode-mcp-java-lsp @kealthas-dev/opencode-mcp-spring-lsp @kealthas-dev/opencode-mcp-mysql
+npm install -g @kealthas-dev/opencode-mcp-oracle @kealthas-dev/opencode-mcp-loki @kealthas-dev/opencode-mcp-mysql @kealthas-dev/opencode-mcp-redis @kealthas-dev/opencode-mcp-java-lsp @kealthas-dev/opencode-mcp-spring-lsp
 ```
 
-Then re-run each server's same start command from steps 6-10 to pick the update back up. If an `EPERM` happens anyway (a lock survives the killed process, or antivirus is holding the directory open), the leftover is at `%APPDATA%\npm\node_modules\@kealthas-dev\opencode-mcp-<name>` on Windows — delete that directory by hand, then re-run the `npm install -g` command above.
-
-Step 12's `redis` entry doesn't need this at all — `redis-mcp-server@latest` in its `command` array re-resolves the newest published version every time opencode spawns it, so it's already always current with no update step of its own.
+Then re-run each of `java-lsp` and `spring-lsp`'s start commands from steps 8-9 to pick the update back up. If an `EPERM` happens anyway (a lock survives the killed process, or antivirus is holding the directory open), the leftover is at `%APPDATA%\npm\node_modules\@kealthas-dev\opencode-mcp-<name>` on Windows — delete that directory by hand, then re-run the `npm install -g` command above.

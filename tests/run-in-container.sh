@@ -2,21 +2,17 @@
 # Meant to run *inside* the docker/ dev sandbox (see tests/README.md) -
 # not against whatever node/bash happens to be on the host. Covers
 # everything that needs no live opencode/model server: the plugin unit
-# tests, the guard-plugins integration test (real opencode server,
-# fake model provider), the oracle query server and command test (needs a real Oracle
-# instance), the loki MCP server test (needs a real Loki instance), and
-# the mysql MCP server test (needs a real MySQL instance) - all reachable
-# here because the shared `oracle`/`loki`/`mysql` services are started
-# separately first, see docker/notes.md. Also the memory and redis
-# MCP server tests - the official upstream packages, not our own code;
-# memory needs only network access to install it, redis additionally needs
-# the real Redis instance (also started separately, see notes.md)
-# and `uv`/`uvx` (see the Dockerfile). Also the playwright MCP server test -
-# the official @playwright/mcp package, not our own code (see
-# mcp-servers/playwright/README.md) - against a real headless Chromium,
-# globally installed with its Linux system deps in docker/Dockerfile; no
-# external service needed, it drives a fixture page served by the test
-# itself.
+# tests, the guard-plugins and verifier-agent integration tests (a real
+# opencode with a fake model provider), the oracle, loki, mysql and redis
+# command tests (each needs its real instance, all reachable here because
+# the shared `oracle`/`loki`/`mysql`/`redis` services are started separately
+# first, see docker/notes.md), the memory MCP server test (the official
+# upstream package, not our own code; it needs only network access to
+# install it) and the playwright MCP server test (the official
+# @playwright/mcp package, see mcp-servers/playwright/README.md, against a
+# real headless Chromium globally installed with its Linux system deps in
+# docker/Dockerfile; no external service needed, it drives a fixture page
+# served by the test itself).
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -45,7 +41,7 @@ echo "== verifier agent integration test (real opencode, fake model) =="
 node tests/integration/verifier-agent.test.mjs
 
 echo
-echo "== oracle query server and command integration test (real Oracle instance) =="
+echo "== oracle command integration test (real Oracle instance) =="
 # mcp-servers/oracle/ is its own npm package - its test lives alongside it (not
 # under tests/) so Node's module resolution finds its node_modules. It's
 # written in TypeScript (see its README's Design section), so the test needs
@@ -53,11 +49,11 @@ echo "== oracle query server and command integration test (real Oracle instance)
 (cd mcp-servers/oracle && npm install --no-audit --no-fund && npm run build && npm test)
 
 echo
-echo "== loki MCP server integration test (real Loki instance) =="
+echo "== loki command integration test (real Loki instance) =="
 (cd mcp-servers/loki && npm install --no-audit --no-fund && npm run build && npm test)
 
 echo
-echo "== mysql MCP server integration test (real MySQL instance) =="
+echo "== mysql command integration test (real MySQL instance) =="
 (cd mcp-servers/mysql && npm install --no-audit --no-fund && npm run build && npm test)
 
 echo
@@ -65,8 +61,8 @@ echo "== memory MCP server integration test (official @modelcontextprotocol/serv
 (cd tests/integration/mcp-memory && npm install --no-audit --no-fund && node --test memory.test.mjs)
 
 echo
-echo "== redis MCP server integration test (official redis-mcp-server package, real Redis instance) =="
-(cd tests/integration/mcp-redis && npm install --no-audit --no-fund && node --test redis.test.mjs)
+echo "== redis command integration test (real Redis instance) =="
+(cd mcp-servers/redis && npm install --no-audit --no-fund && npm run build && npm test)
 
 echo
 echo "== playwright MCP server integration test (official @playwright/mcp package, real headless Chromium) =="

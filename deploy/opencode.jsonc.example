@@ -72,11 +72,6 @@
     // "@kealthas-dev/opencode-path-guard"
   ],
   "mcp": {
-    "loki": {
-      "type": "remote",
-      "url": "http://localhost:8091/mcp",
-      "enabled": true
-    },
     "java-lsp": {
       "type": "remote",
       "url": "http://localhost:8092/mcp",
@@ -85,11 +80,6 @@
     "spring-lsp": {
       "type": "remote",
       "url": "http://localhost:8093/mcp",
-      "enabled": true
-    },
-    "mysql": {
-      "type": "remote",
-      "url": "http://localhost:8094/mcp",
       "enabled": true
     },
     "idea": {
@@ -101,24 +91,6 @@
       "type": "local",
       "command": ["mcp-server-memory"],
       "enabled": true
-    },
-    "redis": {
-      "type": "local",
-      "command": [
-        "uvx",
-        "--from",
-        "redis-mcp-server@latest",
-        "redis-mcp-server",
-        "--host",
-        "REPLACE_WITH_REDIS_HOST",
-        "--port",
-        "REPLACE_WITH_REDIS_PORT"
-      ],
-      "enabled": true,
-      "environment": {
-        "REDIS_USERNAME": "REPLACE_WITH_REDIS_READONLY_USERNAME",
-        "REDIS_PWD": "REPLACE_WITH_REDIS_READONLY_PASSWORD"
-      }
     }
   }
 }

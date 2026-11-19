@@ -1,0 +1,33 @@
+{
+  "name": "@kealthas-dev/opencode-mcp-redis",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Redis for the agent as a command, `opencode-redis-query`, reading one Redis command from stdin and connecting straight to Redis - see README.md for the design and the config.json-driven config",
+  "main": "dist/cli.js",
+  "bin": {
+    "opencode-redis-query": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Keal-thas/opencode-toolkit.git",
+    "directory": "mcp-servers/redis"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "tsx --test redis.test.ts"
+  },
+  "dependencies": {
+    "redis": "^4.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

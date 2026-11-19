@@ -12,8 +12,8 @@
 2. 把 `deploy/system-prompt.txt` 拷贝到 `$CONFIG_DIR`。
 3. `$CONFIG_DIR/opencode.jsonc` 和 `opencode.json` 都不存在就直接拷贝 `deploy/opencode.jsonc.example` 为 `opencode.jsonc`;已经存在其一就只合并它的 `agent`/`plugin`/`mcp` 三个字段,不要动已有的 provider、权限等配置。
 4. `deploy/opencode.jsonc.example` 里的插件和 MCP 服务器默认启用(哪些见 [plugins/README.md](plugins/README.md) 和 [mcp-servers/README.md](mcp-servers/README.md) 的表),要不要真的用、要不要关掉哪个,自己决定。llm-review-gate 在示例里是注释掉的(每次 bash 调用前多一次模型调用,而且会拦截命令),需要时取消 `plugin` 数组里那一行的注释:
-   - 表里 Transport 为 remote 的服务器要自己单独 `npm install && npm run build && npm start` 常驻;Transport 为 CLI 的(oracle)没有 MCP 工具也没有常驻服务,agent 用 bash 执行 `opencode-oracle-query`(SQL 从 stdin 用 heredoc 传入),命令直接连 Oracle。
-   - Transport 为 local 的服务器(memory、redis)由 opencode 自己启动,只需装一次依赖;具体见 SETUP.md 对应步骤。
+   - Transport 为 remote 的服务器(java-lsp、spring-lsp)要自己单独 `npm install && npm run build && npm start` 常驻;Transport 为 local 的(memory)由 opencode 自己启动,只需装一次依赖。
+   - Transport 为 CLI 的(oracle、loki、mysql、redis)没有 MCP 工具也没有常驻服务:agent 用 bash 执行 `opencode-oracle-query`、`opencode-loki-query`、`opencode-mysql-query`、`opencode-redis-query`,查询语句从 stdin 用 heredoc 传入,命令直接连数据库。它们都是配置文件驱动的:真实连接信息写进一个固定位置的 JSON 文件(如 `~/.config/kealthas-dev/opencode-mcp-oracle/config.json`),不需要设置任何环境变量;要切换多个环境(prod/dev/...)才用 `<X>_CONFIG_ENV=<名字>` 这个环境变量,指向同目录下 `config-<名字>.json`。只读靠数据库账号保证,所以给它们配只读账号。详见各自的 README.md 和 SETUP.md 对应步骤。
 5. 跑一句 `opencode run --model <provider>/<model> "say hi"`,(先临时启用 hook-logger 插件)再看 `~/opencode-hook-output/experimental.chat.system.transform.jsonl` 最后一行(hook-logger 记的)里的 `output.system`——第一块应该以 `system-prompt.txt` 开头,而不是原来那段啰嗦的自我介绍,这样才算真的生效。
 
 ## 各目录是什么(简版)
