@@ -105,36 +105,31 @@ OPENCODE_MODELS_PATH="$CONFIG_DIR/models-dev-snapshot.json"
 OPENCODE_DISABLE_MODELS_FETCH=1
 ```
 
-## 4. Install the viewer plugin
+## 4. How plugins get installed
 
-This lets you actually see what gets sent to the model — a JSON-valid `opencode.json` doesn't guarantee the override actually took effect at runtime, and this is the only way to check. Published as a real npm package, `@kealthas-dev/opencode-system-prompt-tools` — opencode's own npm-plugin loader installs it itself, no manual packaging or cache-seeding needed. If step 2 copied `deploy/opencode.jsonc.example` fresh (the "does NOT exist yet" branch), this entry — along with step 5's default plugins — is already in there by default; skip straight to the verification note below unless you want to remove one. Otherwise (the more likely case — you merged into an existing `opencode.json`), add it to `opencode.json`'s top level (merge, don't replace, same rule as step 2), by bare package name, no version:
+Every entry in the `plugin` array is a published npm package, referenced by bare name, no version. opencode does a real `npm install` of it on first use, against whatever registry this machine's npm is configured for (this machine's internal registry mirror — confirmed working via steps 6/7's `npm install` calls), and caches the result so later runs skip straight past it. Leaving off a version means every fresh cache picks up whatever's currently tagged `latest` on the registry at install time — it won't silently update again after that first install.
 
-```json
-"plugin": ["@kealthas-dev/opencode-system-prompt-tools"]
-```
+**Important:** `opencode debug config` showing a `plugin_origins` entry is NOT proof the install succeeded — a bad/unreachable package name fails silently (exit 0, no log line) and leaves `$CACHE_DIR/packages/@kealthas-dev/<package>@latest/` permanently empty. The real proof is whether that cache directory has files in it (`package.json`/`node_modules` = real install; empty = failed) — if empty, delete it by hand and retry rather than assuming the config itself is wrong.
 
-opencode does a real `npm install` of this on first use, against whatever registry this machine's npm is configured for (this machine's internal registry mirror — confirmed working via steps 6/7's `npm install` calls), and caches the result so later runs skip straight past it. Leaving off a version means every fresh cache picks up whatever's currently tagged `latest` on the registry at install time — it won't silently update again after that first install.
+## 5. Plugins: gitbash-edit-path-fix and verify-session (included), the rest opt-in
 
-**Important:** `opencode debug config` showing a `plugin_origins` entry is NOT proof the install succeeded — a bad/unreachable package name fails silently (exit 0, no log line) and leaves `$CACHE_DIR/packages/@kealthas-dev/opencode-system-prompt-tools@latest/` permanently empty. The real proof is step 13: does `~/.local/share/opencode/last-system-prompt.txt` exist with the expected content after `opencode run`? If not, check whether that cache directory actually has files in it (`package.json`/`node_modules` = real install; empty = failed) — if empty, delete it by hand and retry rather than assuming the config itself is wrong.
+The rest of `plugins/` is general-purpose tooling, unrelated to the prompt override itself. Each is its own published npm package, independent of the others, so adding or removing one from the `plugin` array doesn't affect the rest. `deploy/opencode.jsonc.example` enables `gitbash-edit-path-fix` and `verify-session` and leaves the rest commented out:
 
-## 5. Plugins: hook-logger and verify-session (included), the rest opt-in
-
-The rest of `plugins/` is general-purpose tooling, unrelated to the prompt override itself. Each is its own published npm package, independent of the others, so adding or removing one from the `plugin` array doesn't affect the rest. `deploy/opencode.jsonc.example` enables `hook-logger` and `verify-session` and leaves the rest commented out:
-
-- `hook-logger.ts` (`@kealthas-dev/opencode-hook-logger`) — logs essentially every opencode hook event (chat, tool execution, permission asks, compaction, etc.) as JSONL under `~/opencode-hook-output/`, for debugging/observability.
+- `gitbash-edit-path-fix.ts` (`@kealthas-dev/opencode-gitbash-edit-path-fix`) — fixes Git-Bash paths in the `edit`/`write`/`apply_patch` tools on Windows.
+- `hook-logger.ts` (`@kealthas-dev/opencode-hook-logger`) — opt-in. Logs essentially every opencode hook event (chat, tool execution, permission asks, compaction, etc.) as JSONL under `~/opencode-hook-output/`, for debugging/observability.
 - `verify-session.ts` (`@kealthas-dev/opencode-verify-session`) — adds `/verify <claim>`, which starts a fresh top-level session that independently reviews the working tree; nothing runs until the command is used.
 - `llm-review-gate.ts` (`@kealthas-dev/opencode-llm-review-gate`) — opt-in. Gates `bash` tool calls behind an LLM safety review: before a command runs, it's sent to a hidden internal opencode session for an ALLOW/BLOCK verdict, layered on top of (not replacing) opencode's own permission config. Fails open on review errors/timeouts by default. **This changes real runtime behavior** (an extra hidden model call before every `bash` call).
 - `loop-guard.ts` (`@kealthas-dev/opencode-loop-guard`) — opt-in. Warns, then refuses, a model that keeps calling the same tool with the same arguments. Enable after confirming its thresholds suit this machine's model; they are untested against it.
 - `path-guard.ts` (`@kealthas-dev/opencode-path-guard`) — opt-in. Repairs an absolute path a model guessed with directory segments dropped, and gives `grep`/`glob` a clear error for a search path that does not exist.
 - `council.ts` (`@kealthas-dev/opencode-council`) — opt-in. `council`/`/council` puts a question to several independent advisors and synthesizes their answers; costs several model calls per use.
 
-If step 2 merged into an existing `opencode.json` rather than copying the example fresh, add the ones you want the same way as step 4, same install mechanism. At minimum the two enabled by default:
+If step 2 merged into an existing `opencode.json` rather than copying the example fresh, add the ones you want to the same `plugin` array (install mechanism: step 4). At minimum the two enabled by default:
 
 ```json
-"plugin": ["@kealthas-dev/opencode-hook-logger", "@kealthas-dev/opencode-verify-session"]
+"plugin": ["@kealthas-dev/opencode-gitbash-edit-path-fix", "@kealthas-dev/opencode-verify-session"]
 ```
 
-Each opt-in plugin is just another entry in the same array — `"@kealthas-dev/opencode-llm-review-gate"`, `"@kealthas-dev/opencode-loop-guard"`, `"@kealthas-dev/opencode-path-guard"`, `"@kealthas-dev/opencode-council"`. Merge into the same `plugin` array as step 4's entry rather than replacing it — each entry here is independent: include just one by adding just its own array entry.
+Each opt-in plugin is just another entry in the same array — `"@kealthas-dev/opencode-hook-logger"`, `"@kealthas-dev/opencode-llm-review-gate"`, `"@kealthas-dev/opencode-loop-guard"`, `"@kealthas-dev/opencode-path-guard"`, `"@kealthas-dev/opencode-council"`. Merge into the same `plugin` array rather than replacing it — each entry here is independent: include just one by adding just its own array entry.
 
 ## Steps 6-10: the shared MCP server pattern
 
@@ -465,15 +460,15 @@ Run a trivial request against your actual local model:
 opencode run --model <your-provider>/<your-model> "say hi in one word"
 ```
 
-If you installed the plugin in step 4, check what actually got sent:
+To check what actually got sent, enable `hook-logger` for this one run (add `"@kealthas-dev/opencode-hook-logger"` to the `plugin` array, step 5). It logs the system prompt blocks of every request as one JSON line; look at `output.system` in the last line:
 
 ```bash
-cat ~/.local/share/opencode/last-system-prompt.txt
+tail -n 1 ~/opencode-hook-output/experimental.chat.system.transform.jsonl
 ```
 
-Confirm: the output should start with the content of `system-prompt.txt` (not the original hand-holding `default.txt` identity paragraph), and should still have an `<env>` block further down with the real working directory/platform/date. If it still looks like the original verbose default, the `agent.prompt` config wasn't picked up — check for a JSON syntax error in `opencode.json` first.
+Confirm: the first block should be the content of `system-prompt.txt` (not the original hand-holding `default.txt` identity paragraph), and should still have an `<env>` block further down with the real working directory/platform/date. If it still looks like the original verbose default, the `agent.prompt` config wasn't picked up — check for a JSON syntax error in `opencode.json` first.
 
-If you installed either plugin (steps 4/5) and `opencode run` errors out instead, that's more likely this machine's `npm install` failing against its registry (network/proxy issue, same class of failure as steps 6-10) than a problem with the prompt override itself — check `opencode debug config` output for a `plugin_origins` entry resolving correctly before assuming the whole setup is broken.
+If you installed any plugin (steps 4/5) and `opencode run` errors out instead, that's more likely this machine's `npm install` failing against its registry (network/proxy issue, same class of failure as steps 6-10) than a problem with the prompt override itself — check `opencode debug config` output for a `plugin_origins` entry resolving correctly before assuming the whole setup is broken.
 
 ## 14. Cleanup (optional)
 
@@ -485,7 +480,7 @@ State plainly, as a checklist:
 
 - Did `opencode.json` already exist (merged) or get created fresh (copied)?
 - Did step 13 confirm the custom prompt is actually being sent? If not, what did the output look like instead?
-- Which `plugin` entries got installed (step 4, step 5, both, neither), and did `npm install` against this machine's registry succeed cleanly for them?
+- Which `plugin` entries got installed, and did `npm install` against this machine's registry succeed cleanly for them?
 - Did steps 6-10's `npm install` succeed against the internal registry? For steps 8/9: were `python3`/JDK 21+ `java` already present, or did they need manually transferring in (see step 8's note)?
 - If step 11 was installed: did `npm install -g` put `mcp-server-memory` on `PATH`? Did the model actually call the memory tools during step 13, or does `deploy/system-prompt.txt`'s `# Memory` section need stronger wording for this model?
 - If step 12 was attempted: was `uv`/`uvx` already present, or did it need installing (PyPI access is confirmed, see `docs/deployment-environment.md` — this should just work)?

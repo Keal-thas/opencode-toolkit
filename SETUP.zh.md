@@ -14,7 +14,7 @@
 4. `deploy/opencode.jsonc.example` 里的插件和 MCP 服务器默认启用(哪些见 [plugins/README.md](plugins/README.md) 和 [mcp-servers/README.md](mcp-servers/README.md) 的表),要不要真的用、要不要关掉哪个,自己决定。llm-review-gate 在示例里是注释掉的(每次 bash 调用前多一次模型调用,而且会拦截命令),需要时取消 `plugin` 数组里那一行的注释:
    - 表里 Transport 为 remote 的服务器要自己单独 `npm install && npm run build && npm start` 常驻。它们都是配置文件驱动的:真实连接信息写进一个固定位置的 JSON 文件(如 `~/.config/kealthas-dev/opencode-mcp-oracle/config.json`),不需要设置任何环境变量;要切换多个环境(prod/dev/...)才用 `<X>_CONFIG_ENV=<名字>` 这个环境变量,指向同目录下 `config-<名字>.json`——注意这个变量只接受一个简单的名字,不是路径,不会有 `~` 展不展开这种问题。端口是同目录下可选的 `server.json`。详见各自的 README.md。
    - Transport 为 local 的服务器(memory、redis)由 opencode 自己启动,只需装一次依赖;具体见 SETUP.md 对应步骤。
-5. 跑一句 `opencode run --model <provider>/<model> "say hi"`,再看 `~/.local/share/opencode/last-system-prompt.txt`——内容应该以 `system-prompt.txt` 开头,而不是原来那段啰嗦的自我介绍,这样才算真的生效。
+5. 跑一句 `opencode run --model <provider>/<model> "say hi"`,(先临时启用 hook-logger 插件)再看 `~/opencode-hook-output/experimental.chat.system.transform.jsonl` 最后一行(hook-logger 记的)里的 `output.system`——第一块应该以 `system-prompt.txt` 开头,而不是原来那段啰嗦的自我介绍,这样才算真的生效。
 
 ## 各目录是什么(简版)
 
