@@ -8,6 +8,12 @@ The root `package.json` packages the entire git-tracked tree as `@kealthas-dev/o
 
 `scripts/publish-npm.sh` exports the current `HEAD` with `git archive` into a clean temp dir before publishing, avoiding sweeping local untracked files into the tarball. Keep the intentionally-empty root `.npmignore`: its presence stops npm from falling back to `.gitignore` and dropping gitignored-but-tracked payloads such as `docs/opencode-docs-reference/` and `deploy/models-dev-snapshot.json`.
 
+## When to release
+
+Tagging is manual — whoever lands a change (an agent, per [CLAUDE.md](../CLAUDE.md)) pushes the tag; nothing auto-tags in CI. Because the root package packages the entire git-tracked tree, there is no such thing as a change that doesn't touch a published package, so every landing on `master` is unreleased until tagged.
+
+After a merge to `master` lands: confirm `master` is synced with `origin/master`; if any generated/vendored file might have drifted, run `./scripts/refresh-generated-files.sh` first (see [generated-files.md](generated-files.md)); then `git tag vX.Y.Z && git push origin vX.Y.Z` (lightweight tag, matching the existing ones). Default to a patch bump; minor and major are deliberate manual choices, picked by hand rather than derived from commit types. A failed release is superseded by a new tag, never re-run — see below.
+
 ## One shared version number for every package
 
 **Pushing a `v*` tag is the single release trigger for every published npm package in this repo** — the root package plus every plugin in [plugins/README.md](../plugins/README.md) and every server we wrote in [mcp-servers/README.md](../mcp-servers/README.md); the exact set is the `for dir in …` list in `release.yml`. `mcp-servers/redis`, `memory` and `playwright` wrap official upstream packages unmodified, so there is nothing of ours to publish. `release.yml` loops over all of them:
