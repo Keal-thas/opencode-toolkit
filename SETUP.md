@@ -162,14 +162,14 @@ Each opt-in plugin is just another entry in the same array — `"@kealthas-dev/o
 
 ## Steps 6-10: the shared MCP server pattern
 
-Steps 6-10 (`oracle`, `loki`, `java-lsp`, `spring-lsp`, `mysql`) all follow the same shape, each published as a real npm package under `@kealthas-dev/opencode-mcp-<name>`:
+Steps 6-10 (`oracle`, `loki`, `java-lsp`, `spring-lsp`, `mysql`) all follow the same shape, except that `oracle` is used through a command and not through an MCP tool (step 6), each published as a real npm package under `@kealthas-dev/opencode-mcp-<name>`:
 
-1. Install globally via the internal npm registry (see this doc's intro for why that registry, not public npm, resolves this) — same mechanism that already makes the `opencode` command itself work on this machine. This puts an `opencode-mcp-<name>` binary on `PATH`. If `npm install` (or a prerequisite check below) unexpectedly fails, report it rather than working around by guessing at a substitute package or how to fix the environment.
-2. Each is wired as `type: "remote"` in `opencode.json` (see `mcp-servers/oracle/README.md`'s Design section for why): opencode connects to it as an already-running HTTP endpoint rather than spawning and owning it. The server process has to be started independently, before opencode ever tries to use it — a persistent terminal/session running the binary, a process supervisor, or a container, whichever fits this machine — and left running. opencode itself never starts, stops, or restarts any of these four.
+1. Install globally via the internal npm registry (see this doc's intro for why that registry, not public npm, resolves this) — same mechanism that already makes the `opencode` command itself work on this machine. This puts an `opencode-mcp-<name>` binary on `PATH` (the server process; `oracle` also installs the `oracle` command, step 6). If `npm install` (or a prerequisite check below) unexpectedly fails, report it rather than working around by guessing at a substitute package or how to fix the environment.
+2. Each is wired as `type: "remote"` in `opencode.json` (`oracle` is the exception, see step 6): opencode connects to it as an already-running HTTP endpoint rather than spawning and owning it. The server process has to be started independently, before opencode ever tries to use it — a persistent terminal/session running the binary, a process supervisor, or a container, whichever fits this machine — and left running. opencode itself never starts, stops, or restarts any of these four.
 3. Each reads its config from files, not raw environment variables (see the relevant README's Configuration section) — a config file plus a `server.json` for just the port (only needed if the default port below isn't free; an `<X>_MCP_PORT` env var overrides it too, for running more than one instance). The config file's *location* is fixed too, not an arbitrary path: with no `<X>_CONFIG_ENV` env var set (see the table below for the exact name) it's read from `~/.config/kealthas-dev/opencode-mcp-<name>/config.json`; setting `<X>_CONFIG_ENV=prod` reads `config-prod.json` instead, for multi-environment setups.
 4. Create the config file yourself — **real values only, never guessed by an executing agent; ask the human running this.**
 5. Start the server and leave it running. `oracle`/`loki` re-read their config file on every call, so editing it takes effect without a restart; `java-lsp`/`spring-lsp` read it once at startup (their LSP session is stateful and tied to one workspace) and need a restart after an edit.
-6. `deploy/opencode.jsonc.example` already carries all five `mcp` blocks below, enabled, with placeholder ports — only add one by hand if step 2 merged into an existing `opencode.json` instead of copying the example fresh (merge into the top-level `mcp` key, don't replace it).
+6. `deploy/opencode.jsonc.example` already carries the four `mcp` blocks below (`loki`, `java-lsp`, `spring-lsp`, `mysql`; `oracle` has none, it is a command), enabled, with placeholder ports — only add one by hand if step 2 merged into an existing `opencode.json` instead of copying the example fresh (merge into the top-level `mcp` key, don't replace it).
 
 Per-server specifics:
 
@@ -178,17 +178,19 @@ Per-server specifics:
 | Package | `@kealthas-dev/opencode-mcp-oracle` | `@kealthas-dev/opencode-mcp-loki` | `@kealthas-dev/opencode-mcp-java-lsp` | `@kealthas-dev/opencode-mcp-spring-lsp` | `@kealthas-dev/opencode-mcp-mysql` |
 | Prerequisites | none | none | `python3` + JDK 21+ `java` on `PATH`, separate from whatever JDK the analyzed project targets — neither confirmed present on the actual target machine yet | JDK 21+ `java` on `PATH` (no `python3` needed), and Maven (`mvn`) on `PATH` for a Maven project (see step 9) | none |
 | Config env var | `ORACLE_CONFIG_ENV` | `LOKI_CONFIG_ENV` | `JAVA_LSP_CONFIG_ENV` | `SPRING_LSP_CONFIG_ENV` | `MYSQL_CONFIG_ENV` |
-| Config file keys | `ORACLE_CONNECT_STRING`, `ORACLE_USER`, `ORACLE_PASSWORD` (required); `ORACLE_DEFAULT_SCHEMA` (optional — sets the session's default schema; `oracle_query`'s own `schema` argument overrides it per call) | `LOKI_BASE_URL` (required); `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` (optional, only if that instance requires them); `LOKI_VIA_GRAFANA`/`LOKI_GRAFANA_DATASOURCE_ID` (optional — set when Loki is only reachable through Grafana's own datasource proxy, not directly; see step 7 below) | `JAVA_LSP_WORKSPACE_ROOT` (project to analyze), `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch dir, not the project root) — both required | `SPRING_LSP_WORKSPACE_ROOT` (project to analyze, required) | `MYSQL_CONNECT_STRING` (required — a single `mysql://user:pass@host:port/db` URI; any reserved character in the password needs percent-encoding first, see `mcp-servers/mysql/README.md`) |
+| Config file keys | `ORACLE_CONNECT_STRING`, `ORACLE_USER`, `ORACLE_PASSWORD` (required); `ORACLE_DEFAULT_SCHEMA` (optional — sets the session's default schema; `oracle q --schema` overrides it per call); `ORACLE_MAX_ROWS` (optional — hard cap on rows per query, default 10000) | `LOKI_BASE_URL` (required); `LOKI_USERNAME`/`LOKI_PASSWORD`/`LOKI_ORG_ID` (optional, only if that instance requires them); `LOKI_VIA_GRAFANA`/`LOKI_GRAFANA_DATASOURCE_ID` (optional — set when Loki is only reachable through Grafana's own datasource proxy, not directly; see step 7 below) | `JAVA_LSP_WORKSPACE_ROOT` (project to analyze), `JDTLS_DATA_DIR` (jdtls's own index storage — a scratch dir, not the project root) — both required | `SPRING_LSP_WORKSPACE_ROOT` (project to analyze, required) | `MYSQL_CONNECT_STRING` (required — a single `mysql://user:pass@host:port/db` URI; any reserved character in the password needs percent-encoding first, see `mcp-servers/mysql/README.md`) |
 | Default port / override key | `8090` / `ORACLE_MCP_PORT` | `8091` / `LOKI_MCP_PORT` | `8092` / `JAVA_LSP_MCP_PORT` | `8093` / `SPRING_LSP_MCP_PORT` | `8094` / `MYSQL_MCP_PORT` |
-| Passthrough / notes | full passthrough, no read-only enforcement, by deliberate design — see `mcp-servers/oracle/README.md` | full passthrough, any LogQL, by deliberate design — see `mcp-servers/loki/README.md` | vendored `jdtls` (Eclipse JDT Language Server) ships inside the npm package — nothing extra to download | vendored `spring-boot-language-server` ships inside the npm package; classpath-aware richness needs pairing with a `java-lsp` jdtls instance via a "classpath listener" not implemented yet — see `mcp-servers/TODO.md` | every call runs inside `START TRANSACTION READ ONLY` — unconditionally blocks DML, does NOT block DDL (implicitly commits first); the connecting account's own grants have to close that gap — see `mcp-servers/mysql/README.md`'s "Recommended read-only account" |
+| Passthrough / notes | read-only transaction on every query, but DDL still goes through, so the account's own grants are the boundary — see `mcp-servers/oracle/README.md` | full passthrough, any LogQL, by deliberate design — see `mcp-servers/loki/README.md` | vendored `jdtls` (Eclipse JDT Language Server) ships inside the npm package — nothing extra to download | vendored `spring-boot-language-server` ships inside the npm package; classpath-aware richness needs pairing with a `java-lsp` jdtls instance via a "classpath listener" not implemented yet — see `mcp-servers/TODO.md` | every call runs inside `START TRANSACTION READ ONLY` — unconditionally blocks DML, does NOT block DDL (implicitly commits first); the connecting account's own grants have to close that gap — see `mcp-servers/mysql/README.md`'s "Recommended read-only account" |
 
-## 6. Add the Oracle MCP server
+## 6. Add the Oracle command
+
+Oracle is reached with a command, `oracle q "<sql>"`, not an MCP tool: the agent runs it with `bash`, so it can pipe, cut and save the output instead of taking every row into its context. The command talks to a small query server that holds the credentials, so there are two things to install and run.
 
 ```bash
 npm install -g @kealthas-dev/opencode-mcp-oracle
 ```
 
-Create the config file with real values (see the shared pattern above), then start the server:
+This puts `oracle` (the command) and `opencode-mcp-oracle` (the server) on `PATH`. Create the config file with real values (see the shared pattern above), then start the server and leave it running:
 
 ```bash
 mkdir -p ~/.config/kealthas-dev/opencode-mcp-oracle
@@ -205,17 +207,15 @@ EOF
 opencode-mcp-oracle
 ```
 
-```json
-"mcp": {
-  "oracle": {
-    "type": "remote",
-    "url": "http://localhost:8090/mcp",
-    "enabled": true
-  }
-}
+Check it from another shell, with the same user:
+
+```bash
+oracle q "SELECT 1 AS one FROM dual"
 ```
 
-If port `8090` is taken, write `~/.config/kealthas-dev/opencode-mcp-oracle/server.json` (`{"ORACLE_MCP_PORT": <port>}`) and update the `url` above to match.
+It should print `ONE` and `1`. Nothing goes into `opencode.json` for Oracle: there is no `mcp` entry, and `deploy/system-prompt.txt`'s `# Databases` section already tells the model about the command.
+
+Use an account that can only read: every query runs in a read-only transaction, which stops `INSERT`, `UPDATE` and `DELETE`, but not `CREATE`/`DROP`. `mcp-servers/oracle/README.md` has the recommended grants. If port `8090` is taken, write `~/.config/kealthas-dev/opencode-mcp-oracle/server.json` (`{"ORACLE_MCP_PORT": <port>}`); the command reads the same file.
 
 ## 7. Add the Loki MCP server
 
