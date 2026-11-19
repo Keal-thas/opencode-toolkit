@@ -22,9 +22,16 @@ const CONNECT_TIMEOUT_SECONDS = 10;
 const CALL_TIMEOUT_MS = 30_000;
 
 const HELP = `Usage: ${NAME} "<sql>"
+       ${NAME} <<'SQL'
+       <sql, any number of lines>
+       SQL
 
 Runs one read-only SQL statement against the configured Oracle database and prints every row to stdout as CSV.
 Nothing is cut off, and errors from the database are printed exactly as the database gave them.
+
+Give the statement as one quoted argument, or on stdin. Prefer stdin with a quoted heredoc delimiter (<<'SQL', as above)
+when the SQL contains $, backticks, quotes or backslashes: inside double quotes the shell expands $, so v$session would
+reach Oracle as v.
 
 Exit codes: 0 ok, 1 SQL error, 2 usage error, 3 could not run (cannot connect, bad credentials, bad config, timeout).`;
 
@@ -33,13 +40,22 @@ function usageError(message: string): never {
   process.exit(EXIT_USAGE);
 }
 
-function parseArgs(argv: string[]): string {
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+// One quoted argument, or the whole of stdin when there is no argument and stdin is not a terminal.
+async function readSql(argv: string[]): Promise<string> {
   if (argv.includes("--help") || argv.includes("-h")) {
     console.log(HELP);
     process.exit(0);
   }
-  if (argv.length !== 1 || argv[0].trim() === "") usageError("give exactly one SQL statement, quoted");
-  return argv[0];
+  if (argv.length > 1) usageError("give exactly one SQL statement, quoted");
+  const sql = argv.length === 1 ? argv[0] : process.stdin.isTTY ? "" : await readStdin();
+  if (sql.trim() === "") usageError("give a SQL statement, as one quoted argument or on stdin");
+  return sql;
 }
 
 interface DatabaseConfig {
@@ -113,7 +129,7 @@ function toCsv(columns: string[], rows: unknown[][]): string {
 }
 
 async function main(): Promise<number> {
-  const sql = parseArgs(process.argv.slice(2));
+  const sql = await readSql(process.argv.slice(2));
 
   let config: DatabaseConfig;
   try {

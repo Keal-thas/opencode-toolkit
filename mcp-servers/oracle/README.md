@@ -13,7 +13,15 @@ opencode-oracle-query "SELECT * FROM big_table" | head -n 20
 opencode-oracle-query --help
 ```
 
-That is the whole interface: one SQL statement, every row of the result on stdout as CSV, no options. Nothing is cut off, so cut the output in the SQL (a `WHERE` clause, an aggregate, `FETCH FIRST n ROWS ONLY`) or in the shell. A database error is printed to stderr exactly as the database gave it, nothing added.
+The statement can also come on stdin, which is the form to use whenever the SQL contains `$`, backticks, quotes or backslashes. Inside double quotes the shell expands `$`, so `"SELECT * FROM v$session"` reaches Oracle as `SELECT * FROM v`; with a quoted heredoc delimiter the shell touches nothing:
+
+```bash
+opencode-oracle-query <<'SQL'
+SELECT sid, serial# FROM v$session WHERE username = 'SCOTT'
+SQL
+```
+
+That is the whole interface: one SQL statement (one argument, or stdin when there is none), every row of the result on stdout as CSV, no options. Nothing is cut off, so cut the output in the SQL (a `WHERE` clause, an aggregate, `FETCH FIRST n ROWS ONLY`) or in the shell. A database error is printed to stderr exactly as the database gave it, nothing added.
 
 Exit codes: `0` ok, `1` the SQL failed, `2` usage error, `3` the query could not run (cannot connect, bad credentials, bad config, timeout).
 
@@ -74,6 +82,6 @@ For the repo's own checkout, `npm install && npm run build` in this directory, t
 
 ## Status
 
-`oracle.test.ts` runs against a real Oracle instance in the docker sandbox (see `docker/notes.md`, "Oracle test instance"), running the built command the way an agent would: CSV output and quoting, a trailing semicolon, a 50000-row result coming back whole, `| head` closing the pipe early, duplicate column names, dates/CLOB/BLOB/RAW as text, `ORACLE_DEFAULT_SCHEMA`, `INSERT`/`UPDATE`/`DELETE` refused with nothing changed, an Oracle error passed through untouched, usage errors, bad credentials, and a missing or broken config file.
+`oracle.test.ts` runs against a real Oracle instance in the docker sandbox (see `docker/notes.md`, "Oracle test instance"), running the built command the way an agent would: CSV output and quoting, a trailing semicolon, the SQL on stdin (with `$`, quotes and a backslash arriving untouched, and a `V$` view through a quoted heredoc), a 50000-row result coming back whole, `| head` closing the pipe early, duplicate column names, dates/CLOB/BLOB/RAW as text, `ORACLE_DEFAULT_SCHEMA`, `INSERT`/`UPDATE`/`DELETE` refused with nothing changed, an Oracle error passed through untouched, usage errors, bad credentials, and a missing or broken config file.
 
 Known, not covered: DDL goes through (see Design), and a TIMESTAMP loses anything finer than milliseconds.
