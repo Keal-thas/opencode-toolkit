@@ -4,10 +4,10 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      no_cache: true
       args:
         UID: "${UID:-1000}"
         GID: "${GID:-1000}"
-        OPENCODE_VERSION: "${OPENCODE_VERSION:?set OPENCODE_VERSION in .env}"
     # Fixed image tag (shared across worktrees - multi-GB toolchain), but no fixed container_name: Compose derives it from the hashed project so each worktree gets its own. Race risk if two worktrees build concurrently with different Dockerfile content - accepted.
     image: opencode-toolkit-dev:latest
     working_dir: /home/dev/project

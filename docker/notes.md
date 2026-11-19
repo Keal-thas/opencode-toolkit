@@ -57,9 +57,9 @@ To add a key for another provider: drop a file in `~/.keys/` (`chmod 700` the di
 
 Claude never reads these key files' contents directly (only checks filenames/lengths) and never writes a real key into any file — a hard rule, independent of how low-stakes the key is claimed to be.
 
-## Pinned version
+## opencode version
 
-`opencode-ai`'s version is pinned in exactly one place: `OPENCODE_VERSION` in `docker/.env` (committed, secret-free — see its own header comment). `docker compose` loads it automatically and passes it into the `Dockerfile`'s `ARG OPENCODE_VERSION`. Deliberately not `@latest`, so a rebuild months from now reproduces the same environment instead of silently picking up a newer opencode. Bump by editing that one line (check `npm view opencode-ai version` first), then `docker/dev.sh build`.
+The image always installs the newest `opencode-ai` (`@latest` in the `Dockerfile`), and `docker-compose.yml` builds it with `no_cache: true` so every `docker/dev.sh build` (which `tests/run-all.sh` runs first) fetches whatever is current, Chromium and the rest included. The price is a full rebuild each time; the gain is no version to look up or bump.
 
 ## Base image Node version
 

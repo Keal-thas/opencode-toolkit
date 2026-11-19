@@ -24,7 +24,7 @@ A resource gets pulled out of per-worktree isolation into a single shared instan
 
 ## Pin third-party versions explicitly, never track latest
 
-Every external component this repo's sandbox depends on — the opencode CLI itself, the test Oracle image, the test Loki image — has its version pinned in one place rather than resolved to whatever is newest at build time. A rebuild done months later reproduces the same environment instead of silently picking up an unrelated upstream change; bumping a version is always a deliberate, single-line edit, never an implicit side effect of rebuilding.
+The test service images (Oracle, Loki, MySQL) have their versions pinned in one place rather than resolved to whatever is newest at build time. A rebuild done months later reproduces the same environment instead of silently picking up an unrelated upstream change; bumping a version is always a deliberate, single-line edit. The opencode CLI is the deliberate exception: the plugins here are written against the newest opencode, so the sandbox always installs the latest release (`@latest`, built without cache), and a release that breaks one shows up in the next test run instead of on the target machine.
 
 ## Safety boundaries live at the account/permission layer, not in tool code
 
