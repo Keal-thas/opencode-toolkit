@@ -59,12 +59,18 @@ interface CliResult {
 
 // os.homedir() reads USERPROFILE on Windows, HOME elsewhere.
 function run(home: string, ...args: string[]): Promise<CliResult> {
+  return runWithStdin(home, undefined, ...args);
+}
+
+// stdin is closed at once when there is nothing to send, so a run that would read it does not wait.
+function runWithStdin(home: string, stdin: string | undefined, ...args: string[]): Promise<CliResult> {
   const env = { ...process.env, HOME: home, USERPROFILE: home };
   delete env.ORACLE_CONFIG_ENV;
   return new Promise((resolve) => {
-    execFile("node", [CLI, ...args], { env, maxBuffer: 256 * 1024 * 1024 }, (err, stdout, stderr) => {
+    const child = execFile("node", [CLI, ...args], { env, maxBuffer: 256 * 1024 * 1024 }, (err, stdout, stderr) => {
       resolve({ code: err ? ((err as NodeJS.ErrnoException & { code?: number }).code as number) : 0, stdout, stderr });
     });
+    child.stdin!.end(stdin ?? "");
   });
 }
 const cli = (...args: string[]) => run(good.home, ...args);
@@ -175,7 +181,7 @@ test("a statement with no result set says so instead of printing an empty line",
 });
 
 test("usage errors exit 2, and --help prints the usage", async () => {
-  assert.equal((await cli()).code, 2);
+  assert.equal((await cli()).code, 2, "no argument and nothing on stdin");
   assert.equal((await cli("SELECT 1 FROM dual", "--limit", "5")).code, 2, "there are no options");
   assert.equal((await cli("SELECT 1 FROM dual", "SELECT 2 FROM dual")).code, 2, "one statement only");
   const help = await cli("--help");
@@ -206,4 +212,30 @@ test("a missing or broken config file exits 3 and says where it looked", async (
   const partial = await run(broken.home, "SELECT 1 FROM dual");
   assert.equal(partial.code, 3);
   assert.match(partial.stderr, /missing one of ORACLE_CONNECT_STRING/);
+});
+
+test("the statement can come on stdin, so the shell never touches $, quotes or backticks", async () => {
+  // In double quotes bash would turn $b into nothing; on stdin it arrives as written.
+  const sql = `SELECT 'a$b' AS "My Col", 'back\\slash' AS bs, 1 AS n
+FROM dual
+WHERE 'x' = 'x'`;
+  const r = await runWithStdin(good.home, sql);
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.stdout, 'My Col,BS,N\na$b,back\\slash,1\n');
+});
+
+test("a V$ view can be queried through a quoted heredoc", async () => {
+  const env = { ...process.env, HOME: good.home, USERPROFILE: good.home };
+  const out = await new Promise<{ code: number; stdout: string; stderr: string }>((resolve) =>
+    execFile("bash", ["-c", `node "${CLI}" <<'SQL'\nSELECT COUNT(*) AS n FROM v$version\nSQL`], { env }, (err, stdout, stderr) =>
+      resolve({ code: err ? ((err as NodeJS.ErrnoException & { code?: number }).code as number) : 0, stdout, stderr }),
+    ),
+  );
+  assert.equal(out.code, 0, out.stderr);
+  assert.match(out.stdout, /^N\n\d+\n$/);
+});
+
+test("an argument and stdin together: the argument wins, stdin is ignored", async () => {
+  const r = await runWithStdin(good.home, "SELECT 2 AS two FROM dual", "SELECT 1 AS one FROM dual");
+  assert.equal(r.stdout, "ONE\n1\n");
 });
