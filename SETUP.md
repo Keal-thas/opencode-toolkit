@@ -121,7 +121,6 @@ The rest of `plugins/` is general-purpose tooling, unrelated to the prompt overr
 - `llm-review-gate.ts` (`@kealthas-dev/opencode-llm-review-gate`) — opt-in. Gates `bash` tool calls behind an LLM safety review: before a command runs, it's sent to a hidden internal opencode session for an ALLOW/BLOCK verdict, layered on top of (not replacing) opencode's own permission config. Fails open on review errors/timeouts by default. **This changes real runtime behavior** (an extra hidden model call before every `bash` call).
 - `loop-guard.ts` (`@kealthas-dev/opencode-loop-guard`) — opt-in. Warns, then refuses, a model that keeps calling the same tool with the same arguments. Enable after confirming its thresholds suit this machine's model; they are untested against it.
 - `path-guard.ts` (`@kealthas-dev/opencode-path-guard`) — opt-in. Repairs an absolute path a model guessed with directory segments dropped, and gives `grep`/`glob` a clear error for a search path that does not exist.
-- `council.ts` (`@kealthas-dev/opencode-council`) — opt-in. `council`/`/council` puts a question to several independent advisors and synthesizes their answers; costs several model calls per use.
 
 If step 2 merged into an existing `opencode.json` rather than copying the example fresh, add the ones you want to the same `plugin` array (install mechanism: step 4). At minimum the two enabled by default:
 
@@ -129,7 +128,7 @@ If step 2 merged into an existing `opencode.json` rather than copying the exampl
 "plugin": ["@kealthas-dev/opencode-gitbash-edit-path-fix", "@kealthas-dev/opencode-verify-session"]
 ```
 
-Each opt-in plugin is just another entry in the same array — `"@kealthas-dev/opencode-hook-logger"`, `"@kealthas-dev/opencode-llm-review-gate"`, `"@kealthas-dev/opencode-loop-guard"`, `"@kealthas-dev/opencode-path-guard"`, `"@kealthas-dev/opencode-council"`. Merge into the same `plugin` array rather than replacing it — each entry here is independent: include just one by adding just its own array entry.
+Each opt-in plugin is just another entry in the same array — `"@kealthas-dev/opencode-hook-logger"`, `"@kealthas-dev/opencode-llm-review-gate"`, `"@kealthas-dev/opencode-loop-guard"`, `"@kealthas-dev/opencode-path-guard"`. Merge into the same `plugin` array rather than replacing it — each entry here is independent: include just one by adding just its own array entry.
 
 ## Steps 6-10: the shared MCP server pattern
 

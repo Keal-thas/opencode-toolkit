@@ -43,7 +43,6 @@
     // Opt-in guard plugins: enable after validating against this machine's model, see SETUP.md step 5.
     // "@kealthas-dev/opencode-loop-guard"
     // "@kealthas-dev/opencode-path-guard"
-    // "@kealthas-dev/opencode-council"
   ],
   "mcp": {
     "oracle": {
